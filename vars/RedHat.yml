@@ -46,3 +46,9 @@ docker_packages:
   - docker-ce-cli
   - containerd.io
   - docker-compose-plugin
+
+tlp_packages:
+  - tlp
+  - tlp-rdw
+
+fwupd_package: fwupd

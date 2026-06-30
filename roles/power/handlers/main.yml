@@ -1,0 +1,6 @@
+---
+- name: Restart TLP
+  ansible.builtin.systemd_service:
+    name: tlp
+    state: restarted
+  become: true

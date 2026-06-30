@@ -58,6 +58,9 @@
     - role: containers
       tags: [containers, docker]
       when: docker_install | bool
+    - role: power
+      tags: [power]
+      when: enable_tlp | bool
     - role: editors
       tags: [editors]
     - role: cli_tools

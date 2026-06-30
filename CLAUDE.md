@@ -40,8 +40,8 @@ instead of ~1,000-line bash scripts. It supersedes the bash scripts in
 - **Privilege model**: the play runs `become: false`; system tasks opt into
   `become: true`, user-space tasks (nvm, `.bashrc`, Starship, VS Code settings)
   run as the user. Use `target_user` / `target_home`, never root's `$HOME`.
-- **Roles**: common, languages, cloud_tools, containers, editors, cli_tools,
-  shell, repos.
+- **Roles**: common, languages, cloud_tools, containers, power, editors,
+  cli_tools, shell, repos.
 
 ## Editing guidelines
 
@@ -62,9 +62,11 @@ instead of ~1,000-line bash scripts. It supersedes the bash scripts in
 - **Debian-family profiles (`xubuntu`, `ubuntu_laptop`) are runnable now**;
   `crostini` is partial (sudo / `~/.local/bin` quirks).
 - **Fedora** runs the shared toolchain plus Docker + VS Code from their dnf
-  repos (`containers`/`editors` roles); the desktop layer is still pending.
-- **Pending follow-ups**: the `power` role (TLP + ThinkPad charge thresholds,
-  fwupd).
+  repos (`containers`/`editors` roles).
+- **`ubuntu_laptop`** adds TLP power management, ThinkPad charge thresholds, and
+  fwupd via the `power` role (`enable_tlp`).
+- **No pending role follow-ups.** All core and platform roles are in; remote
+  desktop (XRDP) was dropped as unused.
 
 ## CI
 

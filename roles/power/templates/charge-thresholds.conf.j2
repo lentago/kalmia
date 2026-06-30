@@ -1,0 +1,7 @@
+# {{ ansible_managed }}
+# ThinkPad battery charge thresholds (percent), applied by TLP through the
+# kernel's native charge-control sysfs. Ignored on hardware without threshold
+# support. Managed by the workstation-ansible `power` role — local edits are
+# overwritten on the next run.
+START_CHARGE_THRESH_BAT0={{ tlp_start_charge_threshold }}
+STOP_CHARGE_THRESH_BAT0={{ tlp_stop_charge_threshold }}

@@ -1,0 +1,58 @@
+---
+# ============================================================================
+# power — TLP power management + ThinkPad charge thresholds + fwupd firmware
+# updates. Opt-in via enable_tlp (only the bare-metal ubuntu_laptop profile);
+# the whole role is gated in site.yml. TLP and power-profiles-daemon are
+# mutually exclusive, so PPD is masked when present. Package names come from
+# the OS-family var map, so the role stays package-manager-agnostic.
+# ============================================================================
+- name: Install TLP
+  ansible.builtin.package:
+    name: "{{ tlp_packages }}"
+    state: present
+  become: true
+
+- name: Collect service facts
+  ansible.builtin.service_facts:
+  become: true
+
+- name: Mask power-profiles-daemon (mutually exclusive with TLP)
+  ansible.builtin.systemd_service:
+    name: power-profiles-daemon
+    state: stopped
+    masked: true
+  become: true
+  when: "'power-profiles-daemon.service' in (ansible_facts.services | default({}))"
+
+- name: Write the ThinkPad charge-threshold drop-in
+  ansible.builtin.template:
+    src: charge-thresholds.conf.j2
+    dest: /etc/tlp.d/01-charge-thresholds.conf
+    mode: "0644"
+  become: true
+  when:
+    - tlp_start_charge_threshold is not none
+    - tlp_stop_charge_threshold is not none
+  notify: Restart TLP
+
+- name: Enable and start TLP
+  ansible.builtin.systemd_service:
+    name: tlp
+    enabled: true
+    state: started
+  become: true
+
+- name: Install fwupd
+  ansible.builtin.package:
+    name: "{{ fwupd_package }}"
+    state: present
+  become: true
+  when: install_fwupd | bool
+
+- name: Enable the fwupd metadata-refresh timer
+  ansible.builtin.systemd_service:
+    name: fwupd-refresh.timer
+    enabled: true
+    state: started
+  become: true
+  when: install_fwupd | bool

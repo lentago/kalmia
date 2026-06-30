@@ -72,6 +72,7 @@ The profile autodetects from host facts when unset. Run a subset with tags, e.g.
 | `languages` | Python, Node.js (nvm), Go |
 | `cloud_tools` | AWS CLI v2, Granted, Terraform (tfswitch), kubectl, eksctl, Helm |
 | `containers` | Docker Engine + Compose (daemon optional) |
+| `power` | TLP power management, ThinkPad charge thresholds, fwupd (opt-in) |
 | `editors` | VS Code (+ extensions), Claude Code |
 | `cli_tools` | jq, yq, bat, fd, ripgrep, fzf, tmux, direnv, Starship, … |
 | `shell` | marker-managed `.bashrc` block + Starship config |
@@ -81,8 +82,8 @@ The profile autodetects from host facts when unset. Run a subset with tags, e.g.
 
 **Debian-family profiles (`xubuntu`, `ubuntu_laptop`) are runnable now.**
 Crostini is partial (sudo / `~/.local/bin` quirks). Fedora runs the shared
-toolchain plus Docker + VS Code from their dnf repos. Landing next: the `power`
-role (TLP + ThinkPad charge thresholds, fwupd).
+toolchain plus Docker + VS Code from their dnf repos; `ubuntu_laptop` adds TLP
+power management, ThinkPad charge thresholds, and fwupd via the `power` role.
 
 ---
 

@@ -1,0 +1,12 @@
+---
+# Power management is opt-in per profile (enable_tlp); only the bare-metal
+# ubuntu_laptop profile turns it on. fwupd rides along because firmware updates
+# only matter on bare metal.
+enable_tlp: false
+install_fwupd: true
+
+# ThinkPad battery charge thresholds (percent). TLP applies these through the
+# kernel's native charge-control sysfs on supported hardware and ignores them
+# elsewhere. Set either to null to skip writing the threshold drop-in.
+tlp_start_charge_threshold: 75
+tlp_stop_charge_threshold: 80
