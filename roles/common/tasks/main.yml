@@ -1,7 +1,21 @@
 ---
 # ============================================================================
-# common — base packages, base services, and global git configuration.
+# common — host hygiene (hostname resolution, user-space bin dirs), base
+# packages, base services, and global git configuration.
 # ============================================================================
+# Crostini's container hostname (penguin) has no /etc/hosts entry, so every
+# sudo/become call warns "unable to resolve host penguin". Map the short
+# hostname to loopback the Debian way. The exact-match regexp is idempotent and
+# never clobbers an existing FQDN loopback line.
+- name: Map the short hostname to loopback so sudo can resolve it
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    line: "127.0.1.1 {{ ansible_hostname }}"
+    regexp: '^127\.0\.1\.1\s+{{ ansible_hostname }}\s*$'
+    state: present
+  become: true
+  when: ansible_os_family == "Debian"
+
 - name: Update apt cache and upgrade the base system (Debian)
   ansible.builtin.apt:
     update_cache: true
@@ -32,6 +46,18 @@
   become: true
   loop: "{{ base_services | default([]) }}"
   failed_when: false        # guest-agent may be absent on bare metal — non-fatal
+
+# The .bashrc PATH includes ~/.local/bin and ~/bin; guarantee they exist so the
+# user-scoped installs (Claude Code, tldr, tfswitch) have a target on PATH.
+- name: Ensure user-space bin directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ target_home }}/.local/bin"
+    - "{{ target_home }}/bin"
+  become: false
 
 - name: Configure global git settings
   community.general.git_config:

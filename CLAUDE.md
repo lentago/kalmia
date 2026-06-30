@@ -59,8 +59,9 @@ instead of ~1,000-line bash scripts. It supersedes the bash scripts in
 
 ## Status
 
-- **Debian-family profiles (`xubuntu`, `ubuntu_laptop`) are runnable now**;
-  `crostini` is partial (sudo / `~/.local/bin` quirks).
+- **All three Debian-family profiles (`xubuntu`, `ubuntu_laptop`, `crostini`)
+  are runnable.** Crostini runs Docker CLI-only; the `common` role handles its
+  hostname-resolution (sudo) and `~/.local/bin` quirks.
 - **Fedora** runs the shared toolchain plus Docker + VS Code from their dnf
   repos (`containers`/`editors` roles).
 - **`ubuntu_laptop`** adds TLP power management, ThinkPad charge thresholds, and

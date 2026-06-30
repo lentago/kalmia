@@ -80,10 +80,11 @@ The profile autodetects from host facts when unset. Run a subset with tags, e.g.
 
 ## Status
 
-**Debian-family profiles (`xubuntu`, `ubuntu_laptop`) are runnable now.**
-Crostini is partial (sudo / `~/.local/bin` quirks). Fedora runs the shared
-toolchain plus Docker + VS Code from their dnf repos; `ubuntu_laptop` adds TLP
-power management, ThinkPad charge thresholds, and fwupd via the `power` role.
+**All four profiles are runnable.** Fedora installs the shared toolchain plus
+Docker + VS Code from their dnf repos; `ubuntu_laptop` adds TLP power
+management, ThinkPad charge thresholds, and fwupd via the `power` role; Crostini
+runs Docker CLI-only with hostname-resolution and `~/.local/bin` fixes from the
+`common` role.
 
 ---
 

@@ -1,11 +1,17 @@
 ---
 # Chromebook Crostini (Debian container) — Docker CLI only (no daemon), no
-# systemd-managed services. NOTE: Crostini's sudo quirks and ~/.local/bin
-# install paths are only partially handled in this release; xubuntu and
-# ubuntu_laptop are the fully-supported Debian targets for now.
+# systemd-managed services. The common role maps the `penguin` hostname to
+# loopback (silencing sudo's "unable to resolve host" warning) and pre-creates
+# ~/.local/bin and ~/bin so user-space installs land on PATH.
 docker_install: true
 docker_daemon: false           # CLI only — no daemon inside the container
 docker_apt_repo_url: "https://download.docker.com/linux/debian"
+
+# The daemon can't run in the container, so install just the client + Compose
+# plugin rather than the full docker-ce engine + containerd.
+docker_packages:
+  - docker-ce-cli
+  - docker-compose-plugin
 install_vscode: true
 install_claude_code: true
 clone_repos: false
