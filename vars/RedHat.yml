@@ -13,6 +13,8 @@ base_packages:
   - zip
   - gnupg2
   - ca-certificates
+  - openssl              # minimal Fedora ships openssl-libs but not the CLI;
+                         # the Helm install script needs it for checksum verify
   - "@development-tools"
   - openssh-clients
   - bind-utils
