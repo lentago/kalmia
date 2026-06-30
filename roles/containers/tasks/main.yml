@@ -1,8 +1,9 @@
 ---
 # ============================================================================
 # containers — Docker Engine + Compose. The daemon/group steps are skipped on
-# CLI-only profiles (Crostini). Fedora's dnf-repo wiring lands in a follow-up
-# PR; the fedora profile disables docker_install until then.
+# CLI-only profiles (Crostini). Debian installs from the Docker apt repo;
+# Fedora from the Docker dnf repo — both pull the same docker_packages set
+# from the OS-family var map.
 # ============================================================================
 - name: Set up Docker from the official apt repository (Debian)
   when: ansible_os_family == "Debian"
@@ -36,6 +37,29 @@
         name: "{{ docker_packages }}"
         state: present
         update_cache: true
+
+- name: Set up Docker from the official dnf repository (Fedora)
+  when: ansible_os_family == "RedHat"
+  become: true
+  block:
+    - name: Import the Docker GPG key
+      ansible.builtin.rpm_key:
+        key: "{{ docker_dnf_repo_url }}/gpg"
+        state: present
+
+    - name: Add the Docker dnf repository
+      ansible.builtin.yum_repository:
+        name: docker-ce-stable
+        description: Docker CE Stable - $basearch
+        baseurl: "{{ docker_dnf_repo_url }}/$releasever/$basearch/stable"
+        gpgcheck: true
+        gpgkey: "{{ docker_dnf_repo_url }}/gpg"
+        enabled: true
+
+    - name: Install Docker Engine + Compose plugin
+      ansible.builtin.dnf:
+        name: "{{ docker_packages }}"
+        state: present
 
 - name: Add the user to the docker group
   ansible.builtin.user:

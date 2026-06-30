@@ -1,12 +1,12 @@
 ---
 # Fedora KDE on a Proxmox VM. The distro-agnostic core roles run via the dnf
-# package map (vars/RedHat.yml). Docker + VS Code need dnf-repo wiring and the
-# XRDP/SELinux desktop layer is not built yet — both are disabled here until
-# the Fedora follow-up PR lands, so a fedora run installs the shared toolchain
-# without erroring on the not-yet-ported steps.
-docker_install: false
+# package map (vars/RedHat.yml). Docker + VS Code install from their Fedora dnf
+# repos (containers/editors roles). The XRDP/SELinux desktop layer is not built
+# yet — enable_xrdp is pre-wired but has no consumer until the remote_desktop
+# role lands, so it is a no-op for now.
+docker_install: true
 docker_daemon: true
-install_vscode: false
+install_vscode: true
 install_claude_code: true
 clone_repos: false
 
