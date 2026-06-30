@@ -37,7 +37,7 @@ jobs:
           steps (nvm, .bashrc, Starship, VS Code settings) must run as the user.
           Flag become misuse and root-vs-user `$HOME`/`ansible_env.HOME` mix-ups.
         - **Profile / variable correctness**: feature toggles (docker_install,
-          docker_daemon, enable_xrdp, …) and the vars/<os_family>.yml package
+          docker_daemon, enable_tlp, …) and the vars/<os_family>.yml package
           maps must be applied consistently; flag a role hard-coding what a
           profile should drive.
         - **Security**: no secrets committed; GH_TOKEN only via the environment;

@@ -10,7 +10,6 @@ install_vscode: true
 install_claude_code: true
 clone_repos: false
 
-enable_xrdp: false
 enable_tlp: false
 
 base_extra_packages: []

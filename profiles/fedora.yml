@@ -1,17 +1,13 @@
 ---
 # Fedora KDE on a Proxmox VM. The distro-agnostic core roles run via the dnf
 # package map (vars/RedHat.yml). Docker + VS Code install from their Fedora dnf
-# repos (containers/editors roles). The XRDP/SELinux desktop layer is not built
-# yet — enable_xrdp is pre-wired but has no consumer until the remote_desktop
-# role lands, so it is a no-op for now.
+# repos (containers/editors roles).
 docker_install: true
 docker_daemon: true
 install_vscode: true
 install_claude_code: true
 clone_repos: false
 
-desktop_env: kde
-enable_xrdp: true
 enable_tlp: false
 
 base_extra_packages:

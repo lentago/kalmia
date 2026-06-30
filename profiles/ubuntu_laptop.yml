@@ -1,5 +1,5 @@
 ---
-# Bare-metal Ubuntu laptop — full Docker Engine, no XRDP, TLP power management.
+# Bare-metal Ubuntu laptop — full Docker Engine, TLP power management.
 docker_install: true
 docker_daemon: true
 docker_apt_repo_url: "https://download.docker.com/linux/ubuntu"
@@ -7,7 +7,6 @@ install_vscode: true
 install_claude_code: true
 clone_repos: false
 
-enable_xrdp: false
 enable_tlp: true               # TLP + ThinkPad charge thresholds (follow-up PR)
 
 base_extra_packages:

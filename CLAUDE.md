@@ -32,11 +32,11 @@ instead of ~1,000-line bash scripts. It supersedes the bash scripts in
   `bootstrap.sh` installs Ansible and runs the play (or `ansible-pull`s the repo).
 - **Profile + facts model**: `workstation_profile` (autodetected, or
   `-e workstation_profile=…`) loads `profiles/<name>.yml`, which sets feature
-  toggles (`docker_install`, `docker_daemon`, `enable_xrdp`, `enable_tlp`, …).
+  toggles (`docker_install`, `docker_daemon`, `enable_tlp`, …).
   `ansible_os_family` loads `vars/<family>.yml` for package-name differences
   (e.g. `batcat`↔`bat`, `fd-find`↔`fd`). The split is deliberate — it is NOT
   purely by distro (Crostini is Debian but daemonless; ubuntu_laptop is Debian
-  but TLP-not-XRDP).
+  but the lone TLP target).
 - **Privilege model**: the play runs `become: false`; system tasks opt into
   `become: true`, user-space tasks (nvm, `.bashrc`, Starship, VS Code settings)
   run as the user. Use `target_user` / `target_home`, never root's `$HOME`.
@@ -63,9 +63,8 @@ instead of ~1,000-line bash scripts. It supersedes the bash scripts in
   `crostini` is partial (sudo / `~/.local/bin` quirks).
 - **Fedora** runs the shared toolchain plus Docker + VS Code from their dnf
   repos (`containers`/`editors` roles); the desktop layer is still pending.
-- **Pending follow-ups**: the platform-specific roles — `remote_desktop`
-  (XRDP + XFCE/KDE + SELinux/polkit) and `power` (TLP + ThinkPad charge
-  thresholds, fwupd).
+- **Pending follow-ups**: the `power` role (TLP + ThinkPad charge thresholds,
+  fwupd).
 
 ## CI
 

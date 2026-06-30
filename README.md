@@ -55,11 +55,11 @@ The profile autodetects from host facts when unset. Run a subset with tags, e.g.
 
 - **Self-provisioning** against `localhost` (`connection: local`).
 - **Profile + facts model**: `workstation_profile` selects `profiles/<name>.yml`
-  (feature toggles like `docker_daemon`, `enable_xrdp`, `enable_tlp`);
+  (feature toggles like `docker_daemon`, `enable_tlp`);
   `ansible_os_family` selects `vars/<family>.yml` (package-name differences such
   as `batcat`↔`bat`). The toggles exist because the split isn't purely by
   distro — Crostini is Debian but daemonless; the Ubuntu laptop is Debian but
-  TLP-not-XRDP.
+  the lone TLP power-management target.
 - **Privilege model**: user context by default; system installs escalate with
   `become: true`; user config (nvm, `.bashrc`, Starship, VS Code settings) runs
   as you.
@@ -80,10 +80,9 @@ The profile autodetects from host facts when unset. Run a subset with tags, e.g.
 ## Status
 
 **Debian-family profiles (`xubuntu`, `ubuntu_laptop`) are runnable now.**
-Crostini is partial (sudo / `~/.local/bin` quirks). Landing next: Fedora
-dnf-repo wiring (Docker, VS Code) and the platform-specific roles —
-`remote_desktop` (XRDP + XFCE/KDE, SELinux/polkit) and `power` (TLP + ThinkPad
-charge thresholds, fwupd).
+Crostini is partial (sudo / `~/.local/bin` quirks). Fedora runs the shared
+toolchain plus Docker + VS Code from their dnf repos. Landing next: the `power`
+role (TLP + ThinkPad charge thresholds, fwupd).
 
 ---
 
