@@ -61,9 +61,11 @@ instead of ~1,000-line bash scripts. It supersedes the bash scripts in
 
 - **Debian-family profiles (`xubuntu`, `ubuntu_laptop`) are runnable now**;
   `crostini` is partial (sudo / `~/.local/bin` quirks).
-- **Pending follow-ups**: Fedora dnf-repo wiring (Docker, VS Code), and the
-  platform-specific roles — `remote_desktop` (XRDP + XFCE/KDE + SELinux/polkit)
-  and `power` (TLP + ThinkPad charge thresholds, fwupd).
+- **Fedora** runs the shared toolchain plus Docker + VS Code from their dnf
+  repos (`containers`/`editors` roles); the desktop layer is still pending.
+- **Pending follow-ups**: the platform-specific roles — `remote_desktop`
+  (XRDP + XFCE/KDE + SELinux/polkit) and `power` (TLP + ThinkPad charge
+  thresholds, fwupd).
 
 ## CI
 

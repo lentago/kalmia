@@ -1,8 +1,9 @@
 ---
 # ============================================================================
 # editors — VS Code (+ extensions, settings) and Claude Code.
-# VS Code installs via the Microsoft apt repo (Debian); the Fedora dnf repo
-# lands in a follow-up PR, so the fedora profile sets install_vscode: false.
+# VS Code installs from the Microsoft apt repo on Debian and the Microsoft dnf
+# repo on Fedora; the extension and settings steps are repo-agnostic and run
+# on both once the `code` binary is present.
 # ============================================================================
 - name: Set up VS Code from the Microsoft apt repository (Debian)
   when:
@@ -46,6 +47,31 @@
         state: present
         update_cache: true
 
+- name: Set up VS Code from the Microsoft dnf repository (Fedora)
+  when:
+    - install_vscode | bool
+    - ansible_os_family == "RedHat"
+  become: true
+  block:
+    - name: Import the Microsoft GPG key
+      ansible.builtin.rpm_key:
+        key: https://packages.microsoft.com/keys/microsoft.asc
+        state: present
+
+    - name: Add the VS Code dnf repository
+      ansible.builtin.yum_repository:
+        name: vscode
+        description: Visual Studio Code
+        baseurl: https://packages.microsoft.com/yumrepos/vscode
+        gpgcheck: true
+        gpgkey: https://packages.microsoft.com/keys/microsoft.asc
+        enabled: true
+
+    - name: Install VS Code
+      ansible.builtin.dnf:
+        name: code
+        state: present
+
 - name: Install VS Code extensions
   ansible.builtin.command: "code --install-extension {{ item }} --force"
   register: code_ext
@@ -55,9 +81,7 @@
     - "'is already installed' not in code_ext.stdout"
   loop: "{{ vscode_extensions }}"
   become: false
-  when:
-    - install_vscode | bool
-    - ansible_os_family == "Debian"
+  when: install_vscode | bool
 
 - name: Ensure the VS Code user-config directory exists
   ansible.builtin.file:

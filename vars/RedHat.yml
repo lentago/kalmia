@@ -1,10 +1,10 @@
 ---
 # ============================================================================
 # Fedora (dnf) package-name map. Loaded when ansible_os_family == "RedHat".
-# The core roles consume this so the distro-agnostic steps (languages, CLI
-# tools, shell, cloud-tool binaries) run on Fedora today. Fedora-specific repo
-# wiring (Docker, VS Code) and the XRDP/SELinux desktop layer land in a
-# follow-up PR; the fedora profile disables those toggles until then.
+# The core roles consume this for the distro-agnostic steps (languages, CLI
+# tools, shell, cloud-tool binaries) plus the Docker and VS Code dnf-repo
+# installs. The XRDP/SELinux desktop layer still lands in a follow-up PR; the
+# fedora profile leaves enable_xrdp wired but unconsumed until then.
 # ============================================================================
 base_packages:
   - curl
