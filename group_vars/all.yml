@@ -1,0 +1,63 @@
+---
+# ============================================================================
+# Global configuration — applies to every profile unless a profile file
+# (profiles/<name>.yml) or the OS-family map (vars/<family>.yml) overrides it.
+# ============================================================================
+
+# --- Tool versions (pin here; bump in one place) ---------------------------
+go_version: "1.23.6"
+nvm_version: "v0.40.1"
+
+# --- Feature toggles (profiles override these) -----------------------------
+docker_install: true
+docker_daemon: true            # false → CLI-only (Crostini)
+install_vscode: true
+install_claude_code: true
+clone_repos: false             # opt-in; needs gh auth or GH_TOKEN in the env
+
+# --- GitHub / repo cloning -------------------------------------------------
+github_user: "{{ lookup('env', 'GITHUB_USER') | default('', true) }}"
+github_org: "{{ lookup('env', 'GITHUB_ORG') | default('', true) }}"
+github_default_owner: "{{ lookup('env', 'GITHUB_DEFAULT_OWNER') | default('', true) }}"
+repos_dir: "{{ ansible_env.HOME }}/repos"
+
+# --- Git identity (auto-pulled from the gh profile when left empty) ---------
+git_user_name: "{{ lookup('env', 'GIT_NAME') | default('', true) }}"
+git_user_email: "{{ lookup('env', 'GIT_EMAIL') | default('', true) }}"
+
+git_config_global:
+  init.defaultBranch: main
+  pull.rebase: "true"
+  push.autoSetupRemote: "true"
+  core.editor: nano
+
+git_aliases:
+  st: status -sb
+  lg: log --oneline --graph --decorate -20
+  co: checkout
+  br: branch
+  unstage: reset HEAD --
+  amend: commit --amend --no-edit
+  wip: "!git add -A && git commit -m 'WIP'"
+
+# --- VS Code extensions ----------------------------------------------------
+vscode_extensions:
+  - hashicorp.terraform
+  - hashicorp.hcl
+  - ms-azuretools.vscode-docker
+  - amazonwebservices.aws-toolkit-vscode
+  - ms-python.python
+  - golang.go
+  - anthropic.claude-code
+  - redhat.vscode-yaml
+  - eamodio.gitlens
+  - timonwong.shellcheck
+  - ms-vscode-remote.remote-ssh
+
+# --- Quality-of-life packages with identical names across families ---------
+# (family-specific names — bat, fd, ripgrep, shellcheck — live in vars/<family>.yml)
+qol_packages:
+  - jq
+  - tree
+  - tmux
+  - direnv

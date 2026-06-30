@@ -1,0 +1,49 @@
+---
+# ============================================================================
+# Fedora (dnf) package-name map. Loaded when ansible_os_family == "RedHat".
+# The core roles consume this so the distro-agnostic steps (languages, CLI
+# tools, shell, cloud-tool binaries) run on Fedora today. Fedora-specific repo
+# wiring (Docker, VS Code) and the XRDP/SELinux desktop layer land in a
+# follow-up PR; the fedora profile disables those toggles until then.
+# ============================================================================
+base_packages:
+  - curl
+  - wget
+  - git
+  - unzip
+  - zip
+  - gnupg2
+  - ca-certificates
+  - "@development-tools"
+  - openssh-clients
+  - bind-utils
+  - net-tools
+  - traceroute
+  - nmap
+  - whois
+  - htop
+  - ncdu
+  - nano
+  - nfs-utils
+  - findutils
+  - procps-ng
+  - util-linux
+
+python_packages:
+  - python3
+  - python3-pip
+
+# Fedora ships these with clean binary names — no alias needed.
+pkg_bat: bat
+pkg_fd: fd-find
+pkg_ripgrep: ripgrep
+pkg_shellcheck: ShellCheck
+pkg_pipx: pipx
+bat_command: bat
+fd_command: fd
+
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-compose-plugin

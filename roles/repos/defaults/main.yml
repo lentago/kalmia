@@ -1,0 +1,5 @@
+---
+clone_repos: false
+repos_dir: "{{ ansible_env.HOME }}/repos"
+github_user: ""
+github_org: ""

@@ -1,0 +1,79 @@
+{
+  // Managed by lentago/workstation-ansible (editors role). Written once —
+  // your later edits are preserved (the role never clobbers this file).
+
+  // --- Editor behavior ---
+  "editor.fontSize": 15,
+  "editor.fontFamily": "'{{ vscode_font }}', 'monospace', monospace",
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.formatOnSave": true,
+  "editor.trimAutoWhitespace": true,
+  "editor.renderWhitespace": "trailing",
+  "editor.suggestSelection": "first",
+  "editor.linkedEditing": true,
+  "editor.bracketPairColorization.enabled": true,
+  "editor.guides.bracketPairs": "active",
+
+  // --- Files ---
+  "files.autoSave": "onFocusChange",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
+
+  // --- Theme ---
+  "workbench.colorTheme": "Default Dark Modern",
+
+  // --- Terminal ---
+  "terminal.integrated.defaultProfile.linux": "bash",
+  "terminal.integrated.fontSize": 14,
+
+  // --- Git ---
+  "git.autofetch": true,
+  "git.confirmSync": false,
+  "git.enableSmartCommit": true,
+
+  // --- Terraform ---
+  "terraform.experimentalFeatures.validateOnSave": true,
+  "[terraform]": {
+    "editor.defaultFormatter": "hashicorp.terraform",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2
+  },
+  "[terraform-vars]": {
+    "editor.defaultFormatter": "hashicorp.terraform",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2
+  },
+
+  // --- YAML ---
+  "[yaml]": {
+    "editor.tabSize": 2,
+    "editor.autoIndent": "keep"
+  },
+
+  // --- JSON ---
+  "[json]": {
+    "editor.tabSize": 2,
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "[jsonc]": {
+    "editor.tabSize": 2,
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+
+  // --- Markdown ---
+  "[markdown]": {
+    "editor.wordWrap": "on"
+  },
+
+  // --- Docker ---
+  "[dockerfile]": {
+    "editor.tabSize": 4
+  },
+
+  // --- Misc ---
+  "telemetry.telemetryLevel": "off",
+  "update.mode": "default",
+  "extensions.autoUpdate": true
+}

@@ -1,0 +1,5 @@
+---
+docker_install: true
+bat_command: bat
+fd_command: fd
+github_default_owner: ""

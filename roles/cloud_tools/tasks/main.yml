@@ -1,0 +1,134 @@
+---
+# ============================================================================
+# cloud_tools — AWS CLI v2, Granted, Terraform (tfswitch), kubectl, eksctl, Helm.
+# Binaries land in /usr/local/bin (system) or ~/bin (tfswitch's default).
+# ============================================================================
+
+# --- AWS CLI v2 ------------------------------------------------------------
+- name: Check for AWS CLI v2
+  ansible.builtin.command: aws --version
+  register: aws_check
+  changed_when: false
+  failed_when: false
+
+- name: Install AWS CLI v2
+  when: "'aws-cli/2' not in (aws_check.stdout | default('')) and 'aws-cli/2' not in (aws_check.stderr | default(''))"
+  become: true
+  block:
+    - name: Download the AWS CLI v2 installer
+      ansible.builtin.get_url:
+        url: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+        dest: /tmp/awscliv2.zip
+        mode: "0644"
+
+    - name: Unpack the AWS CLI v2 installer
+      ansible.builtin.unarchive:
+        src: /tmp/awscliv2.zip
+        dest: /tmp
+        remote_src: true
+
+    - name: Run the AWS CLI v2 installer
+      ansible.builtin.command: /tmp/aws/install --update
+      args:
+        creates: /usr/local/bin/aws
+
+# --- Granted (assume) ------------------------------------------------------
+# Granted moved from common-fate to fwdcloudsec after Common Fate wound down;
+# its old APT repo/CDN are dead, so install straight from GitHub releases.
+- name: Check for Granted
+  ansible.builtin.stat:
+    path: /usr/local/bin/granted
+  register: granted_bin
+
+- name: Install Granted
+  when: not granted_bin.stat.exists
+  become: true
+  block:
+    - name: Resolve the latest Granted release
+      ansible.builtin.uri:
+        url: https://api.github.com/repos/fwdcloudsec/granted/releases/latest
+        return_content: true
+      register: granted_release
+
+    - name: Download and unpack Granted into /usr/local/bin
+      ansible.builtin.unarchive:
+        src: >-
+          https://github.com/fwdcloudsec/granted/releases/download/{{ granted_release.json.tag_name }}/granted_{{
+          granted_release.json.tag_name | regex_replace('^v', '') }}_linux_x86_64.tar.gz
+        dest: /usr/local/bin
+        remote_src: true
+        include:
+          - granted
+          - assume
+        mode: "0755"
+
+# --- Terraform via tfswitch ------------------------------------------------
+- name: Check for tfswitch
+  ansible.builtin.stat:
+    path: /usr/local/bin/tfswitch
+  register: tfswitch_bin
+
+- name: Install tfswitch
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    curl -fsSL https://raw.githubusercontent.com/warrensbox/terraform-switcher/release/install.sh | bash
+  args:
+    executable: /bin/bash
+    creates: /usr/local/bin/tfswitch
+  become: true
+  when: not tfswitch_bin.stat.exists
+
+- name: Install the latest Terraform via tfswitch
+  ansible.builtin.command: tfswitch --latest
+  args:
+    creates: "{{ target_home }}/bin/terraform"
+  become: false
+  failed_when: false
+
+# --- kubectl ---------------------------------------------------------------
+- name: Resolve the latest stable kubectl version
+  ansible.builtin.uri:
+    url: https://dl.k8s.io/release/stable.txt
+    return_content: true
+  register: kubectl_stable
+  changed_when: false
+
+- name: Install kubectl
+  ansible.builtin.get_url:
+    url: "https://dl.k8s.io/release/{{ kubectl_stable.content | trim }}/bin/linux/amd64/kubectl"
+    dest: /usr/local/bin/kubectl
+    mode: "0755"
+  become: true
+
+# --- eksctl ----------------------------------------------------------------
+- name: Check for eksctl
+  ansible.builtin.stat:
+    path: /usr/local/bin/eksctl
+  register: eksctl_bin
+
+- name: Download and install eksctl
+  ansible.builtin.unarchive:
+    src: https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz
+    dest: /usr/local/bin
+    remote_src: true
+    include:
+      - eksctl
+    mode: "0755"
+  become: true
+  when: not eksctl_bin.stat.exists
+
+# --- Helm ------------------------------------------------------------------
+- name: Check for Helm
+  ansible.builtin.stat:
+    path: /usr/local/bin/helm
+  register: helm_bin
+
+- name: Install Helm
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  args:
+    executable: /bin/bash
+    creates: /usr/local/bin/helm
+  become: true
+  when: not helm_bin.stat.exists

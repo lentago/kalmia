@@ -1,0 +1,7 @@
+---
+qol_packages: [jq, tree, tmux, direnv]
+pkg_bat: bat
+pkg_fd: fd-find
+pkg_ripgrep: ripgrep
+pkg_shellcheck: shellcheck
+pkg_pipx: pipx

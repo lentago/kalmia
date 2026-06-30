@@ -1,0 +1,103 @@
+---
+# ============================================================================
+# repos — GitHub CLI + clone personal (and optional org) repositories.
+# Opt-in: runs only when clone_repos is true. Needs gh already authenticated
+# or GH_TOKEN in the environment.
+# ============================================================================
+- name: Install GitHub CLI from the official apt repository (Debian)
+  when: ansible_os_family == "Debian"
+  become: true
+  block:
+    - name: Ensure the apt keyrings directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Add the GitHub CLI GPG key
+      ansible.builtin.get_url:
+        url: https://cli.github.com/packages/githubcli-archive-keyring.gpg
+        dest: /etc/apt/keyrings/githubcli-archive-keyring.gpg
+        mode: "0644"
+
+    - name: Add the GitHub CLI apt repository
+      ansible.builtin.deb822_repository:
+        name: github-cli
+        types: [deb]
+        uris: https://cli.github.com/packages
+        suites: stable
+        components: [main]
+        architectures: "{{ deb_arch }}"
+        signed_by: /etc/apt/keyrings/githubcli-archive-keyring.gpg
+        state: present
+
+    - name: Install gh
+      ansible.builtin.apt:
+        name: gh
+        state: present
+        update_cache: true
+
+- name: Check GitHub CLI auth status
+  ansible.builtin.command: gh auth status
+  register: gh_auth
+  changed_when: false
+  failed_when: false
+  become: false
+  environment:
+    GH_TOKEN: "{{ lookup('env', 'GH_TOKEN') | default('', true) }}"
+
+- name: Clone repositories
+  when: gh_auth.rc == 0
+  become: false
+  environment:
+    GH_TOKEN: "{{ lookup('env', 'GH_TOKEN') | default('', true) }}"
+  block:
+    - name: Configure git to use gh credentials
+      ansible.builtin.command: gh auth setup-git
+      changed_when: false
+
+    - name: Resolve the GitHub user when not set explicitly
+      ansible.builtin.command: gh api user -q .login
+      register: gh_user_cmd
+      changed_when: false
+      when: github_user | length == 0
+
+    - name: Set the effective GitHub user
+      ansible.builtin.set_fact:
+        effective_github_user: "{{ github_user if (github_user | length > 0) else gh_user_cmd.stdout }}"
+
+    - name: Ensure the repos directory exists
+      ansible.builtin.file:
+        path: "{{ repos_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: List personal repositories
+      ansible.builtin.command: "gh repo list {{ effective_github_user }} --limit 200 --json name -q .[].name"
+      register: personal_repos
+      changed_when: false
+
+    - name: Clone personal repositories
+      ansible.builtin.git:
+        repo: "https://github.com/{{ effective_github_user }}/{{ item }}.git"
+        dest: "{{ repos_dir }}/{{ item }}"
+        version: HEAD
+        update: false
+      loop: "{{ personal_repos.stdout_lines }}"
+      failed_when: false
+
+    - name: List organization repositories
+      ansible.builtin.command: "gh repo list {{ github_org }} --limit 200 --json name -q .[].name"
+      register: org_repos
+      changed_when: false
+      when: github_org | length > 0
+
+    - name: Clone organization repositories
+      ansible.builtin.git:
+        repo: "https://github.com/{{ github_org }}/{{ item }}.git"
+        dest: "{{ repos_dir }}/{{ item }}"
+        version: HEAD
+        update: false
+      loop: "{{ org_repos.stdout_lines | default([]) }}"
+      failed_when: false
+      when: github_org | length > 0

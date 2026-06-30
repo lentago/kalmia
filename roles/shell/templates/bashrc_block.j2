@@ -1,0 +1,120 @@
+
+# --- PATH ---
+export PATH="$HOME/.local/bin:$HOME/bin:$HOME/go/bin:/usr/local/go/bin:$PATH"
+
+# --- Workstation config ---
+WS_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/workstation-bootstrap/config"
+[[ -f "$WS_CONFIG" ]] && . "$WS_CONFIG"
+
+# --- nvm ---
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
+
+# --- fzf ---
+[ -f "$HOME/.fzf.bash" ] && . "$HOME/.fzf.bash"
+
+# --- direnv ---
+command -v direnv &>/dev/null && eval "$(direnv hook bash)"
+
+# --- Starship prompt ---
+command -v starship &>/dev/null && eval "$(starship init bash)"
+
+# --- Granted (AWS account switching) ---
+alias assume="source assume"
+
+# --- Aliases: navigation ---
+alias ll='ls -alFh --color=auto'
+alias la='ls -A --color=auto'
+alias l='ls -CF --color=auto'
+alias ..='cd ..'
+alias ...='cd ../..'
+alias repos='cd ~/repos'
+{% if bat_command != 'bat' %}
+# --- bat (Debian ships it as {{ bat_command }}) ---
+command -v {{ bat_command }} &>/dev/null && alias bat='{{ bat_command }}'
+{% endif %}
+{% if fd_command != 'fd' %}
+# --- fd (Debian ships it as {{ fd_command }}) ---
+command -v {{ fd_command }} &>/dev/null && alias fd='{{ fd_command }}'
+{% endif %}
+{% if docker_install %}
+# --- Aliases: docker ---
+{% raw %}
+alias dc='docker compose'
+alias dps='docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"'
+alias dlog='docker logs -f'
+{% endraw %}
+{% endif %}
+# --- Aliases: kubernetes ---
+alias k='kubectl'
+alias kgp='kubectl get pods'
+alias kgs='kubectl get svc'
+alias kgn='kubectl get nodes'
+alias kns='kubectl config set-context --current --namespace'
+alias kctx='kubectl config use-context'
+
+# --- Aliases: terraform ---
+alias tf='terraform'
+alias tfi='terraform init'
+alias tfp='terraform plan'
+alias tfa='terraform apply'
+alias tfs='tfswitch'
+
+# --- Aliases: git ---
+alias g='git'
+alias gs='git status -sb'
+alias gd='git diff'
+alias gp='git push'
+alias gl='git lg'
+alias gco='git checkout'
+alias gcb='git checkout -b'
+alias gwip='git wip'
+
+# --- Aliases: GitHub org ---
+if [[ -n "${GITHUB_DEFAULT_OWNER:-}" ]]; then
+  alias ghnew='gh repo create --owner "$GITHUB_DEFAULT_OWNER"'
+  alias ghclone='gh repo clone "$GITHUB_DEFAULT_OWNER"/'
+fi
+
+# --- Aliases: safety nets ---
+alias rm='rm -i'
+alias cp='cp -i'
+alias mv='mv -i'
+
+# --- AWS defaults (uncomment as needed) ---
+# export AWS_PROFILE=default
+# export AWS_DEFAULT_REGION=us-east-1
+
+# --- Functions ---
+
+# mkdir + cd in one shot
+mkcd() { mkdir -p "$1" && cd "$1"; }
+
+# Quick Python venv setup
+venv() {
+  local name="${1:-.venv}"
+  if [[ ! -d "$name" ]]; then
+    python3 -m venv "$name"
+    echo "Created venv: $name"
+  fi
+  # shellcheck disable=SC1091
+  source "$name/bin/activate"
+  echo "Activated: $name"
+}
+
+# Quick look at what's in your repos dir
+projects() {
+  echo ""
+  echo "📂 ~/repos:"
+  for dir in ~/repos/*/; do
+    [[ -d "$dir/.git" ]] || continue
+    local name branch dirty
+    name=$(basename "$dir")
+    branch=$(git -C "$dir" branch --show-current 2>/dev/null || echo "—")
+    dirty=""
+    [[ -n "$(git -C "$dir" status --porcelain 2>/dev/null)" ]] && dirty=" *"
+    printf "  %-30s (%s)%s\n" "$name" "$branch" "$dirty"
+  done
+  echo ""
+}

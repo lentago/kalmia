@@ -1,0 +1,8 @@
+---
+profile: basic
+exclude_paths:
+  - .github/
+skip_list:
+  - package-latest    # base-system upgrade legitimately wants the latest packages
+  - git-latest        # fzf installs from its upstream master branch by design
+  - var-naming[no-role-prefix]  # toggles (docker_install, …) are shared across roles by design

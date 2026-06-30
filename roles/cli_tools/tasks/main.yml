@@ -1,0 +1,64 @@
+---
+# ============================================================================
+# cli_tools — jq, yq, bat, fd, ripgrep, tmux, shellcheck, direnv, pipx, tree,
+# fzf, tldr, and the Starship prompt binary.
+# ============================================================================
+- name: Install quality-of-life packages from the system package manager
+  ansible.builtin.package:
+    name: "{{ qol_packages + [pkg_bat, pkg_fd, pkg_ripgrep, pkg_shellcheck, pkg_pipx] }}"
+    state: present
+  become: true
+
+- name: Install tldr (pip, user scope)
+  ansible.builtin.pip:
+    name: tldr
+    extra_args: --user --break-system-packages
+  become: false
+  failed_when: false        # best-effort; pip policies vary by distro
+
+# --- yq (single binary) ----------------------------------------------------
+- name: Check for yq
+  ansible.builtin.stat:
+    path: /usr/local/bin/yq
+  register: yq_bin
+
+- name: Install yq
+  when: not yq_bin.stat.exists
+  become: true
+  block:
+    - name: Resolve the latest yq version
+      ansible.builtin.uri:
+        url: https://api.github.com/repos/mikefarah/yq/releases/latest
+        return_content: true
+      register: yq_release
+
+    - name: Download the yq binary
+      ansible.builtin.get_url:
+        url: "https://github.com/mikefarah/yq/releases/download/{{ yq_release.json.tag_name }}/yq_linux_amd64"
+        dest: /usr/local/bin/yq
+        mode: "0755"
+
+# --- fzf (git clone + installer, user space) -------------------------------
+- name: Clone fzf
+  ansible.builtin.git:
+    repo: https://github.com/junegunn/fzf.git
+    dest: "{{ target_home }}/.fzf"
+    depth: 1
+    version: master
+  become: false
+
+- name: Run the fzf installer
+  ansible.builtin.command: >-
+    {{ target_home }}/.fzf/install --key-bindings --completion
+    --no-update-rc --no-bash --no-zsh --no-fish
+  args:
+    creates: "{{ target_home }}/.fzf.bash"
+  become: false
+
+# --- Starship prompt (single binary → /usr/local/bin) ----------------------
+- name: Install the Starship prompt
+  ansible.builtin.shell: set -o pipefail; curl -fsSL https://starship.rs/install.sh | sh -s -- -y
+  args:
+    executable: /bin/bash
+    creates: /usr/local/bin/starship
+  become: true

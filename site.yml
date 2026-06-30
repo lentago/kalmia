@@ -1,0 +1,69 @@
+---
+# ============================================================================
+# Bootstrap a Lentago Labs cloud-infrastructure dev workstation.
+#
+#   ansible-playbook site.yml                         # autodetect profile
+#   ansible-playbook site.yml -e workstation_profile=xubuntu
+#   WORKSTATION_PROFILE=xubuntu ./bootstrap.sh        # self-provision
+#
+# The play runs in user context (become: false) and escalates per-task for
+# system installs. Every role is idempotent — re-running is safe.
+# ============================================================================
+- name: Bootstrap a Lentago Labs cloud-infrastructure workstation
+  hosts: all
+  gather_facts: true
+  become: false
+
+  vars:
+    # Override with -e workstation_profile=<name> or WORKSTATION_PROFILE env.
+    # Empty → autodetected in pre_tasks below.
+    workstation_profile: "{{ lookup('env', 'WORKSTATION_PROFILE') | default('', true) }}"
+    target_user: "{{ ansible_user_id }}"
+    target_home: "{{ ansible_env.HOME }}"
+
+  pre_tasks:
+    - name: Autodetect workstation profile when not provided
+      ansible.builtin.set_fact:
+        workstation_profile: >-
+          {{
+            'fedora' if ansible_distribution == 'Fedora'
+            else 'crostini' if ansible_hostname == 'penguin'
+            else 'ubuntu_laptop' if (ansible_form_factor | default('')) in ['Laptop', 'Notebook', 'Portable', 'Sub-Notebook', 'Hand-Held']
+            else 'xubuntu' if (ansible_virtualization_role | default('host')) == 'guest'
+            else ''
+          }}
+      when: workstation_profile | length == 0
+
+    - name: Fail fast when the profile cannot be determined
+      ansible.builtin.assert:
+        that: workstation_profile | length > 0
+        fail_msg: >-
+          Could not autodetect the workstation profile. Re-run with
+          -e workstation_profile=<crostini|xubuntu|fedora|ubuntu_laptop>.
+        success_msg: "Workstation profile: {{ workstation_profile }}"
+
+    - name: Load OS-family package-name map
+      ansible.builtin.include_vars: "vars/{{ ansible_os_family }}.yml"
+
+    - name: Load profile feature toggles
+      ansible.builtin.include_vars: "profiles/{{ workstation_profile }}.yml"
+
+  roles:
+    - role: common
+      tags: [common, base]
+    - role: languages
+      tags: [languages]
+    - role: cloud_tools
+      tags: [cloud]
+    - role: containers
+      tags: [containers, docker]
+      when: docker_install | bool
+    - role: editors
+      tags: [editors]
+    - role: cli_tools
+      tags: [cli]
+    - role: shell
+      tags: [shell]
+    - role: repos
+      tags: [repos]
+      when: clone_repos | bool

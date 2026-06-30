@@ -1,0 +1,4 @@
+---
+docker_install: true
+docker_daemon: true
+docker_apt_repo_url: "https://download.docker.com/linux/ubuntu"

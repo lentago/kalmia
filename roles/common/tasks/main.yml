@@ -1,0 +1,67 @@
+---
+# ============================================================================
+# common — base packages, base services, and global git configuration.
+# ============================================================================
+- name: Update apt cache and upgrade the base system (Debian)
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    upgrade: safe
+  become: true
+  when: ansible_os_family == "Debian"
+
+- name: Upgrade the base system (RedHat)
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
+    update_only: true
+  become: true
+  when: ansible_os_family == "RedHat"
+
+- name: Install base packages
+  ansible.builtin.package:
+    name: "{{ base_packages + (base_extra_packages | default([])) }}"
+    state: present
+  become: true
+
+- name: Enable and start base services
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  become: true
+  loop: "{{ base_services | default([]) }}"
+  failed_when: false        # guest-agent may be absent on bare metal — non-fatal
+
+- name: Configure global git settings
+  community.general.git_config:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    scope: global
+  loop: "{{ git_config_global | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  become: false
+
+- name: Configure global git aliases
+  community.general.git_config:
+    name: "alias.{{ item.key }}"
+    value: "{{ item.value }}"
+    scope: global
+  loop: "{{ git_aliases | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  become: false
+
+- name: Set git identity from explicit vars when provided
+  community.general.git_config:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    scope: global
+  loop:
+    - { name: user.name, value: "{{ git_user_name }}" }
+    - { name: user.email, value: "{{ git_user_email }}" }
+  loop_control:
+    label: "{{ item.name }}"
+  when: item.value | length > 0
+  become: false

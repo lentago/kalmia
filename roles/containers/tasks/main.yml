@@ -1,0 +1,54 @@
+---
+# ============================================================================
+# containers — Docker Engine + Compose. The daemon/group steps are skipped on
+# CLI-only profiles (Crostini). Fedora's dnf-repo wiring lands in a follow-up
+# PR; the fedora profile disables docker_install until then.
+# ============================================================================
+- name: Set up Docker from the official apt repository (Debian)
+  when: ansible_os_family == "Debian"
+  become: true
+  block:
+    - name: Ensure the apt keyrings directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Add the Docker GPG key
+      ansible.builtin.get_url:
+        url: "{{ docker_apt_repo_url }}/gpg"
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+
+    - name: Add the Docker apt repository
+      ansible.builtin.deb822_repository:
+        name: docker
+        types: [deb]
+        uris: "{{ docker_apt_repo_url }}"
+        suites: "{{ ansible_distribution_release }}"
+        components: [stable]
+        architectures: "{{ deb_arch }}"
+        signed_by: /etc/apt/keyrings/docker.asc
+        state: present
+
+    - name: Install Docker Engine + Compose plugin
+      ansible.builtin.apt:
+        name: "{{ docker_packages }}"
+        state: present
+        update_cache: true
+
+- name: Add the user to the docker group
+  ansible.builtin.user:
+    name: "{{ target_user }}"
+    groups: docker
+    append: true
+  become: true
+  when: docker_daemon | bool
+
+- name: Enable and start the Docker daemon
+  ansible.builtin.systemd_service:
+    name: docker
+    enabled: true
+    state: started
+  become: true
+  when: docker_daemon | bool

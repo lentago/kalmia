@@ -1,0 +1,36 @@
+---
+# ============================================================================
+# shell — Starship prompt config + the marker-managed .bashrc block.
+# blockinfile owns the markers, so re-runs replace the block cleanly — no
+# hand-rolled sed. Legacy blocks from the old setup-*.sh scripts are stripped
+# first so a migrated machine doesn't carry two copies.
+# ============================================================================
+- name: Ensure ~/.config exists
+  ansible.builtin.file:
+    path: "{{ target_home }}/.config"
+    state: directory
+    mode: "0755"
+  become: false
+
+- name: Render the Starship configuration
+  ansible.builtin.template:
+    src: starship.toml.j2
+    dest: "{{ target_home }}/.config/starship.toml"
+    mode: "0644"
+  become: false
+
+- name: Strip legacy bootstrap-script .bashrc blocks (migration)
+  ansible.builtin.replace:
+    path: "{{ target_home }}/.bashrc"
+    regexp: '(?s)\n?# >>> setup-[a-z-]+ >>>.*?# <<< setup-[a-z-]+ <<<\n?'
+    replace: ''
+  become: false
+
+- name: Install the managed .bashrc block
+  ansible.builtin.blockinfile:
+    path: "{{ target_home }}/.bashrc"
+    marker: "# {mark} ANSIBLE MANAGED — lentago workstation"
+    block: "{{ lookup('ansible.builtin.template', 'bashrc_block.j2') }}"
+    create: true
+    mode: "0644"
+  become: false

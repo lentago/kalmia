@@ -1,0 +1,5 @@
+---
+install_vscode: true
+install_claude_code: true
+vscode_extensions: []
+vscode_font: "Droid Sans Mono"

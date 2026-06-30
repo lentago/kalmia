@@ -1,0 +1,94 @@
+---
+# ============================================================================
+# editors — VS Code (+ extensions, settings) and Claude Code.
+# VS Code installs via the Microsoft apt repo (Debian); the Fedora dnf repo
+# lands in a follow-up PR, so the fedora profile sets install_vscode: false.
+# ============================================================================
+- name: Set up VS Code from the Microsoft apt repository (Debian)
+  when:
+    - install_vscode | bool
+    - ansible_os_family == "Debian"
+  become: true
+  block:
+    - name: Ensure the apt keyrings directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Add the Microsoft GPG key
+      ansible.builtin.get_url:
+        url: https://packages.microsoft.com/keys/microsoft.asc
+        dest: /etc/apt/keyrings/packages.microsoft.asc
+        mode: "0644"
+
+    - name: Add the VS Code apt repository
+      ansible.builtin.deb822_repository:
+        name: vscode
+        types: [deb]
+        uris: https://packages.microsoft.com/repos/code
+        suites: stable
+        components: [main]
+        architectures: "{{ deb_arch }}"
+        signed_by: /etc/apt/keyrings/packages.microsoft.asc
+        state: present
+
+    - name: Pre-seed debconf to skip the Microsoft-repo prompt
+      ansible.builtin.debconf:
+        name: code
+        question: code/add-microsoft-repo
+        vtype: boolean
+        value: "true"
+
+    - name: Install VS Code
+      ansible.builtin.apt:
+        name: code
+        state: present
+        update_cache: true
+
+- name: Install VS Code extensions
+  ansible.builtin.command: "code --install-extension {{ item }} --force"
+  register: code_ext
+  changed_when: "'is already installed' not in code_ext.stdout"
+  failed_when:
+    - code_ext.rc != 0
+    - "'is already installed' not in code_ext.stdout"
+  loop: "{{ vscode_extensions }}"
+  become: false
+  when:
+    - install_vscode | bool
+    - ansible_os_family == "Debian"
+
+- name: Ensure the VS Code user-config directory exists
+  ansible.builtin.file:
+    path: "{{ target_home }}/.config/Code/User"
+    state: directory
+    mode: "0755"
+  become: false
+  when: install_vscode | bool
+
+- name: Write VS Code user settings (never clobber existing)
+  ansible.builtin.template:
+    src: vscode-settings.json.j2
+    dest: "{{ target_home }}/.config/Code/User/settings.json"
+    mode: "0644"
+    force: false
+  become: false
+  when: install_vscode | bool
+
+# --- Claude Code (native binary, user space) -------------------------------
+- name: Check for Claude Code
+  ansible.builtin.stat:
+    path: "{{ target_home }}/.local/bin/claude"
+  register: claude_bin
+  become: false
+
+- name: Install Claude Code
+  ansible.builtin.shell: set -o pipefail; curl -fsSL https://claude.ai/install.sh | bash
+  args:
+    executable: /bin/bash
+    creates: "{{ target_home }}/.local/bin/claude"
+  become: false
+  when:
+    - install_claude_code | bool
+    - not claude_bin.stat.exists

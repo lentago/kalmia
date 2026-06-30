@@ -1,0 +1,79 @@
+---
+# ============================================================================
+# languages — Python, Node.js (via nvm), Go.
+# ============================================================================
+
+# --- Python ----------------------------------------------------------------
+- name: Install the Python toolchain
+  ansible.builtin.package:
+    name: "{{ python_packages }}"
+    state: present
+  become: true
+
+# --- Node.js via nvm (user space) ------------------------------------------
+# nvm triple-fix: (1) NVM_DIR must exist before the installer runs;
+# (2) PROFILE=/dev/null stops the installer rewriting .bashrc (the shell role
+# owns that block); (3) source nvm.sh after install, not before.
+- name: Ensure the nvm directory exists
+  ansible.builtin.file:
+    path: "{{ target_home }}/.nvm"
+    state: directory
+    mode: "0755"
+  become: false
+
+- name: Ensure ~/.bashrc exists (nvm installer expects a profile)
+  ansible.builtin.copy:
+    content: ""
+    dest: "{{ target_home }}/.bashrc"
+    force: false
+    mode: "0644"
+  become: false
+
+- name: Install nvm
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/{{ nvm_version }}/install.sh
+    | PROFILE=/dev/null bash
+  args:
+    executable: /bin/bash
+    creates: "{{ target_home }}/.nvm/nvm.sh"
+  become: false
+
+- name: Install Node.js LTS and set it as the default
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    . "{{ target_home }}/.nvm/nvm.sh" &&
+    nvm install --lts &&
+    nvm alias default 'lts/*'
+  args:
+    executable: /bin/bash
+    creates: "{{ target_home }}/.nvm/alias/default"
+  become: false
+
+# --- Go --------------------------------------------------------------------
+- name: Check the installed Go version
+  ansible.builtin.command: /usr/local/go/bin/go version
+  register: go_check
+  changed_when: false
+  failed_when: false
+
+- name: Install Go {{ go_version }}
+  when: go_version not in (go_check.stdout | default(''))
+  become: true
+  block:
+    - name: Download the Go tarball
+      ansible.builtin.get_url:
+        url: "https://go.dev/dl/go{{ go_version }}.linux-amd64.tar.gz"
+        dest: "/tmp/go{{ go_version }}.linux-amd64.tar.gz"
+        mode: "0644"
+
+    - name: Remove any previous Go install
+      ansible.builtin.file:
+        path: /usr/local/go
+        state: absent
+
+    - name: Extract Go into /usr/local
+      ansible.builtin.unarchive:
+        src: "/tmp/go{{ go_version }}.linux-amd64.tar.gz"
+        dest: /usr/local
+        remote_src: true
