@@ -51,12 +51,12 @@ clone-and-run or one-shot self-provision (what a real new machine does):
 
 ```bash
 # on the test VM, from a clone:
-git clone https://github.com/lentago/workstation-ansible.git
-cd workstation-ansible
+git clone https://github.com/lentago/kalmia.git
+cd kalmia
 WORKSTATION_PROFILE=xubuntu ./bootstrap.sh        # or omit — it autodetects
 
 # …or fully fresh, no clone:
-curl -fsSL https://raw.githubusercontent.com/lentago/workstation-ansible/main/bootstrap.sh \
+curl -fsSL https://raw.githubusercontent.com/lentago/kalmia/main/bootstrap.sh \
   | WORKSTATION_PROFILE=xubuntu bash
 ```
 
