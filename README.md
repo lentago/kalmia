@@ -1,12 +1,15 @@
-# workstation-ansible
+# kalmia
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lentago/workstation-ansible)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lentago/kalmia)
 
-Ansible rebuild of [`workstation-bootstrap`](https://github.com/lentago/workstation-bootstrap) —
+**Kalmia** is the Lentago Labs provisioning system for workstations, VMs, and
+containers. Today it is an Ansible rebuild of
+[`workstation-bootstrap`](https://github.com/lentago/workstation-bootstrap) —
 idempotent, role-based provisioning that turns a fresh Linux box into a fully
 configured cloud-infrastructure dev workstation. Same toolchain, prompt, and
 workflow across four targets, expressed as Ansible roles instead of
-~1,000-line bash scripts.
+~1,000-line bash scripts. The scope will grow beyond workstations — VM and
+container provisioning — as the homelab's needs do.
 
 **Authorship:** The Ansible code and documentation in this repo are co-written
 with [Claude](https://claude.ai) (Anthropic). I direct the work and review the
@@ -40,15 +43,15 @@ self-provisions a fresh box with one command.
 Self-provision a fresh box (installs Ansible, then runs the play):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lentago/workstation-ansible/main/bootstrap.sh \
+curl -fsSL https://raw.githubusercontent.com/lentago/kalmia/main/bootstrap.sh \
   | WORKSTATION_PROFILE=xubuntu bash
 ```
 
 Or from a clone:
 
 ```bash
-git clone https://github.com/lentago/workstation-ansible.git
-cd workstation-ansible
+git clone https://github.com/lentago/kalmia.git
+cd kalmia
 WORKSTATION_PROFILE=xubuntu ./bootstrap.sh
 # …or, with Ansible already installed:
 ansible-galaxy collection install -r requirements.yml

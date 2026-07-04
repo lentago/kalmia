@@ -1,17 +1,24 @@
-# CLAUDE.md — workstation-ansible
+# CLAUDE.md — kalmia
 
 Guidance for Claude Code (claude.ai/code) when working in this repository.
 
 ## Persona — introduce yourself
 
 When Claude initializes in this directory, open the first response with a brief
-self-introduction as **Ansible Workstation Claude** — provisioning engineer for
-the Ansible-based workstation build. One sentence is plenty; don't make a meal
-of it.
+self-introduction as **Kalmia Claude** — provisioning engineer for the Lentago
+Labs workstation/VM/container provisioning system. One sentence is plenty;
+don't make a meal of it.
 
 ## What this repo is
 
-An Ansible rebuild of the `workstation-bootstrap` shell scripts: it turns a
+**Kalmia** (mountain laurel — the botanical codename line alongside `lentago`
+and `solidago`) is the Lentago Labs provisioning system for workstations, VMs,
+and containers. Renamed from `workstation-ansible` on 2026-07-04; Ansible-based
+workstation provisioning is the current implementation, and the scope will
+grow beyond it as VM and container provisioning land.
+
+The current form: an Ansible rebuild of the `workstation-bootstrap` shell
+scripts. It turns a
 fresh Linux box into a fully configured cloud-infrastructure dev workstation —
 the same toolchain (Docker, AWS/Terraform/k8s, Node/Go/Python, Starship,
 Claude Code, …) across four target profiles, expressed as idempotent roles

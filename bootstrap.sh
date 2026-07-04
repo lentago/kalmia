@@ -10,14 +10,14 @@
 #     WORKSTATION_PROFILE=xubuntu ./bootstrap.sh
 #
 #   Self-provision a fresh box (no clone needed):
-#     curl -fsSL https://raw.githubusercontent.com/lentago/workstation-ansible/main/bootstrap.sh \
+#     curl -fsSL https://raw.githubusercontent.com/lentago/kalmia/main/bootstrap.sh \
 #       | WORKSTATION_PROFILE=xubuntu bash
 #
 # Re-runnable: every role is idempotent. The profile autodetects when unset.
 # ============================================================================
 set -euo pipefail
 
-REPO_URL="${REPO_URL:-https://github.com/lentago/workstation-ansible.git}"
+REPO_URL="${REPO_URL:-https://github.com/lentago/kalmia.git}"
 BRANCH="${BRANCH:-main}"
 
 extra_args=()
