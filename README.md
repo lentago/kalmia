@@ -1,5 +1,7 @@
 # workstation-ansible
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lentago/workstation-ansible)
+
 Ansible rebuild of [`workstation-bootstrap`](https://github.com/lentago/workstation-bootstrap) —
 idempotent, role-based provisioning that turns a fresh Linux box into a fully
 configured cloud-infrastructure dev workstation. Same toolchain, prompt, and
