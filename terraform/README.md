@@ -117,12 +117,16 @@ its plans are reviewed with extra care.
       plan` returns the five node names (done 2026-07-04)
 - [x] **1 — pve4 LXCs**: `import` blocks for 110–114, imported to a clean
       `plan: no changes` (#23)
-- [ ] **2 — apply-on-merge**: self-hosted GitHub Actions runner LXC on the
-      LAN + kalmia-scoped AWS OIDC role for state; add this surface to the
-      fleet "Live-state vs. code discipline" table
-- [ ] **3 — remaining guests**: pve5 workstations + testbeds, then VM 100
+- [x] **2 — apply-on-merge**: LAN self-hosted runner (LXC 115) + kalmia AWS
+      OIDC role + `terraform` workflow; added to the fleet enforced-surfaces
+      table (#27)
+- [x] **3 — remaining guests**: pve5 LXC 105 + VMs 102/104/120/121, then
+      VM 100 (HAOS) last — all imported to a clean `plan: no changes`, guests
+      verified running/stopped as before, HAOS not rebooted (#28)
 - [ ] **Cleanup**: pin the PVE CA (drop `insecure = true`); evaluate
       provider coverage for backup jobs (`jobs.cfg`) and users/ACLs
+
+**All 12 guests are now under Terraform.**
 
 Known provider limits (v0.111, 2026-07): PVE 9's new HA-resources API is
 unsupported — fine here, `ha-manager` is deliberately unused (VM 100 pinning).
@@ -140,3 +144,25 @@ unsupported — fine here, `ha-manager` is deliberately unused (VM 100 pinning).
   explicit block plans as a perpetual add. Omit it.
 - Read the full plan before declaring a diff benign — the whole diff, not a
   grep of it.
+
+## VM import notes (learned in phase 3)
+
+- **`reboot_after_update = false` on every imported VM.** The first apply
+  after import reconciles computed defaults; this flag guarantees such a
+  write can never reboot a running guest. Verified: HAOS stayed up through
+  its import.
+- **First apply re-encodes SMBIOS.** Declaring `smbios { uuid = … }` makes
+  the provider rewrite `smbios1` with a `base64=1` prefix (the UUID is
+  unchanged; only the string encoding changes). Cosmetic, no reboot,
+  converges to a clean plan. Keeping the `smbios` block is still correct —
+  it pins the UUID so the VM is never seen as needing recreation.
+- **Match live power state, don't fight it.** Set `started` to each guest's
+  actual state (`false` for the stopped snapshot-reset testbeds) or Terraform
+  will try to power them on.
+- **Disk `file_format` must match the datastore.** `qcow2` for the file/dir
+  store (`local`), `raw` for LVM-thin (`local-lvm`). A mismatch reads as a
+  disk change.
+- **HAOS specifics that must be reproduced or it plans a recreate:**
+  `bios = "ovmf"` + `efi_disk {}`, `scsi_hardware = "virtio-scsi-pci"`, both
+  `usb { host = … }` radios, and the disk `discard`/`ssd` flags. Its verbose
+  installer `description` is `ignore_changes`d rather than reproduced.
