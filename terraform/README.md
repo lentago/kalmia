@@ -45,6 +45,25 @@ provider operations require SSH to the node or root@pam (snippet uploads,
 disk imports via `source_file.path`) — not needed for guest lifecycle; if one
 ever is, wire the provider `ssh {}` block rather than widening the token.
 
+### TLS — trusting the PVE CA (why `insecure = false`)
+
+The cluster serves a self-signed cert issued by its PVE Cluster Manager CA.
+The provider has no CA-file argument, so instead of `insecure = true` both run
+contexts trust that CA out of band via Go's cert-pool env vars:
+
+- `SSL_CERT_DIR=/etc/ssl/certs` — keeps the system roots (needed for the AWS
+  S3 state backend).
+- `SSL_CERT_FILE=<pve-root-ca.pem>` — adds the Proxmox root CA. Go loads certs
+  from both, so the pool ends up with public roots **and** the PVE CA.
+
+The public CA cert is committed at [`pve-root-ca.pem`](pve-root-ca.pem) (a
+trust anchor, no private key). The node cert's SANs already include the IP
+endpoint (`192.168.139.8`) plus `pve`/`pve.local`, so no endpoint change is
+needed. CI sets both env vars in the workflow; locally they live in
+`~/.config/kalmia/proxmox.env` alongside the token (pointing at a copy at
+`~/.config/kalmia/pve-root-ca.pem`). If the CA is ever rotated, replace both
+copies.
+
 ## CI / apply-on-merge
 
 The [`terraform` workflow](../.github/workflows/terraform.yml) runs on every
@@ -123,8 +142,14 @@ its plans are reviewed with extra care.
 - [x] **3 — remaining guests**: pve5 LXC 105 + VMs 102/104/120/121, then
       VM 100 (HAOS) last — all imported to a clean `plan: no changes`, guests
       verified running/stopped as before, HAOS not rebooted (#28)
-- [ ] **Cleanup**: pin the PVE CA (drop `insecure = true`); evaluate
-      provider coverage for backup jobs (`jobs.cfg`) and users/ACLs
+- [x] **Cleanup**: pinned the PVE CA — `insecure = false`, trust via
+      `SSL_CERT_FILE`/`SSL_CERT_DIR` (see § TLS). Provider coverage evaluated:
+      `proxmox_virtual_environment_backup_job` exists → backup jobs
+      (`jobs.cfg`) are a worthwhile future phase (#30). Users/ACLs are also
+      supported, but the `terraform@pve` identity is deliberately **not**
+      brought under Terraform — managing the credentials TF authenticates with
+      is circular and a bad apply could lock out the runner; it stays a
+      bootstrap concern.
 
 **All 12 guests are now under Terraform.**
 
