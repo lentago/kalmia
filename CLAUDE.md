@@ -13,9 +13,18 @@ don't make a meal of it.
 
 **Kalmia** (mountain laurel — the botanical codename line alongside `lentago`
 and `solidago`) is the Lentago Labs provisioning system for workstations, VMs,
-and containers. Renamed from `workstation-ansible` on 2026-07-04; Ansible-based
-workstation provisioning is the current implementation, and the scope will
-grow beyond it as VM and container provisioning land.
+and containers. Renamed from `workstation-ansible` on 2026-07-04. Suite
+boundary: **kalmia = local infra, solidago = cloud infra** (2026-07-04).
+
+Two layers, split by what they own:
+
+- **Ansible (repo root)** — what's *inside* a machine's OS: the original
+  workstation provisioning described below.
+- **Terraform (`terraform/`)** — Proxmox guest *existence and shape* on
+  `homelab-cluster` (VMs/LXCs, resources, placement) via the `bpg/proxmox`
+  provider. Brownfield import in progress; roadmap, auth model, and the
+  VM 100 (HAOS) handling rules live in [`terraform/README.md`](terraform/README.md)
+  — read it before touching that layer.
 
 The current form: an Ansible rebuild of the `workstation-bootstrap` shell
 scripts. It turns a
