@@ -75,10 +75,10 @@ its plans are reviewed with extra care.
 ## Phases
 
 - [x] **0 — scaffolding**: provider + backend + smoke data source (#21)
-- [ ] **0b — identity**: operator runs the `pveum` block above; `terraform
-      plan` returns the five node names
-- [ ] **1 — pve4 LXCs**: `import` blocks for 110–114, iterate to a clean
-      `plan: no changes`
+- [x] **0b — identity**: operator runs the `pveum` block above; `terraform
+      plan` returns the five node names (done 2026-07-04)
+- [x] **1 — pve4 LXCs**: `import` blocks for 110–114, imported to a clean
+      `plan: no changes` (#23)
 - [ ] **2 — apply-on-merge**: self-hosted GitHub Actions runner LXC on the
       LAN + kalmia-scoped AWS OIDC role for state; add this surface to the
       fleet "Live-state vs. code discipline" table
@@ -88,3 +88,17 @@ its plans are reviewed with extra care.
 
 Known provider limits (v0.111, 2026-07): PVE 9's new HA-resources API is
 unsupported — fine here, `ha-manager` is deliberately unused (VM 100 pinning).
+
+## Import gotchas (learned in phase 1)
+
+- `operating_system.template_file_id` is required but create-only and cannot
+  be reconciled on imported guests → set it to the real template and add
+  `lifecycle { ignore_changes = [operating_system] }`.
+- The first apply after a container import writes the provider's `console`
+  defaults (`cmode: tty`, `console: 1`, `tty: 2`) explicitly into the live
+  config. The values equal PVE's implicit defaults — no behavior change, no
+  restart — but the config text changes. Do **not** then add an explicit
+  `console {}` block to match: the provider keeps state blockless, so an
+  explicit block plans as a perpetual add. Omit it.
+- Read the full plan before declaring a diff benign — the whole diff, not a
+  grep of it.
