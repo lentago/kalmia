@@ -45,6 +45,43 @@ provider operations require SSH to the node or root@pam (snippet uploads,
 disk imports via `source_file.path`) — not needed for guest lifecycle; if one
 ever is, wire the provider `ssh {}` block rather than widening the token.
 
+## CI / apply-on-merge
+
+The [`terraform` workflow](../.github/workflows/terraform.yml) runs on every
+PR and push touching `terraform/**`:
+
+- **PR** → `validate` (fmt + validate, GitHub-hosted) and `plan` (posts the
+  diff as a PR comment).
+- **push to `main`** → `validate` then **`apply -auto-approve`** — merging a
+  guest change deploys it; this directory is a fleet **enforced surface**
+  (live-state vs. code discipline applies: never mutate guests via `pvesh`/UI
+  without codifying here in the same session).
+
+`plan` and `apply` run on the **LAN self-hosted runner** — LXC 115
+`gha-runner` on pve4 (`runs-on: [self-hosted, lan]`) — because the PVE API is
+LAN-only. CI reaches AWS (S3 state) via GitHub OIDC assuming
+`arn:aws:iam::365184644049:role/kalmia-github-actions-terraform` (this state
+key + the lock table only), and reaches PVE via the `PROXMOX_VE_API_TOKEN`
+repo secret. The `apply` job serializes under a `terraform-apply` concurrency
+group.
+
+### Runner notes (LXC 115)
+
+- Agent in `/opt/actions-runner`, runs as user `runner`, systemd service
+  installed via `svc.sh`; registered repo-scoped with label `lan`.
+- Re-register after a rebuild: `gh api -X POST
+  repos/lentago/kalmia/actions/runners/registration-token -q .token`, then
+  `config.sh --unattended --url https://github.com/lentago/kalmia --token …
+  --name gha-runner --labels lan`.
+- **Public-repo hardening**: workflow approval is required for **all**
+  external contributors (repo Actions setting); secrets are not exposed to
+  fork-PR runs; the OIDC role trusts only `repo:lentago/kalmia:*` subs.
+- **Firewalla gotcha**: a brand-new guest lands in Device Access Protection
+  `learning` state (default-block + isolation — WAN IPv4 RST'd) until it's
+  classified. If a fresh guest can't reach the internet, check
+  `policy:mac:<MAC>` / `host:mac:<MAC>` on the Firewalla and see the fleet
+  memory; FireMain restart forces re-evaluation.
+
 ## State
 
 Remote state in the shared tfstate bucket (`foundry-tfstate-365184644049`,
@@ -66,6 +103,7 @@ runs use the `cpitzi-iac` IAM credentials already on the workstation.
 | 120 | qemu | xubuntu-test | pve5 | 3 |
 | 121 | qemu | fedora-xfce-test | pve5 | 3 |
 | 100 | qemu | haos-17.1 | pve3 | 3 — **last** |
+| 115 | lxc | gha-runner | pve4 | n/a — created BY this layer (phase 2) |
 
 VM 100 (Home Assistant OS) is mission-critical and USB-pinned to pve3
 (Z-Wave/Zigbee/Matter radios; passthrough does not survive migration). It is
