@@ -61,6 +61,11 @@ jobs:
         working-directory: terraform
     env:
       PROXMOX_VE_API_TOKEN: ${{ secrets.PROXMOX_VE_API_TOKEN }}
+      # Trust the PVE Cluster Manager CA (provider verifies the API cert;
+      # providers.tf sets insecure = false). SSL_CERT_DIR keeps system roots
+      # for the AWS S3 backend; SSL_CERT_FILE adds the committed PVE root CA.
+      SSL_CERT_DIR: /etc/ssl/certs
+      SSL_CERT_FILE: ${{ github.workspace }}/terraform/pve-root-ca.pem
     steps:
       - uses: actions/checkout@v4
 
@@ -140,6 +145,11 @@ jobs:
         working-directory: terraform
     env:
       PROXMOX_VE_API_TOKEN: ${{ secrets.PROXMOX_VE_API_TOKEN }}
+      # Trust the PVE Cluster Manager CA (provider verifies the API cert;
+      # providers.tf sets insecure = false). SSL_CERT_DIR keeps system roots
+      # for the AWS S3 backend; SSL_CERT_FILE adds the committed PVE root CA.
+      SSL_CERT_DIR: /etc/ssl/certs
+      SSL_CERT_FILE: ${{ github.workspace }}/terraform/pve-root-ca.pem
     steps:
       - uses: actions/checkout@v4
 
