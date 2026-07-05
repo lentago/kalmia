@@ -9,7 +9,7 @@ idempotent, role-based provisioning that turns a fresh Linux box into a fully
 configured cloud-infrastructure dev workstation. Same toolchain, prompt, and
 workflow across four targets, expressed as Ansible roles instead of
 ~1,000-line bash scripts. The scope will grow beyond workstations — VM and
-container provisioning — as the homelab's needs do.
+container provisioning — as the Lentago lab's needs do.
 
 **Authorship:** The Ansible code and documentation in this repo are co-written
 with [Claude](https://claude.ai) (Anthropic). I direct the work and review the

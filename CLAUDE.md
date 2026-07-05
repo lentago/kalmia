@@ -96,7 +96,7 @@ Two clean Proxmox VMs exist purely to provision against and reset:
 (`192.168.139.253`, `fedora` profile), each with a `pristine` snapshot so every
 run starts from a fresh box. See [`docs/testbed.md`](docs/testbed.md) for access,
 the rollback-reset loop, run commands, and the 26.04 / XFCE caveats. The VMs are
-Home-Claude-managed on the homelab (pve5), outside this repo's CI.
+Home-Claude-managed in the Lentago lab (pve5), outside this repo's CI.
 
 ## CI
 
