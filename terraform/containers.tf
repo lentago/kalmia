@@ -220,3 +220,67 @@ resource "proxmox_virtual_environment_container" "pub" {
     ignore_changes = [operating_system]
   }
 }
+
+# grafana-stack — the drosera Alloy shipper / Grafana Cloud stack (pve5).
+# Note: no searchdomain in the live config, so the dns block sets servers only.
+import {
+  to = proxmox_virtual_environment_container.grafana_stack
+  id = "pve5/105"
+}
+
+resource "proxmox_virtual_environment_container" "grafana_stack" {
+  node_name     = "pve5"
+  vm_id         = 105
+  unprivileged  = true
+  started       = true
+  start_on_boot = true
+
+  features {
+    nesting = true
+  }
+
+  cpu {
+    cores = 2
+  }
+
+  memory {
+    dedicated = 2048
+    swap      = 512
+  }
+
+  disk {
+    datastore_id = "local-lvm"
+    size         = 20
+  }
+
+  network_interface {
+    name        = "eth0"
+    bridge      = "vmbr0"
+    mac_address = "BC:24:11:82:91:78"
+  }
+
+  initialization {
+    hostname = "grafana-stack"
+
+    dns {
+      servers = ["192.168.139.1"]
+    }
+
+    ip_config {
+      ipv4 {
+        address = "192.168.139.20/24"
+        gateway = "192.168.139.1"
+      }
+    }
+  }
+
+  operating_system {
+    # Build template is gone from local storage; ignored after import.
+    template_file_id = "local:vztmpl/ubuntu-24.04-standard_24.04-1_amd64.tar.zst"
+    type             = "ubuntu"
+  }
+
+  lifecycle {
+    ignore_changes = [operating_system]
+  }
+}
