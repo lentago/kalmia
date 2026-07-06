@@ -57,10 +57,20 @@ resource "proxmox_virtual_environment_container" "bullpen_runner" {
     size         = 20
   }
 
-  # NAS claude-jobs share (queue) — bind mount, workers see /srv/jobs
-  mount_point {
-    volume = "/mnt/neptune-lentago/claude-jobs"
-    path   = "/srv/jobs"
+  # NAS claude-jobs share (queue) — bind mount, workers see /srv/jobs.
+  # Bind mounts are root@pam-only at create time (the terraform@pve token gets
+  # HTTP 403 "mount point type bind is only allowed for root@pam"), so TF does
+  # NOT create them. The imported runners already have theirs (attached as root
+  # before phase-1 import) and keep it here so their plan stays clean; the new
+  # runners get theirs attached as a root `pct set` step during claytonia
+  # provisioning (provision/README step 2). ignore_changes below keeps TF from
+  # reconciling the live mount either way.
+  dynamic "mount_point" {
+    for_each = contains(keys(local.bullpen_runners_imported), each.key) ? [1] : []
+    content {
+      volume = "/mnt/neptune-lentago/claude-jobs"
+      path   = "/srv/jobs"
+    }
   }
 
   network_interface {
@@ -93,7 +103,7 @@ resource "proxmox_virtual_environment_container" "bullpen_runner" {
   }
 
   lifecycle {
-    ignore_changes = [operating_system]
+    ignore_changes = [operating_system, mount_point]
   }
 }
 
