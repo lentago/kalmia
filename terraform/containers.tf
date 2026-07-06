@@ -2,16 +2,29 @@
 # these values at import time: `pct config <vmid>` on pve4.
 
 locals {
-  # The three claytonia (bullpen) workers are identical modulo identity.
-  bullpen_runners = {
+  # The claytonia (bullpen) workers are identical modulo identity. Split by
+  # provenance: the first three were imported brownfield in phase 1 (#23) and
+  # carry the MACs read from `pct config` at import time; runners 4–5 are
+  # created by this layer, so their MAC is left null for Proxmox to assign.
+  # Workers are cattle — a new LXC becomes a bullpen member purely by running
+  # claytonia's in-guest provisioning (provision/01–06 + secrets + gitops);
+  # there is no central runner list to grow. See claytonia/provision/README.md.
+  bullpen_runners_imported = {
     "claude-runner"   = { vm_id = 110, ip = "192.168.139.10", mac = "BC:24:11:7A:1A:E1" }
     "claude-runner-2" = { vm_id = 111, ip = "192.168.139.11", mac = "BC:24:11:A8:C7:AF" }
     "claude-runner-3" = { vm_id = 112, ip = "192.168.139.12", mac = "BC:24:11:05:FD:71" }
   }
+  bullpen_runners_new = {
+    "claude-runner-4" = { vm_id = 116, ip = "192.168.139.17", mac = null }
+    "claude-runner-5" = { vm_id = 117, ip = "192.168.139.18", mac = null }
+  }
+  bullpen_runners = merge(local.bullpen_runners_imported, local.bullpen_runners_new)
 }
 
+# Only the phase-1 workers have an existing guest to adopt; the new runners are
+# created, so the import for_each covers the imported set alone.
 import {
-  for_each = local.bullpen_runners
+  for_each = local.bullpen_runners_imported
   to       = proxmox_virtual_environment_container.bullpen_runner[each.key]
   id       = "pve4/${each.value.vm_id}"
 }
