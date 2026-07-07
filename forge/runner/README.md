@@ -76,11 +76,12 @@ documents for new guests.)
 ## Consume (claytonia)
 
 The pool's Terraform (`claytonia/terraform/`) sets the workers'
-`template_file_id` — today the Debian base, switched to
-`neptune:vztmpl/claytonia-runner-v1.tar.zst` once this ships (tracked as a
-claytonia follow-up). New-worker scale-out then collapses to: add a map entry,
-apply, attach the NAS mount + pool membership, inject secrets. First boot the
-gitops loop takes over. `provision/01–05` become legacy/reference.
+`template_file_id`. Since claytonia#54 it points at
+`neptune:vztmpl/claytonia-runner-v1.tar.zst` (create-only and in the resource's
+`ignore_changes`, so it governs new workers without touching the existing ones).
+New-worker scale-out then collapses to: add a map entry, apply, attach the NAS
+mount + pool membership, inject secrets. First boot the gitops loop takes over;
+`provision/01–05` are legacy/reference.
 
 ## Versioning
 
