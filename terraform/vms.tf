@@ -5,6 +5,11 @@
 # Safety: every VM sets reboot_after_update = false — an imported guest must
 # never be rebooted by a config write Terraform makes during reconciliation.
 # HAOS (100) additionally carries prevent_destroy.
+#
+# Power state (#38): workstations and testbeds ignore `started` — their
+# momentary power is operator-/test-driven, and an apply must neither boot a
+# parked workstation nor stop a testbed mid-run. HAOS and the service LXCs
+# deliberately keep enforced power: re-starting those is desired state.
 
 # --- xubuntu-ws (102): running workstation, disk on `local` (qcow2) ---
 import {
@@ -53,6 +58,12 @@ resource "proxmox_virtual_environment_vm" "xubuntu_ws" {
 
   smbios {
     uuid = "1833a71b-1912-4817-be36-b7972fe9a7f4"
+  }
+
+  # Momentary power is operator-driven (parked when unused) — manage shape,
+  # not the power button. `started` is the create-time baseline only.
+  lifecycle {
+    ignore_changes = [started]
   }
 }
 
@@ -107,11 +118,17 @@ resource "proxmox_virtual_environment_vm" "fedora_ws" {
   smbios {
     uuid = "c85ce4a1-b762-4a0e-a28f-255db4c07840"
   }
+
+  # Power: operator-driven — see xubuntu_ws.
+  lifecycle {
+    ignore_changes = [started]
+  }
 }
 
 # --- kalmia testbeds (120 xubuntu-test, 121 fedora-xfce-test): STOPPED,
-#     single socket, serial+std VGA, snapshot-reset boxes. started = false so
-#     Terraform never powers them on. ---
+#     single socket, serial+std VGA, snapshot-reset boxes. started = false as
+#     the baseline; `started` is ignored below so Terraform neither powers
+#     them on nor stops one mid-test-run. ---
 locals {
   testbed_vms = {
     "xubuntu-test"     = { vm_id = 120, mac = "BC:24:11:B9:93:C5", uuid = "6876cdc2-a900-4e56-a99d-5908a5488ece" }
@@ -177,6 +194,12 @@ resource "proxmox_virtual_environment_vm" "testbed" {
 
   smbios {
     uuid = each.value.uuid
+  }
+
+  # Power cycles with the test loop (boot → provision → snapshot rollback);
+  # an apply landing mid-run must never stop a testbed under test.
+  lifecycle {
+    ignore_changes = [started]
   }
 }
 
