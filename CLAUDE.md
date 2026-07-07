@@ -22,9 +22,11 @@ Two layers, split by what they own:
   workstation provisioning described below.
 - **Terraform (`terraform/`)** — Proxmox guest *existence and shape* on
   `homelab-cluster` (VMs/LXCs, resources, placement) via the `bpg/proxmox`
-  provider. Brownfield import in progress; roadmap, auth model, and the
-  VM 100 (HAOS) handling rules live in [`terraform/README.md`](terraform/README.md)
-  — read it before touching that layer.
+  provider — every guest **except the bullpen runner pool** (110–112,
+  116–117), released to claytonia's `terraform/` 2026-07-07 (#37; products
+  own their capacity). Roadmap, auth model, and the VM 100 (HAOS) handling
+  rules live in [`terraform/README.md`](terraform/README.md) — read it
+  before touching that layer.
 
 The current form: an Ansible rebuild of the `workstation-bootstrap` shell
 scripts. It turns a

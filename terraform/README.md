@@ -6,6 +6,12 @@ VMs/LXCs exist, their resources, placement, and hardware config — via the
 It sits between the hardware and the Ansible layer: what's *inside* the guest
 OS remains the job of the playbooks in the repo root.
 
+One carve-out (2026-07-07, #37): the **bullpen runner pool** (claude-runner
+1–5, VMIDs 110–112/116–117) is owned by
+[claytonia](https://github.com/lentago/claytonia)'s `terraform/` — products
+own their capacity. kalmia keeps every other guest, including LXC 115
+`gha-runner` (shared CI substrate must not depend on claytonia's workers).
+
 Suite boundary (2026-07-04): **kalmia = local infra, solidago = cloud infra.**
 
 ## Auth — the `terraform@pve` identity
@@ -111,9 +117,6 @@ runs use the `cpitzi-iac` IAM credentials already on the workstation.
 
 | VMID | Type | Name | Node | Import phase |
 |---|---|---|---|---|
-| 110 | lxc | claude-runner | pve4 | 1 |
-| 111 | lxc | claude-runner-2 | pve4 | 1 |
-| 112 | lxc | claude-runner-3 | pve4 | 1 |
 | 113 | lxc | n8n | pve4 | 1 |
 | 114 | lxc | pub | pve4 | 1 |
 | 105 | lxc | grafana-stack | pve5 | 3 |
@@ -151,7 +154,11 @@ its plans are reviewed with extra care.
       is circular and a bad apply could lock out the runner; it stays a
       bootstrap concern.
 
-**All 12 guests are now under Terraform.**
+**All 9 guests kalmia owns are under Terraform.** The bullpen runner pool
+(110–112, 116–117 — grown to five workers in #34/#35) was released to
+claytonia's `terraform/` on 2026-07-07 (#37; adoption
+lentago/claytonia#51), with the state moved via `terraform state rm` +
+import — no guest was touched.
 
 Known provider limits (v0.111, 2026-07): PVE 9's new HA-resources API is
 unsupported — fine here, `ha-manager` is deliberately unused (VM 100 pinning).
