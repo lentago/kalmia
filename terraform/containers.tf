@@ -82,7 +82,7 @@ import {
 resource "proxmox_virtual_environment_container" "pub" {
   node_name     = "pve4"
   vm_id         = 114
-  description   = "Caddy webserver (pub.lan, 192.168.139.9) replacing the retired web.lan. Serves NAS /volume1/PitziLabs/web (bind-mounted to /srv/www) with directory browsing. Drop files via NAS share; room for a dynamic reverse_proxy backend later.\n"
+  description   = "Caddy webserver (pub.lan, 192.168.139.9) replacing the retired web.lan. Serves NAS /volume1/lentago/web (bind-mounted to /srv/www) with directory browsing. Drop files via NAS share; room for a dynamic reverse_proxy backend later.\n"
   unprivileged  = true
   started       = true
   start_on_boot = true
