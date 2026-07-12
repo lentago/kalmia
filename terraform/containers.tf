@@ -70,6 +70,16 @@ resource "proxmox_virtual_environment_container" "n8n" {
         gateway = "192.168.139.1"
       }
     }
+
+    # SSH key codified so the mount_point recreate (below — bpg treats a
+    # mount_point add as forces-replacement) comes back reachable. The prior
+    # root key was PVE-injected out-of-band and would be lost on rebuild.
+    # Public key only.
+    user_account {
+      keys = [
+        "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCbnPjDFmbYusUw13NsD5h+NMRA/l8JAjaSZF94ohUvMQvXTY5ozTnBl5fWtd9UHof9ftE4hLdih/sSdDxRJAtq9SSCSb4OuFsEy+CFJpM6/f6mtsCjrL3TE11f5M6hiGX7423gdW0FXBLgC6klTWK023lt21S9VU0um6XIPicdsMg8udOVKSYPquPSq6XhB7ngpPjN7XdELfzSJYAwlgTaoFjw1ZvdQfMRslCXdx/AhbKBSlQKBsf/LkLZJCZACvt1+Z1vZtJr7kq7WqANEzJqrTZWDTF5NnEPU6eHDVqCh8lZZkaBY6cTNIIugwW3UMSrbw3I40OD9/qGpleyLowmf8cxX1WHY/HbVAxpmxYbWO5f4N9l6lFe6tdVwaTGtlj3jEJFM/CPZP6ygp6m9OqgaXXwSG6vFuJKz4XQvtF3hBmRs+vlzgflkF+5h/qKh+e29g/bkj82zMA8cfIdwoT9n2DdP3LHIfSFo/l9l9AANPKHFtvZq6saHIx5Dp/Pd8M= cpitzi@penguin"
+      ]
+    }
   }
 
   operating_system {
