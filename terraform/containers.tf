@@ -40,6 +40,16 @@ resource "proxmox_virtual_environment_container" "n8n" {
     size         = 12
   }
 
+  # NAS harvest landing — the lentago/music-curator Spotify harvester (an n8n
+  # workflow on this box) writes dated snapshots here. Bind mount mirrors pub's
+  # web mount. The unprivileged CT's uid 1000 (n8n `node` user) maps to host
+  # 101000, which equals the CIFS share's forceuid (mode 0770), so the container
+  # can write. See lentago/music-curator harvest/README.md.
+  mount_point {
+    volume = "/mnt/neptune-lentago/spotify-harvest"
+    path   = "/data/harvests"
+  }
+
   network_interface {
     name        = "eth0"
     bridge      = "vmbr0"
