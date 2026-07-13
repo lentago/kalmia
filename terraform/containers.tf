@@ -8,10 +8,15 @@
 # LXC 115 (`runner.tf`): shared CI substrate deliberately does not depend on
 # claytonia's own workers.
 
-# CT 113 was destroyed by the 2026-07-12 mount recreate and could not be
-# recreated with the bind mount: Proxmox allows bind mounts only for root@pam,
-# not API tokens, and the CI runner authenticates with a token. Recreated fresh
-# WITHOUT a mount; the import block is gone since there is no live 113 to import.
+# CT 113 is created out-of-band by root@pam and imported here. Docker-capable
+# LXCs need keyctl (and any bind mount) — both root@pam-only — so an API-token
+# CI apply cannot create this container; it can only manage it post-import. It
+# was rebuilt this way on 2026-07-12 after a mount-driven recreate destroyed it.
+import {
+  to = proxmox_virtual_environment_container.n8n
+  id = "pve4/113"
+}
+
 resource "proxmox_virtual_environment_container" "n8n" {
   node_name     = "pve4"
   vm_id         = 113
@@ -62,15 +67,6 @@ resource "proxmox_virtual_environment_container" "n8n" {
         address = "192.168.139.13/24"
         gateway = "192.168.139.1"
       }
-    }
-
-    # Root SSH key codified so the recreated container is reachable (the prior
-    # key was PVE-injected out-of-band and was lost when CT 113 was destroyed on
-    # 2026-07-12). Public key only.
-    user_account {
-      keys = [
-        "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCbnPjDFmbYusUw13NsD5h+NMRA/l8JAjaSZF94ohUvMQvXTY5ozTnBl5fWtd9UHof9ftE4hLdih/sSdDxRJAtq9SSCSb4OuFsEy+CFJpM6/f6mtsCjrL3TE11f5M6hiGX7423gdW0FXBLgC6klTWK023lt21S9VU0um6XIPicdsMg8udOVKSYPquPSq6XhB7ngpPjN7XdELfzSJYAwlgTaoFjw1ZvdQfMRslCXdx/AhbKBSlQKBsf/LkLZJCZACvt1+Z1vZtJr7kq7WqANEzJqrTZWDTF5NnEPU6eHDVqCh8lZZkaBY6cTNIIugwW3UMSrbw3I40OD9/qGpleyLowmf8cxX1WHY/HbVAxpmxYbWO5f4N9l6lFe6tdVwaTGtlj3jEJFM/CPZP6ygp6m9OqgaXXwSG6vFuJKz4XQvtF3hBmRs+vlzgflkF+5h/qKh+e29g/bkj82zMA8cfIdwoT9n2DdP3LHIfSFo/l9l9AANPKHFtvZq6saHIx5Dp/Pd8M= cpitzi@penguin"
-      ]
     }
   }
 
