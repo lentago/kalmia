@@ -1,0 +1,14 @@
+---
+# ============================================================================
+# pub — Morning Brief publish relay for the pub LXC (114, pve4). Syncs the
+# claude.ai "Morning brief" routine's Google Drive output down to the web
+# root Caddy serves at http://pub.lan/brief/. Caddy itself is out of scope
+# here — see kalmia#54.
+# ============================================================================
+pub_script_path: /usr/local/bin/publish-morning-brief
+pub_rclone_config_dir: /root/.config/rclone
+pub_rclone_config_path: "{{ pub_rclone_config_dir }}/rclone.conf"
+
+# Weekdays, 08:00-11:04 America/New_York every 15 minutes. The container
+# clock runs UTC — the explicit zone suffix is load-bearing.
+pub_timer_oncalendar: "Mon..Fri *-*-* 08..11:04/15:00 America/New_York"
