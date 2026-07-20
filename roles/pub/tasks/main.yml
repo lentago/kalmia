@@ -1,0 +1,80 @@
+---
+# ============================================================================
+# pub — installs rclone, deploys the publish-morning-brief script + systemd
+# oneshot/timer pair, and prepares the rclone secret directory. The
+# rclone.conf OAuth remote is credential material and is deliberately never
+# written by this role — see docs/pub.md for the manual seeding step.
+# ============================================================================
+- name: Install rclone
+  ansible.builtin.apt:
+    name: rclone
+    state: present
+    update_cache: true
+  become: true
+
+- name: Deploy the publish-morning-brief script
+  ansible.builtin.copy:
+    src: publish-morning-brief
+    dest: "{{ pub_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Deploy the publish-morning-brief systemd service
+  ansible.builtin.copy:
+    src: publish-morning-brief.service
+    dest: /etc/systemd/system/publish-morning-brief.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+
+- name: Deploy the publish-morning-brief systemd timer
+  ansible.builtin.template:
+    src: publish-morning-brief.timer.j2
+    dest: /etc/systemd/system/publish-morning-brief.timer
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+
+- name: Enable and start the publish-morning-brief timer
+  ansible.builtin.systemd_service:
+    name: publish-morning-brief.timer
+    daemon_reload: true
+    enabled: true
+    state: started
+  become: true
+
+- name: Ensure the rclone config directory exists
+  ansible.builtin.file:
+    path: "{{ pub_rclone_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  become: true
+
+- name: Check whether the rclone secret has been seeded
+  ansible.builtin.stat:
+    path: "{{ pub_rclone_config_path }}"
+  become: true
+  register: pub_rclone_config
+
+- name: Enforce restrictive permissions on the rclone secret when present
+  ansible.builtin.file:
+    path: "{{ pub_rclone_config_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  become: true
+  when: pub_rclone_config.stat.exists
+
+- name: Warn when the rclone credential has not been seeded
+  ansible.builtin.debug:
+    msg: >-
+      {{ pub_rclone_config_path }} is missing. This role never writes
+      credential material — seed it manually per docs/pub.md before relying
+      on the timer; publish-morning-brief will fail until then.
+  when: not pub_rclone_config.stat.exists

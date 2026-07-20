@@ -1,0 +1,18 @@
+---
+# ============================================================================
+# Provision the pub LXC (114, pve4) — Morning Brief publish relay.
+# Self-provisioning, same as site.yml: run this ON the container.
+#
+#   ansible-playbook -i inventory/hosts.yml pub.yml
+#
+# Caddy — the webserver pub actually serves http://pub.lan/brief/ through —
+# is hand-state and out of scope here; see kalmia#54.
+# ============================================================================
+- name: Provision the pub LXC Morning Brief publisher
+  hosts: all
+  gather_facts: true
+  become: false
+
+  roles:
+    - role: pub
+      tags: [pub, morning_brief]

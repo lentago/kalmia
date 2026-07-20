@@ -100,6 +100,13 @@ toolchain plus Docker + VS Code from their dnf repos.
 via the `power` role; Crostini runs Docker CLI-only with hostname-resolution and
 `~/.local/bin` fixes from the `common` role.
 
+## Beyond workstations
+
+The first non-workstation target: `pub.yml` + the `pub` role codify the
+Morning Brief publisher (rclone + systemd timer) running inside the `pub` LXC
+(114). It's a standalone playbook, not a `site.yml` profile — see
+[`docs/pub.md`](docs/pub.md) for how to run it and seed its secret.
+
 ---
 
 *Part of the [Lentago Labs](https://github.com/lentago) portfolio.*

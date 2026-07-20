@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Sync the cloud Morning Brief HTML from Google Drive to the pub.lan web root.
+# Drive side is written by the claude.ai "Morning brief" routine (trig_01HjHNJSnSL5kTumQBvS9xTQ);
+# newest dated file becomes index.html so http://pub.lan/brief/ always shows the latest.
+set -euo pipefail
+SRC="Google Drive:Hobbies/Claude-Code/morning-brief"
+DEST=/srv/www/brief
+mountpoint -q /srv/www || { echo "web share not mounted; skipping" >&2; exit 0; }
+mkdir -p "$DEST"
+rclone copy "$SRC" "$DEST" --include "morning-brief-*.html" --timeout 60s
+newest=$(find "$DEST" -maxdepth 1 -name "morning-brief-*.html" -printf "%f\n" | LC_ALL=C sort | tail -1)
+[ -n "$newest" ] || exit 0
+if ! cmp -s "$DEST/$newest" "$DEST/index.html" 2>/dev/null; then
+    cp "$DEST/$newest" "$DEST/index.html.tmp"
+    mv "$DEST/index.html.tmp" "$DEST/index.html"
+    echo "published $newest"
+fi
