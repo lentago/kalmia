@@ -14,10 +14,11 @@ Caddy (the webserver that actually serves `/srv/www`) is hand-state and
 Self-provisioning, same model as `site.yml`: run it *on* the container.
 
 ```bash
-# on pub (pct enter 114, or ssh root@pub.lan):
+# on pub, as root (no sudo/sshd on this container — enter via the PVE host:
+#   ssh pve4 'pct enter 114'   or   lxc-attach -n 114):
+apt-get install -y ansible git
 git clone https://github.com/lentago/kalmia.git
 cd kalmia
-sudo apt-get install -y ansible
 ansible-galaxy collection install -r requirements.yml
 ansible-playbook -i inventory/hosts.yml pub.yml
 ```
@@ -37,13 +38,14 @@ The same refresh token also lives in `~/.config/rclone/rclone.conf` on the
 ThinkPad — **rotate both together** if either is ever revoked.
 
 1. Copy the known-good config from the ThinkPad (or wherever the current
-   remote lives) to the container, e.g.:
+   remote lives) to the container. pub runs no sshd, so stream it through the
+   PVE host instead of scp — from the ThinkPad:
    ```bash
-   scp ~/.config/rclone/rclone.conf root@pub.lan:/root/.config/rclone/rclone.conf
+   ssh pve4 'lxc-attach -n 114 -- bash -c "umask 077; mkdir -p /root/.config/rclone; cat > /root/.config/rclone/rclone.conf"' \
+     < ~/.config/rclone/rclone.conf
    ```
-   (run `ansible-playbook -i inventory/hosts.yml pub.yml` first so the
-   directory exists with the right mode, or `mkdir -p -m 0700
-   /root/.config/rclone` by hand.)
+   (or `pct push 114 <file> /root/.config/rclone/rclone.conf` from pve4; run
+   the play first if you want the directory pre-created with the right mode.)
 2. Fix ownership/permissions if `scp` didn't preserve them:
    ```bash
    chmod 0600 /root/.config/rclone/rclone.conf
