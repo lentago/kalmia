@@ -2,7 +2,7 @@
 # ============================================================================
 # lunaria — wall-display compositor for the LXC 118 (pve4), serving the
 # product now named lentago/brasenia (renamed from lentago/lunaria on
-# 2026-07-20; 'lunaria' is the retained legacy runtime name — see issue #61).
+# 2026-07-20; 'lunaria' is the legacy runtime name, rename tracked in #63).
 # Renders the Morning Brief TV edition from pub.lan into a continuous H.264
 # HLS stream the play-room Roku dev channel plays. Concept: docs/lunaria.md
 # and http://pub.lan/brasenia/concept.md. Deliberately credential-free — pub
