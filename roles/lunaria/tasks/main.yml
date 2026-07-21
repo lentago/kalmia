@@ -1,9 +1,11 @@
 ---
 # ============================================================================
-# lunaria — installs the wall-display compositor stack: distro ffmpeg +
-# chromium (headless shots), a pinned mediamtx (HLS transport), the
-# shooter/rotator/encoder scripts, and their systemd services. Runs
-# credential-free: the only input is http://pub.lan/. See docs/lunaria.md.
+# lunaria — installs the wall-display compositor stack for lentago/brasenia
+# (renamed from lentago/lunaria on 2026-07-20; 'lunaria' is the retained
+# legacy runtime name — see issue #61): distro ffmpeg + chromium (headless
+# shots), a pinned mediamtx (HLS transport), the shooter/rotator/encoder
+# scripts, and their systemd services. Runs credential-free: the only input
+# is http://pub.lan/. See docs/lunaria.md.
 # ============================================================================
 - name: Install packages (ffmpeg, chromium, PIL, fonts)
   ansible.builtin.apt:
