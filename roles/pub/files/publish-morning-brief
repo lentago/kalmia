@@ -2,16 +2,29 @@
 # Sync the cloud Morning Brief HTML from Google Drive to the pub.lan web root.
 # Drive side is written by the claude.ai "Morning brief" routine (trig_01HjHNJSnSL5kTumQBvS9xTQ);
 # newest dated file becomes index.html so http://pub.lan/brief/ always shows the latest.
+# The routine also uploads a TV edition (morning-brief-tv-YYYY-MM-DD.html) for the
+# lunaria wall-display pipeline; the newest of those becomes tv.html. TV files must
+# be excluded from the index.html pick: in LC_ALL=C, "tv-" sorts after any date, so
+# an unfiltered glob would publish the TV edition to http://pub.lan/brief/.
 set -euo pipefail
 SRC="Google Drive:Hobbies/Claude-Code/morning-brief"
 DEST=/srv/www/brief
 mountpoint -q /srv/www || { echo "web share not mounted; skipping" >&2; exit 0; }
 mkdir -p "$DEST"
 rclone copy "$SRC" "$DEST" --include "morning-brief-*.html" --timeout 60s
-newest=$(find "$DEST" -maxdepth 1 -name "morning-brief-*.html" -printf "%f\n" | LC_ALL=C sort | tail -1)
-[ -n "$newest" ] || exit 0
-if ! cmp -s "$DEST/$newest" "$DEST/index.html" 2>/dev/null; then
+
+newest=$(find "$DEST" -maxdepth 1 -name "morning-brief-*.html" ! -name "morning-brief-tv-*" -printf "%f\n" | LC_ALL=C sort | tail -1)
+if [ -n "$newest" ] && ! cmp -s "$DEST/$newest" "$DEST/index.html" 2>/dev/null; then
     cp "$DEST/$newest" "$DEST/index.html.tmp"
     mv "$DEST/index.html.tmp" "$DEST/index.html"
     echo "published $newest"
+fi
+
+# TV edition: map only when a tv-* file exists — leaving tv.html untouched
+# otherwise lets a hand-made edition stand in on days the routine made none.
+newest_tv=$(find "$DEST" -maxdepth 1 -name "morning-brief-tv-*.html" -printf "%f\n" | LC_ALL=C sort | tail -1)
+if [ -n "$newest_tv" ] && ! cmp -s "$DEST/$newest_tv" "$DEST/tv.html" 2>/dev/null; then
+    cp "$DEST/$newest_tv" "$DEST/tv.html.tmp"
+    mv "$DEST/tv.html.tmp" "$DEST/tv.html"
+    echo "published $newest_tv (tv)"
 fi
