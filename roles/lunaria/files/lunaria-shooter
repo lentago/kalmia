@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""Render the Morning Brief to 1280x720 page PNGs for the lunaria stream.
+
+Preferred source: the TV edition (one or more exact 1280x720 screens, body
+height a multiple of 720 — see the Morning-brief routine's TV-edition spec).
+Fallback when it's missing: slice the full brief into 720-high pages, cutting
+on near-background rows so text lines don't get split.
+
+Chromium notes: throwaway profile per shot (a persistent profile's HTTP cache
+once served a stale tv.html); --no-sandbox because unprivileged LXCs lack the
+user namespaces chromium's sandbox wants (input is our own pub.lan pages).
+"""
+import os, shutil, subprocess, sys, tempfile, urllib.request
+from PIL import Image, ImageChops
+
+TV_URL = sys.argv[1] if len(sys.argv) > 1 else "http://pub.lan/brief/tv.html"
+FULL_URL = sys.argv[2] if len(sys.argv) > 2 else "http://pub.lan/brief/"
+OUT_DIR = os.environ.get("LUNARIA_PAGES", "/var/lib/lunaria/pages")
+W, PAGE_H, SEARCH = 1280, 720, 100
+BG_TOLERANCE = 12          # px diff below this counts as background
+
+
+def shoot(url, height):
+    tmp = os.path.join(tempfile.gettempdir(), "lunaria-shot.png")
+    profile = tempfile.mkdtemp(prefix="lunaria-chromium-")
+    try:
+        subprocess.run([
+            "chromium", "--headless=new", "--no-sandbox", "--disable-gpu",
+            "--no-first-run", "--no-default-browser-check", "--hide-scrollbars",
+            "--user-data-dir=" + profile,
+            f"--window-size={W},{height}", f"--screenshot={tmp}",
+            "--virtual-time-budget=10000", url,
+        ], check=True, capture_output=True, timeout=90)
+    finally:
+        shutil.rmtree(profile, ignore_errors=True)
+    return Image.open(tmp).convert("RGB")
+
+
+def write_pages(pages):
+    os.makedirs(OUT_DIR, exist_ok=True)
+    for old in os.listdir(OUT_DIR):
+        os.unlink(os.path.join(OUT_DIR, old))
+    for i, page in enumerate(pages, 1):
+        page.save(os.path.join(OUT_DIR, f"page-{i:02d}.png"))
+
+
+def tv_available():
+    try:
+        return urllib.request.urlopen(TV_URL, timeout=10).status == 200
+    except Exception:
+        return False
+
+
+def content_mask(im, bg):
+    """Diff vs bg with small deltas (antialiasing, off-white noise) crushed
+    to zero, so getbbox() finds real content only."""
+    diff = ImageChops.difference(im, Image.new("RGB", im.size, bg)).convert("L")
+    return diff.point(lambda p: 255 if p > BG_TOLERANCE else 0)
+
+
+if tv_available():
+    im = shoot(TV_URL, PAGE_H * 4)
+    bg = im.getpixel((5, 5))
+    bbox = content_mask(im, bg).getbbox()
+    content_bottom = bbox[3] if bbox else PAGE_H
+    n = max(1, -(-content_bottom // PAGE_H))          # ceil to whole screens
+    write_pages([im.crop((0, i * PAGE_H, W, (i + 1) * PAGE_H)) for i in range(n)])
+    print(f"{n} page(s) (tv edition, content {content_bottom}px)")
+else:
+    im = shoot(FULL_URL, 4000)
+    bg = im.getpixel((5, 5))
+    bbox = content_mask(im, bg).getbbox()
+    content_bottom = bbox[3] if bbox else PAGE_H
+    if content_bottom > 3900:
+        im = shoot(FULL_URL, 8000)
+        bbox = content_mask(im, bg).getbbox()
+        content_bottom = bbox[3] if bbox else PAGE_H
+
+    mask = content_mask(im, bg)
+
+    def blank_row(y):
+        return mask.crop((0, y, W, y + 1)).getbbox() is None
+
+    pages, y = [], 0
+    while y < content_bottom:
+        cut = min(y + PAGE_H, content_bottom)
+        if cut < content_bottom:
+            for dy in range(SEARCH):
+                if blank_row(cut - dy):
+                    cut -= dy
+                    break
+        page = Image.new("RGB", (W, PAGE_H), bg)
+        page.paste(im.crop((0, y, W, cut)), (0, 0))
+        pages.append(page)
+        y = cut
+    write_pages(pages)
+    print(f"{len(pages)} pages (sliced full brief, content {content_bottom}px)")

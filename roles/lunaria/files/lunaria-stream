@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Encode the current frame.png into the mediamtx RTSP path as 10fps H.264 +
+# silent AAC (the Roku-proven recipe: main profile, yuv420p, mpegts-friendly
+# GOP = one 2s HLS segment). The feeder re-cats frame.png per frame, so
+# atomic replacements from lunaria-frames appear in the stream within 100ms.
+# The wall-clock overlay doubles as the display's liveness indicator.
+set -euo pipefail
+
+HOME_DIR="${LUNARIA_HOME:-/var/lib/lunaria}"
+FONT=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+cd "$HOME_DIR"
+
+[ -s frame.png ] || { echo "frame.png missing - waiting for lunaria-frames" >&2; exit 1; }
+
+( while :; do cat frame.png; sleep 0.1; done ) | \
+exec ffmpeg -loglevel warning \
+  -f image2pipe -framerate 10 -i - \
+  -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=48000" \
+  -vf "drawtext=fontfile=${FONT}:text='%{localtime\:%X}':fontsize=28:fontcolor=white:box=1:boxcolor=black@0.6:boxborderw=8:x=w-tw-20:y=h-th-16" \
+  -c:v libx264 -preset veryfast -tune zerolatency \
+  -profile:v main -pix_fmt yuv420p \
+  -g 20 -keyint_min 20 -sc_threshold 0 -b:v 2500k \
+  -c:a aac -b:a 64k \
+  -rtsp_transport tcp \
+  -f rtsp rtsp://localhost:8554/board

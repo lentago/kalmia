@@ -1,0 +1,18 @@
+---
+# ============================================================================
+# Provision the lunaria LXC (118, pve4) — wall-display compositor/streamer.
+# Self-provisioning, same as pub.yml: run this ON the container.
+#
+#   ansible-playbook -i inventory/hosts.yml lunaria.yml
+#
+# The guest itself is created by terraform/containers.tf (CI apply-on-merge).
+# Concept doc: docs/lunaria.md and http://pub.lan/lunaria/LUNARIA.md.
+# ============================================================================
+- name: Provision the lunaria wall-display compositor
+  hosts: all
+  gather_facts: true
+  become: false
+
+  roles:
+    - role: lunaria
+      tags: [lunaria, wall_display]

@@ -1,0 +1,137 @@
+---
+# ============================================================================
+# lunaria — installs the wall-display compositor stack: distro ffmpeg +
+# chromium (headless shots), a pinned mediamtx (HLS transport), the
+# shooter/rotator/encoder scripts, and their systemd services. Runs
+# credential-free: the only input is http://pub.lan/. See docs/lunaria.md.
+# ============================================================================
+- name: Install packages (ffmpeg, chromium, PIL, fonts)
+  ansible.builtin.apt:
+    name:
+      - ffmpeg
+      - chromium
+      - python3-pil
+      - fonts-dejavu-core
+      - ca-certificates
+    state: present
+    update_cache: true
+  become: true
+
+- name: Create the lunaria service user
+  ansible.builtin.user:
+    name: "{{ lunaria_user }}"
+    system: true
+    home: "{{ lunaria_home }}"
+    create_home: true
+    shell: /usr/sbin/nologin
+  become: true
+
+- name: Ensure the pages directory exists
+  ansible.builtin.file:
+    path: "{{ lunaria_home }}/pages"
+    state: directory
+    owner: "{{ lunaria_user }}"
+    group: "{{ lunaria_user }}"
+    mode: "0755"
+  become: true
+
+# mediamtx writes auto-generated certs into its working directory, so the
+# install dir is owned by the service user. The version-stamp marker makes
+# upgrades idempotent: bump lunaria_mediamtx_version and the unarchive re-runs.
+- name: Ensure the mediamtx directory exists
+  ansible.builtin.file:
+    path: "{{ lunaria_mediamtx_dir }}"
+    state: directory
+    owner: "{{ lunaria_user }}"
+    group: "{{ lunaria_user }}"
+    mode: "0755"
+  become: true
+
+- name: Download and unpack mediamtx {{ lunaria_mediamtx_version }}
+  ansible.builtin.unarchive:
+    src: "https://github.com/bluenviron/mediamtx/releases/download/{{ lunaria_mediamtx_version }}/mediamtx_{{ lunaria_mediamtx_version }}_linux_amd64.tar.gz"
+    dest: "{{ lunaria_mediamtx_dir }}"
+    remote_src: true
+    owner: "{{ lunaria_user }}"
+    group: "{{ lunaria_user }}"
+    creates: "{{ lunaria_mediamtx_dir }}/.installed-{{ lunaria_mediamtx_version }}"
+  become: true
+  notify: Restart mediamtx
+
+- name: Stamp the installed mediamtx version
+  ansible.builtin.file:
+    path: "{{ lunaria_mediamtx_dir }}/.installed-{{ lunaria_mediamtx_version }}"
+    state: touch
+    owner: "{{ lunaria_user }}"
+    group: "{{ lunaria_user }}"
+    mode: "0644"
+    modification_time: preserve
+    access_time: preserve
+  become: true
+
+- name: Deploy the mediamtx config
+  ansible.builtin.copy:
+    src: mediamtx.yml
+    dest: "{{ lunaria_mediamtx_dir }}/mediamtx.yml"
+    owner: "{{ lunaria_user }}"
+    group: "{{ lunaria_user }}"
+    mode: "0644"
+  become: true
+  notify: Restart mediamtx
+
+- name: Deploy the lunaria scripts
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - lunaria-shooter
+    - lunaria-frames
+    - lunaria-stream
+  become: true
+  notify:
+    - Restart lunaria-frames
+    - Restart lunaria-stream
+
+- name: Render the lunaria environment file
+  ansible.builtin.template:
+    src: lunaria.env.j2
+    dest: /etc/default/lunaria
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify:
+    - Restart lunaria-frames
+    - Restart lunaria-stream
+
+- name: Deploy the systemd units
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - mediamtx.service
+    - lunaria-frames.service
+    - lunaria-stream.service
+  become: true
+  notify:
+    - Restart mediamtx
+    - Restart lunaria-frames
+    - Restart lunaria-stream
+
+- name: Enable and start the lunaria services
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    daemon_reload: true
+    enabled: true
+    state: started
+  loop:
+    - mediamtx.service
+    - lunaria-frames.service
+    - lunaria-stream.service
+  become: true

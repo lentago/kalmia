@@ -1,0 +1,15 @@
+[Unit]
+Description=lunaria encoder (frame.png -> RTSP -> mediamtx HLS)
+After=network-online.target mediamtx.service lunaria-frames.service
+Wants=network-online.target mediamtx.service lunaria-frames.service
+
+[Service]
+User=lunaria
+WorkingDirectory=/var/lib/lunaria
+EnvironmentFile=/etc/default/lunaria
+ExecStart=/usr/local/bin/lunaria-stream
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
