@@ -17,6 +17,12 @@
     update_cache: true
   become: true
 
+- name: Set the container timezone (the stream's clock overlay uses it)
+  community.general.timezone:
+    name: "{{ lunaria_timezone }}"
+  become: true
+  notify: Restart lunaria-stream
+
 - name: Create the lunaria service user
   ansible.builtin.user:
     name: "{{ lunaria_user }}"

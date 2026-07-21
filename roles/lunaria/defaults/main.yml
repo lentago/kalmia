@@ -9,6 +9,10 @@
 lunaria_user: lunaria
 lunaria_home: /var/lib/lunaria
 
+# The clock overlay burned into the stream uses the system TZ; the debian
+# template defaults to UTC, which reads as a broken clock on the TV.
+lunaria_timezone: America/New_York
+
 lunaria_mediamtx_version: v1.19.2
 lunaria_mediamtx_dir: /opt/mediamtx
 
