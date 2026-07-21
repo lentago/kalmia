@@ -108,9 +108,11 @@ Morning Brief publisher (rclone + systemd timer) running inside the `pub` LXC
 [`docs/pub.md`](docs/pub.md) for how to run it and seed its secret.
 
 The second: `lunaria.yml` + the `lunaria` role codify the wall-display
-compositor (LXC 118) — chromium-rendered Morning Brief → ffmpeg → mediamtx
-HLS for the play-room Roku. Credential-free by design; the guest itself is
-defined in `terraform/containers.tf`. See [`docs/lunaria.md`](docs/lunaria.md).
+compositor (LXC 118) for **brasenia** (renamed from `lunaria` on 2026-07-20;
+kalmia keeps the legacy `lunaria` runtime names — see
+[`docs/lunaria.md`](docs/lunaria.md)) — chromium-rendered Morning Brief →
+ffmpeg → mediamtx HLS for the play-room Roku. Credential-free by design; the
+guest itself is defined in `terraform/containers.tf`.
 
 ---
 

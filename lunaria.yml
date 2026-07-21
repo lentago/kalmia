@@ -1,12 +1,14 @@
 ---
 # ============================================================================
-# Provision the lunaria LXC (118, pve4) — wall-display compositor/streamer.
-# Self-provisioning, same as pub.yml: run this ON the container.
+# Provision the lunaria LXC (118, pve4) — wall-display compositor/streamer
+# for lentago/brasenia (renamed from lentago/lunaria on 2026-07-20; 'lunaria'
+# is the retained legacy runtime name — see issue #61). Self-provisioning,
+# same as pub.yml: run this ON the container.
 #
 #   ansible-playbook -i inventory/hosts.yml lunaria.yml
 #
 # The guest itself is created by terraform/containers.tf (CI apply-on-merge).
-# Concept doc: docs/lunaria.md and http://pub.lan/lunaria/LUNARIA.md.
+# Concept doc: docs/lunaria.md and http://pub.lan/brasenia/concept.md.
 # ============================================================================
 - name: Provision the lunaria wall-display compositor
   hosts: all

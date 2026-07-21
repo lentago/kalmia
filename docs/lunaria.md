@@ -1,10 +1,21 @@
 # lunaria — wall-display compositor (LXC 118, pve4)
 
+> **Naming note:** the product this runtime serves was renamed
+> `lentago/lunaria` → [`lentago/brasenia`](https://github.com/lentago/brasenia)
+> on 2026-07-20, hours after creation (*Lunaria annua* is a European garden
+> escape; the Lentago codename roster is New England natives only —
+> *Brasenia* is watershield). kalmia deliberately keeps the legacy `lunaria`
+> runtime names
+> (role, scripts, systemd units, service user, `/etc/default/lunaria`, LXC 118
+> hostname) per fleet precedent (betula/drosera/claytonia all kept their
+> on-host legacy names after similar renames) — see issue #61. Concept
+> snapshot: `http://pub.lan/brasenia/concept.md`.
+
 **lunaria** renders the Morning Brief's TV edition to a continuous H.264 HLS
 stream that the play-room Roku TV's sideloaded dev channel plays. It is the
 containerized productization of the 2026-07-20 Roku HLS validation (worked
 example: `~/roku-hls-test/NOTES.md` on the ThinkPad). Concept and roadmap
-(the pane-rubric viewport this grows into): `http://pub.lan/lunaria/LUNARIA.md`.
+(the pane-rubric viewport this grows into): `http://pub.lan/brasenia/concept.md`.
 
 ## Architecture
 
