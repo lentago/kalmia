@@ -1,0 +1,21 @@
+---
+- name: Restart mediamtx
+  ansible.builtin.systemd_service:
+    name: mediamtx.service
+    daemon_reload: true
+    state: restarted
+  become: true
+
+- name: Restart lunaria-frames
+  ansible.builtin.systemd_service:
+    name: lunaria-frames.service
+    daemon_reload: true
+    state: restarted
+  become: true
+
+- name: Restart lunaria-stream
+  ansible.builtin.systemd_service:
+    name: lunaria-stream.service
+    daemon_reload: true
+    state: restarted
+  become: true

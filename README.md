@@ -107,6 +107,11 @@ Morning Brief publisher (rclone + systemd timer) running inside the `pub` LXC
 (114). It's a standalone playbook, not a `site.yml` profile — see
 [`docs/pub.md`](docs/pub.md) for how to run it and seed its secret.
 
+The second: `lunaria.yml` + the `lunaria` role codify the wall-display
+compositor (LXC 118) — chromium-rendered Morning Brief → ffmpeg → mediamtx
+HLS for the play-room Roku. Credential-free by design; the guest itself is
+defined in `terraform/containers.tf`. See [`docs/lunaria.md`](docs/lunaria.md).
+
 ---
 
 *Part of the [Lentago Labs](https://github.com/lentago) portfolio.*

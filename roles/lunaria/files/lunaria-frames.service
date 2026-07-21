@@ -1,0 +1,15 @@
+[Unit]
+Description=lunaria page renderer and rotator (brief -> frame.png)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=lunaria
+WorkingDirectory=/var/lib/lunaria
+EnvironmentFile=/etc/default/lunaria
+ExecStart=/usr/local/bin/lunaria-frames
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -216,3 +216,62 @@ resource "proxmox_virtual_environment_container" "grafana_stack" {
     ignore_changes = [operating_system]
   }
 }
+
+# LXC 118 — lunaria, the wall-display compositor/streamer (concept:
+# http://pub.lan/lunaria/LUNARIA.md). Renders http://pub.lan/brief/tv.html
+# (headless chromium) into an H.264 HLS stream (mediamtx :8888) that the
+# play-room Roku's sideloaded dev channel plays. Deliberately credential-free:
+# pub owns the Drive leg; lunaria only reads pub.lan. No bind mounts and no
+# keyctl, so the API-token CI apply can create this container from scratch.
+resource "proxmox_virtual_environment_container" "lunaria" {
+  node_name     = "pve4"
+  vm_id         = 118
+  description   = "lunaria — wall-display compositor (192.168.139.19). Renders pub.lan/brief/tv.html to HLS :8888 for the play-room Roku dev channel. Provisioned by lunaria.yml.\n"
+  unprivileged  = true
+  started       = true
+  start_on_boot = true
+
+  cpu {
+    cores = 2
+  }
+
+  memory {
+    dedicated = 2048
+    swap      = 512
+  }
+
+  disk {
+    datastore_id = "local-lvm"
+    size         = 10
+  }
+
+  network_interface {
+    name   = "eth0"
+    bridge = "vmbr0"
+  }
+
+  initialization {
+    hostname = "lunaria"
+
+    dns {
+      domain  = "local"
+      servers = ["192.168.139.1"]
+    }
+
+    ip_config {
+      ipv4 {
+        address = "192.168.139.19/24"
+        gateway = "192.168.139.1"
+      }
+    }
+  }
+
+  operating_system {
+    template_file_id = "local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst"
+    type             = "debian"
+  }
+
+  lifecycle {
+    ignore_changes = [operating_system]
+  }
+}

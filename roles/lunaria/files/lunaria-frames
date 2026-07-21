@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Rotate the rendered brief pages through frame.png (the encoder's input),
+# re-shooting the source page every LUNARIA_REGEN_INTERVAL seconds. On shoot
+# failure the existing pages keep rotating — a stale brief beats a dead screen.
+set -euo pipefail
+
+HOME_DIR="${LUNARIA_HOME:-/var/lib/lunaria}"
+PAGES="${LUNARIA_PAGES:-$HOME_DIR/pages}"
+DWELL="${LUNARIA_PAGE_DWELL:-12}"
+REGEN="${LUNARIA_REGEN_INTERVAL:-600}"
+TV_URL="${LUNARIA_TV_URL:-http://pub.lan/brief/tv.html}"
+FULL_URL="${LUNARIA_FULL_URL:-http://pub.lan/brief/}"
+
+cd "$HOME_DIR"
+last_gen=0
+
+while :; do
+  now=$(date +%s)
+  if (( now - last_gen > REGEN )); then
+    if /usr/local/bin/lunaria-shooter "$TV_URL" "$FULL_URL"; then
+      last_gen=$now
+      echo "pages regenerated"
+    else
+      echo "shoot FAILED, keeping existing pages" >&2
+    fi
+  fi
+  for p in "$PAGES"/page-*.png; do
+    [ -e "$p" ] || continue
+    cp "$p" "frame.tmp.$$.png" && mv "frame.tmp.$$.png" frame.png
+    sleep "$DWELL"
+  done
+done

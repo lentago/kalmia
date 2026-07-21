@@ -1,0 +1,20 @@
+# lunaria HLS config - minimal
+hls: yes
+hlsAddress: :8888
+hlsVariant: mpegts        # CRITICAL: Roku compatibility. Default lowLatency
+                          # uses LL-HLS/fMP4 which Roku handles poorly.
+hlsSegmentDuration: 2s
+hlsSegmentCount: 7
+hlsAlwaysRemux: yes       # remux continuously so first client join is fast
+
+rtsp: yes
+rtspAddress: :8554
+
+# Only HLS out + RTSP in are used; keep the rest off.
+rtmp: no
+webrtc: no
+srt: no
+moq: no
+
+paths:
+  board:

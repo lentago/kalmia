@@ -1,0 +1,23 @@
+---
+# ============================================================================
+# lunaria — wall-display compositor for the LXC 118 (pve4). Renders the
+# Morning Brief TV edition from pub.lan into a continuous H.264 HLS stream
+# the play-room Roku dev channel plays. Concept: docs/lunaria.md and
+# http://pub.lan/lunaria/LUNARIA.md. Deliberately credential-free — pub owns
+# the Google Drive leg; lunaria only reads http://pub.lan/.
+# ============================================================================
+lunaria_user: lunaria
+lunaria_home: /var/lib/lunaria
+
+lunaria_mediamtx_version: v1.19.2
+lunaria_mediamtx_dir: /opt/mediamtx
+
+# Frame sources: the TV edition is preferred (exact 1280x720 screens); the
+# full brief is the fallback, sliced into 720px pages.
+lunaria_tv_url: http://pub.lan/brief/tv.html
+lunaria_full_url: http://pub.lan/brief/
+
+# Seconds each screen stays up before rotating to the next.
+lunaria_page_dwell: 12
+# Seconds between re-renders of the source page.
+lunaria_regen_interval: 600
