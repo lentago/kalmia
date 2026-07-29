@@ -8,6 +8,12 @@
 go_version: "1.23.6"
 nvm_version: "v0.40.1"
 
+# nvm's installer picks $XDG_CONFIG_HOME/nvm over ~/.nvm whenever
+# XDG_CONFIG_HOME is set (true on Crostini). Pin NVM_DIR explicitly so the
+# installer, the idempotency guards, and the .bashrc block all agree on one
+# location regardless of the environment.
+nvm_dir: "{{ ansible_env.HOME }}/.nvm"
+
 # --- Feature toggles (profiles override these) -----------------------------
 docker_install: true
 docker_daemon: true            # false → CLI-only (Crostini)

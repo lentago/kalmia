@@ -101,10 +101,13 @@ Fedora 44 VMs: a pristine box provisions with no failures and re-runs
 idempotently, with the profile autodetected. Fedora installs the shared
 toolchain plus Docker + VS Code from their dnf repos.
 
-**`crostini` and `ubuntu_laptop` are runnable but not yet live-tested.**
-`ubuntu_laptop` adds TLP power management, ThinkPad charge thresholds, and fwupd
-via the `power` role; Crostini runs Docker CLI-only with hostname-resolution and
-`~/.local/bin` fixes from the `common` role.
+**`crostini` is validated end-to-end** on a Chromebook running Debian 13
+trixie: same bar as the VMs, with the profile autodetected from the `penguin`
+hostname. It runs Docker CLI-only (no daemon in the container), with
+hostname-resolution and `~/.local/bin` fixes from the `common` role.
+
+**`ubuntu_laptop` is runnable but not yet live-tested.** It adds TLP power
+management, ThinkPad charge thresholds, and fwupd via the `power` role.
 
 ## Beyond workstations
 

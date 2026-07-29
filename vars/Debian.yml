@@ -17,13 +17,17 @@ base_packages:
   - ca-certificates
   - openssl              # Helm's installer needs it; present by default on
                          # Debian/Ubuntu but pinned here for parity with Fedora
-  - software-properties-common
   - apt-transport-https
   - python3-debian        # required by the deb822_repository module
+                          # (software-properties-common is deliberately absent:
+                          # gone from Debian 13 main, and the repo adds apt
+                          # sources via deb822_repository, not add-apt-repository)
   - man-db
   - less
   - openssh-client
-  - dnsutils
+  - bind9-dnsutils        # `dnsutils` was a transitional package, dropped in
+                          # Debian 13; bind9-dnsutils is the real name on both
+                          # Debian and Ubuntu
   - net-tools
   - traceroute
   - nmap

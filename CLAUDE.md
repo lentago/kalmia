@@ -82,11 +82,16 @@ instead of ~1,000-line bash scripts. It supersedes the bash scripts in
   pristine box, `bootstrap.sh` provisions clean (`failed=0`) and re-runs
   idempotently (`changed=0`), profile autodetected. Fedora pulls Docker + VS
   Code from their dnf repos (`containers`/`editors`).
-- **`crostini` and `ubuntu_laptop` are runnable by design but not yet
-  live-tested** — Crostini lives on the Chromebook (Docker CLI-only; the
-  `common` role handles its hostname/`~/.local/bin` quirks); `ubuntu_laptop` is
-  bare metal and adds TLP + ThinkPad charge thresholds + fwupd via the `power`
-  role (`enable_tlp`).
+- **`crostini` is validated end-to-end** on the Chromebook (Debian 13 trixie,
+  2026-07-28): same bar — `failed=0` from pristine, `changed=0` on re-run,
+  profile autodetected from the `penguin` hostname. Docker is CLI-only (no
+  daemon in the container) and the `common` role handles its
+  hostname/`~/.local/bin` quirks. The first live run is what caught the Debian
+  13 package-name breakage (`software-properties-common`, `dnsutils`) and the
+  nvm `XDG_CONFIG_HOME` misplacement — none of which static CI can see.
+- **`ubuntu_laptop` is runnable by design but not yet live-tested** — it is bare
+  metal and adds TLP + ThinkPad charge thresholds + fwupd via the `power` role
+  (`enable_tlp`).
 - **No pending role follow-ups.** All core and platform roles are in; remote
   desktop (XRDP) was dropped as unused. Static CI can't catch runtime-only
   failures (removed plugins, host deps, idempotency) — real testbed runs do.
