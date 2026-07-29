@@ -11,12 +11,15 @@
   become: true
 
 # --- Node.js via nvm (user space) ------------------------------------------
-# nvm triple-fix: (1) NVM_DIR must exist before the installer runs;
-# (2) PROFILE=/dev/null stops the installer rewriting .bashrc (the shell role
-# owns that block); (3) source nvm.sh after install, not before.
+# nvm quadruple-fix: (1) NVM_DIR must exist before the installer runs;
+# (2) NVM_DIR must also be exported *to* the installer — left unset it defaults
+# to $XDG_CONFIG_HOME/nvm (not ~/.nvm) wherever XDG_CONFIG_HOME is set, so the
+# install silently lands somewhere the guards below never look;
+# (3) PROFILE=/dev/null stops the installer rewriting .bashrc (the shell role
+# owns that block); (4) source nvm.sh after install, not before.
 - name: Ensure the nvm directory exists
   ansible.builtin.file:
-    path: "{{ target_home }}/.nvm"
+    path: "{{ nvm_dir }}"
     state: directory
     mode: "0755"
   become: false
@@ -33,21 +36,22 @@
   ansible.builtin.shell: >-
     set -o pipefail;
     curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/{{ nvm_version }}/install.sh
-    | PROFILE=/dev/null bash
+    | PROFILE=/dev/null NVM_DIR="{{ nvm_dir }}" bash
   args:
     executable: /bin/bash
-    creates: "{{ target_home }}/.nvm/nvm.sh"
+    creates: "{{ nvm_dir }}/nvm.sh"
   become: false
 
 - name: Install Node.js LTS and set it as the default
   ansible.builtin.shell: >-
     set -o pipefail;
-    . "{{ target_home }}/.nvm/nvm.sh" &&
+    export NVM_DIR="{{ nvm_dir }}";
+    . "{{ nvm_dir }}/nvm.sh" &&
     nvm install --lts &&
     nvm alias default 'lts/*'
   args:
     executable: /bin/bash
-    creates: "{{ target_home }}/.nvm/alias/default"
+    creates: "{{ nvm_dir }}/alias/default"
   become: false
 
 # --- Go --------------------------------------------------------------------

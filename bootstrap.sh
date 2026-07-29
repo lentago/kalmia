@@ -34,7 +34,7 @@ install_ansible() {
   echo "[bootstrap] Installing Ansible..."
   if have apt-get; then
     sudo apt-get update -qq
-    sudo apt-get install -y -qq git software-properties-common
+    sudo apt-get install -y -qq git
     sudo apt-get install -y -qq ansible
   elif have dnf; then
     sudo dnf install -y -q git ansible
