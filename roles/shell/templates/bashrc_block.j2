@@ -33,7 +33,7 @@ alias la='ls -A --color=auto'
 alias l='ls -CF --color=auto'
 alias ..='cd ..'
 alias ...='cd ../..'
-alias repos='cd ~/repos'
+alias repos='cd "{{ repos_dir }}"'
 {% if bat_command != 'bat' %}
 # --- bat (Debian ships it as {{ bat_command }}) ---
 command -v {{ bat_command }} &>/dev/null && alias bat='{{ bat_command }}'
@@ -110,8 +110,8 @@ venv() {
 # Quick look at what's in your repos dir
 projects() {
   echo ""
-  echo "📂 ~/repos:"
-  for dir in ~/repos/*/; do
+  echo "📂 {{ repos_dir }}:"
+  for dir in "{{ repos_dir }}"/*/; do
     [[ -d "$dir/.git" ]] || continue
     local name branch dirty
     name=$(basename "$dir")

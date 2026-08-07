@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# gh-issue — Create GitHub issues without shell-escape drama.
+# Dependencies: gh
+# Usage: gh-issue <repo> <title> <body-file>
+#        gh-issue <repo> <title> < body.md
+#        cat body.md | gh-issue <repo> <title>
+#   GH_ISSUE_DEFAULT_REPO   when set, <repo> may be omitted
+#
+# ANSIBLE MANAGED — kalmia roles/shell. Local edits are overwritten on the next
+# run; change roles/shell/templates/gh-issue.j2 instead.
+set -euo pipefail
+
+print_usage() {
+    cat >&2 <<'EOF'
+Usage:
+  gh-issue <repo> <title> <body-file>
+  gh-issue <repo> <title> < body.md
+  cat body.md | gh-issue <repo> <title>
+
+With GH_ISSUE_DEFAULT_REPO set:
+  gh-issue <title> <body-file>
+  gh-issue <title> < body.md
+EOF
+}
+
+# Parse repo and title, supporting an optional GH_ISSUE_DEFAULT_REPO fallback.
+# After this block, positional args are shifted so $@ holds only the optional
+# body-file argument (0 or 1 entries).
+if [[ -n "${GH_ISSUE_DEFAULT_REPO:-}" && $# -le 2 ]]; then
+    if [[ $# -lt 1 ]]; then
+        print_usage; exit 2
+    fi
+    repo="$GH_ISSUE_DEFAULT_REPO"
+    title="$1"
+    shift
+else
+    if [[ $# -lt 2 ]]; then
+        print_usage; exit 2
+    fi
+    if [[ $# -gt 3 ]]; then
+        print_usage; exit 2
+    fi
+    repo="$1"
+    title="$2"
+    shift 2
+fi
+
+# $@ is now empty (stdin mode) or a single body-file path
+if [[ $# -gt 1 ]]; then
+    print_usage; exit 2
+fi
+
+if [[ $# -eq 1 ]]; then
+    # Mode A: body from file argument
+    body_file="$1"
+    if [[ ! -r "$body_file" ]]; then
+        echo "error: cannot read file: $body_file" >&2
+        exit 1
+    fi
+else
+    # Mode B/C: body from stdin (pipe or redirect)
+    if [[ -t 0 ]]; then
+        echo "error: no body provided; pass a file or pipe to stdin" >&2
+        exit 2
+    fi
+    tmp=$(mktemp)
+    trap 'rm -f "$tmp"' EXIT
+    cat > "$tmp"
+    body_file="$tmp"
+fi
+
+gh issue create --repo "$repo" --title "$title" --body-file "$body_file"

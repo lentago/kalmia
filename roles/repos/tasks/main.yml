@@ -1,8 +1,10 @@
 ---
 # ============================================================================
-# repos — GitHub CLI + clone personal (and optional org) repositories.
-# Opt-in: runs only when clone_repos is true. Needs gh already authenticated
-# or GH_TOKEN in the environment.
+# repos — GitHub CLI + clone personal and org repositories.
+# On by default (clone_repos); set it false to skip the role entirely. Needs gh
+# already authenticated or GH_TOKEN in the environment — without that, cloning
+# is skipped with a loud notice rather than aborting the run, unless
+# repos_require_gh_auth is true.
 # ============================================================================
 - name: Install GitHub CLI from the official apt repository (Debian)
   when: ansible_os_family == "Debian"
@@ -47,6 +49,30 @@
   environment:
     GH_TOKEN: "{{ lookup('env', 'GH_TOKEN') | default('', true) }}"
 
+# An unauthenticated gh used to be a silent skip: the block below was gated on
+# gh_auth.rc and the play went green having cloned nothing. Now that clone_repos
+# defaults to true, aborting instead would break the pristine first run, where
+# this role installs gh and nobody has logged in yet. So: skip, but say so
+# unmissably. Set repos_require_gh_auth=true to make it fatal on a box that is
+# supposed to be authenticated.
+- name: Require an authenticated GitHub CLI
+  ansible.builtin.assert:
+    that: gh_auth.rc == 0
+    fail_msg: >-
+      clone_repos is true but the GitHub CLI is not authenticated. Run
+      `gh auth login`, or export GH_TOKEN, and re-run.
+    success_msg: GitHub CLI is authenticated
+    quiet: true
+  when: repos_require_gh_auth | bool
+
+- name: Report that cloning was skipped
+  ansible.builtin.debug:
+    msg: >-
+      SKIPPED cloning — the GitHub CLI is not authenticated, so NO repositories
+      were cloned. Run `gh auth login` (or export GH_TOKEN), then re-run with
+      --tags repos. Set repos_require_gh_auth=true to make this a hard failure.
+  when: gh_auth.rc != 0
+
 - name: Clone repositories
   when: gh_auth.rc == 0
   become: false
@@ -80,6 +106,11 @@
       changed_when: false
       check_mode: false
 
+    # `update: false` is deliberate, not an oversight. With `version: HEAD` the
+    # git module updates by running `git reset --hard origin/<current-branch>`,
+    # which discards unpushed local commits on whatever branch the checkout
+    # happens to be sitting on — verified destroying one on a feature branch
+    # that tracked a remote. This role clones; `pull-all` (shell role) updates.
     - name: Clone personal repositories
       ansible.builtin.git:
         repo: "https://github.com/{{ effective_github_user }}/{{ item }}.git"
@@ -87,7 +118,20 @@
         version: HEAD
         update: false
       loop: "{{ personal_repos.stdout_lines }}"
-      failed_when: false
+      register: personal_clone
+      ignore_errors: true
+
+    - name: Fail when a personal repository could not be cloned
+      ansible.builtin.assert:
+        that:
+          - personal_clone.results | default([]) | selectattr('failed', 'defined') | selectattr('failed') | list | length == 0
+        fail_msg: >-
+          Could not clone
+          {{ personal_clone.results | default([]) | selectattr('failed', 'defined') | selectattr('failed')
+             | map(attribute='item') | join(', ') }}
+        success_msg: >-
+          {{ personal_repos.stdout_lines | length }} personal repositories present
+        quiet: true
 
     - name: List organization repositories
       ansible.builtin.command: "gh repo list {{ github_org }} --limit 200 --json name -q .[].name"
@@ -103,5 +147,19 @@
         version: HEAD
         update: false
       loop: "{{ org_repos.stdout_lines | default([]) }}"
-      failed_when: false
+      register: org_clone
+      ignore_errors: true
+      when: github_org | length > 0
+
+    - name: Fail when an organization repository could not be cloned
+      ansible.builtin.assert:
+        that:
+          - org_clone.results | default([]) | selectattr('failed', 'defined') | selectattr('failed') | list | length == 0
+        fail_msg: >-
+          Could not clone
+          {{ org_clone.results | default([]) | selectattr('failed', 'defined') | selectattr('failed')
+             | map(attribute='item') | join(', ') }}
+        success_msg: >-
+          {{ org_repos.stdout_lines | default([]) | length }} {{ github_org }} repositories present
+        quiet: true
       when: github_org | length > 0

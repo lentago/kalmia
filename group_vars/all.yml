@@ -19,7 +19,14 @@ docker_install: true
 docker_daemon: true            # false → CLI-only (Crostini)
 install_vscode: true
 install_claude_code: true
-clone_repos: false             # opt-in; needs gh auth or GH_TOKEN in the env
+clone_repos: true              # needs gh auth or GH_TOKEN in the env
+
+# Whether an unauthenticated gh is a hard failure when clone_repos is on.
+# Default false: now that cloning is on by default, a pristine first run — where
+# the repos role installs gh and nobody has logged in yet — must still finish
+# clean. The skip is reported loudly instead of aborting the build. Set true on a
+# box that is expected to be authenticated and where cloning nothing is a bug.
+repos_require_gh_auth: false
 
 # Upgrade all installed packages during a run. Default true preserves the
 # historical behavior; set false to converge configuration without touching
@@ -27,8 +34,12 @@ clone_repos: false             # opt-in; needs gh auth or GH_TOKEN in the env
 base_system_upgrade: true
 
 # --- GitHub / repo cloning -------------------------------------------------
+# github_org defaults to the Lentago org because that is where the work repos
+# live. Left empty it isn't an inert default: the org list/clone tasks are
+# guarded on it, so the role cloned personal repos only and still reported a
+# clean run. Export GITHUB_ORG to point a box somewhere else.
 github_user: "{{ lookup('env', 'GITHUB_USER') | default('', true) }}"
-github_org: "{{ lookup('env', 'GITHUB_ORG') | default('', true) }}"
+github_org: "{{ lookup('env', 'GITHUB_ORG') | default('lentago', true) }}"
 # Defaults to the Lentago org so the rendered config actually sets something and
 # the ghnew/ghclone aliases exist. Export GITHUB_DEFAULT_OWNER to override.
 github_default_owner: "{{ lookup('env', 'GITHUB_DEFAULT_OWNER') | default('lentago', true) }}"
