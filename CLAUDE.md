@@ -91,17 +91,23 @@ instead of ~1,000-line bash scripts. It supersedes the bash scripts in
   its hostname/`~/.local/bin` quirks. The first live run is what caught the Debian
   13 package-name breakage (`software-properties-common`, `dnsutils`) and the
   nvm `XDG_CONFIG_HOME` misplacement — none of which static CI can see.
-- **`baguette` is new and NOT yet validated** (added 2026-08-06). ChromeOS M147
-  made the containerless VM the default for new Linux installs, and the
-  Chromebook is now on it: `systemd-detect-virt` reports `kvm`, there is no
+- **`baguette` is validated end-to-end** on the Chromebook (Debian 13 trixie,
+  added and validated 2026-08-06): same bar — `failed=0` from pristine
+  (`ok=67`/`changed=39`), `changed=0` on re-run, profile autodetected. Docker
+  Engine 29.7.2 comes up `enabled` + `active` and the daemon answers, which is
+  the whole premise of splitting this profile off `crostini`. ChromeOS M147 made
+  the containerless VM the default for new Linux installs, and the Chromebook is
+  now on it: `systemd-detect-virt` reports `kvm`, there is no
   `/run/systemd/container` or `/dev/.lxd-mounts`, `/sys/fs/cgroup` is
   `cgroup2fs`, and `/dev/kvm` is exposed. Ansible sees
   `virtualization_type: kvm` with an empty `virtualization_tech_guest` and
   `virtualization_role: host` — it does not look like a guest at all, which is
   why the discriminator tests for LXC rather than for KVM. Before this profile
   existed the hostname match sent the box to `crostini`, which installed
-  `docker-ce-cli` with no daemon to talk to. Needs a pristine run to confirm
-  `failed=0` / `changed=0` and that the engine actually starts.
+  `docker-ce-cli` with no daemon to talk to. Validated on a Lenovo IdeaPad
+  Flex 5i Chromebook Plus (HWID board `TAEKO`, `brya` baseboard, i3-1315U);
+  the host has 8 GB soldered LPDDR4x, of which the VM is given ~6.6 GB — the
+  tightest-memory target in the fleet.
 - **`ubuntu_laptop` is proven idempotent on a provisioned host; a pristine
   first-run remains unproven** (#14). Run on a ThinkPad T14 Gen 2i, Ubuntu
   26.04, profile autodetected from `ansible_form_factor` (2026-08-06). This
