@@ -39,7 +39,8 @@ instead of ~1,000-line bash scripts. It supersedes the bash scripts in
 
 | Profile | Target | Package manager |
 |---|---|---|
-| `crostini` | Chromebook Crostini (Debian) | apt |
+| `crostini` | Chromebook Crostini, legacy LXC container | apt |
+| `baguette` | Chromebook ChromeOS M147+, containerless VM | apt |
 | `xubuntu` | Xubuntu 24.04 (Proxmox VM) | apt |
 | `fedora` | Fedora KDE (Proxmox VM) | dnf |
 | `ubuntu_laptop` | Ubuntu Desktop LTS (bare-metal laptop) | apt |
@@ -53,8 +54,10 @@ instead of ~1,000-line bash scripts. It supersedes the bash scripts in
   toggles (`docker_install`, `docker_daemon`, `enable_tlp`, …).
   `ansible_os_family` loads `vars/<family>.yml` for package-name differences
   (e.g. `batcat`↔`bat`, `fd-find`↔`fd`). The split is deliberate — it is NOT
-  purely by distro (Crostini is Debian but daemonless; ubuntu_laptop is Debian
-  but the lone TLP target).
+  purely by distro (legacy Crostini is Debian but daemonless; ubuntu_laptop is
+  Debian but the lone TLP target). Nor is it purely by hostname: both Chromebook
+  architectures are `penguin`, so autodetection also consults the LXC guest
+  facts (`is_lxc_guest` in `site.yml`) to tell `crostini` from `baguette`.
 - **Privilege model**: the play runs `become: false`; system tasks opt into
   `become: true`, user-space tasks (nvm, `.bashrc`, Starship, VS Code settings)
   run as the user. Use `target_user` / `target_home`, never root's `$HOME`.
@@ -83,12 +86,22 @@ instead of ~1,000-line bash scripts. It supersedes the bash scripts in
   idempotently (`changed=0`), profile autodetected. Fedora pulls Docker + VS
   Code from their dnf repos (`containers`/`editors`).
 - **`crostini` is validated end-to-end** on the Chromebook (Debian 13 trixie,
-  2026-07-28): same bar — `failed=0` from pristine, `changed=0` on re-run,
-  profile autodetected from the `penguin` hostname. Docker is CLI-only (no
-  daemon in the container) and the `common` role handles its
-  hostname/`~/.local/bin` quirks. The first live run is what caught the Debian
+  2026-07-28): same bar — `failed=0` from pristine, `changed=0` on re-run.
+  Docker is CLI-only (no daemon in the container) and the `common` role handles
+  its hostname/`~/.local/bin` quirks. The first live run is what caught the Debian
   13 package-name breakage (`software-properties-common`, `dnsutils`) and the
   nvm `XDG_CONFIG_HOME` misplacement — none of which static CI can see.
+- **`baguette` is new and NOT yet validated** (added 2026-08-06). ChromeOS M147
+  made the containerless VM the default for new Linux installs, and the
+  Chromebook is now on it: `systemd-detect-virt` reports `kvm`, there is no
+  `/run/systemd/container` or `/dev/.lxd-mounts`, `/sys/fs/cgroup` is
+  `cgroup2fs`, and `/dev/kvm` is exposed. Ansible sees
+  `virtualization_type: kvm` with an empty `virtualization_tech_guest` and
+  `virtualization_role: host` — it does not look like a guest at all, which is
+  why the discriminator tests for LXC rather than for KVM. Before this profile
+  existed the hostname match sent the box to `crostini`, which installed
+  `docker-ce-cli` with no daemon to talk to. Needs a pristine run to confirm
+  `failed=0` / `changed=0` and that the engine actually starts.
 - **`ubuntu_laptop` is runnable by design but not yet live-tested** — it is bare
   metal and adds TLP + ThinkPad charge thresholds + fwupd via the `power` role
   (`enable_tlp`).

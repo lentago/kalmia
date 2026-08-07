@@ -1,8 +1,12 @@
 ---
-# Chromebook Crostini (Debian container) — Docker CLI only (no daemon), no
-# systemd-managed services. The common role maps the `penguin` hostname to
-# loopback (silencing sudo's "unable to resolve host" warning) and pre-creates
-# ~/.local/bin and ~/bin so user-space installs land on PATH.
+# Chromebook Crostini, *legacy LXC container* architecture — Docker CLI only
+# (no daemon), no systemd-managed services. The common role maps the `penguin`
+# hostname to loopback (silencing sudo's "unable to resolve host" warning) and
+# pre-creates ~/.local/bin and ~/bin so user-space installs land on PATH.
+#
+# For a Chromebook on ChromeOS M147+ this is the WRONG profile — see
+# profiles/baguette.yml, which runs the full engine in the containerless VM.
+# site.yml picks between them from the LXC guest facts, not the hostname.
 docker_install: true
 docker_daemon: false           # CLI only — no daemon inside the container
 docker_apt_repo_url: "https://download.docker.com/linux/debian"

@@ -1,7 +1,7 @@
 ---
 # ============================================================================
 # Debian / Ubuntu (apt) package-name map. Loaded when ansible_os_family ==
-# "Debian" (covers the crostini, xubuntu, and ubuntu_laptop profiles).
+# "Debian" (covers the crostini, baguette, xubuntu, and ubuntu_laptop profiles).
 # ============================================================================
 deb_arch: amd64
 

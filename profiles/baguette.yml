@@ -1,0 +1,28 @@
+---
+# ChromeOS Baguette — the containerless successor to Crostini, default from
+# M147. The Linux environment is a crosvm KVM guest rather than an LXD
+# container: systemd is PID 1, cgroups v2 is available, and /dev/kvm is
+# exposed. Everything profiles/crostini.yml gives up for being a container is
+# available here, so this profile runs the full Docker Engine.
+#
+# Both architectures keep the `penguin` hostname; site.yml tells them apart by
+# the LXC guest facts. Google does not auto-upgrade existing installs, so
+# crostini and baguette targets coexist in the fleet — keep both profiles.
+docker_install: true
+docker_daemon: true            # real VM + cgroups v2: the daemon runs here
+docker_apt_repo_url: "https://download.docker.com/linux/debian"
+
+# docker_packages is deliberately NOT overridden — it falls through to the full
+# engine set in vars/Debian.yml (docker-ce, docker-ce-cli, containerd.io,
+# docker-compose-plugin). Contrast crostini, which pins the CLI-only subset.
+
+install_vscode: true
+install_claude_code: true
+clone_repos: false
+
+enable_tlp: false              # ChromeOS owns power management on the host
+
+# No sshd (ChromeOS brokers terminal access) and no qemu-guest-agent (crosvm,
+# not QEMU) — so nothing to add or enable beyond the base set.
+base_extra_packages: []
+base_services: []
