@@ -1,7 +1,9 @@
 ---
+# Safe standalone fallbacks. The fleet values come from group_vars/all.yml and
+# profiles/<name>.yml, both of which outrank role defaults: there clone_repos is
+# true and github_org defaults to the Lentago org.
 clone_repos: false
 repos_dir: "{{ ansible_env.HOME }}/repos"
 github_user: ""
-# Safe standalone fallbacks. The fleet values (github_org defaults to the
-# Lentago org) come from group_vars/all.yml, which outranks role defaults.
 github_org: ""
+repos_require_gh_auth: false

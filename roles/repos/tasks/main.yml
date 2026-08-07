@@ -1,8 +1,10 @@
 ---
 # ============================================================================
-# repos — GitHub CLI + clone personal (and optional org) repositories.
-# Opt-in: runs only when clone_repos is true. Needs gh already authenticated
-# or GH_TOKEN in the environment.
+# repos — GitHub CLI + clone personal and org repositories.
+# On by default (clone_repos); set it false to skip the role entirely. Needs gh
+# already authenticated or GH_TOKEN in the environment — without that, cloning
+# is skipped with a loud notice rather than aborting the run, unless
+# repos_require_gh_auth is true.
 # ============================================================================
 - name: Install GitHub CLI from the official apt repository (Debian)
   when: ansible_os_family == "Debian"
@@ -47,10 +49,12 @@
   environment:
     GH_TOKEN: "{{ lookup('env', 'GH_TOKEN') | default('', true) }}"
 
-# clone_repos is opt-in, so reaching this role means cloning was asked for
-# explicitly. The old `when: gh_auth.rc == 0` on the block below turned an
-# unauthenticated gh into a silent skip — a run that reported success having
-# cloned nothing.
+# An unauthenticated gh used to be a silent skip: the block below was gated on
+# gh_auth.rc and the play went green having cloned nothing. Now that clone_repos
+# defaults to true, aborting instead would break the pristine first run, where
+# this role installs gh and nobody has logged in yet. So: skip, but say so
+# unmissably. Set repos_require_gh_auth=true to make it fatal on a box that is
+# supposed to be authenticated.
 - name: Require an authenticated GitHub CLI
   ansible.builtin.assert:
     that: gh_auth.rc == 0
@@ -59,8 +63,18 @@
       `gh auth login`, or export GH_TOKEN, and re-run.
     success_msg: GitHub CLI is authenticated
     quiet: true
+  when: repos_require_gh_auth | bool
+
+- name: Report that cloning was skipped
+  ansible.builtin.debug:
+    msg: >-
+      SKIPPED cloning — the GitHub CLI is not authenticated, so NO repositories
+      were cloned. Run `gh auth login` (or export GH_TOKEN), then re-run with
+      --tags repos. Set repos_require_gh_auth=true to make this a hard failure.
+  when: gh_auth.rc != 0
 
 - name: Clone repositories
+  when: gh_auth.rc == 0
   become: false
   environment:
     GH_TOKEN: "{{ lookup('env', 'GH_TOKEN') | default('', true) }}"

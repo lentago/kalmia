@@ -19,7 +19,14 @@ docker_install: true
 docker_daemon: true            # false → CLI-only (Crostini)
 install_vscode: true
 install_claude_code: true
-clone_repos: false             # opt-in; needs gh auth or GH_TOKEN in the env
+clone_repos: true              # needs gh auth or GH_TOKEN in the env
+
+# Whether an unauthenticated gh is a hard failure when clone_repos is on.
+# Default false: now that cloning is on by default, a pristine first run — where
+# the repos role installs gh and nobody has logged in yet — must still finish
+# clean. The skip is reported loudly instead of aborting the build. Set true on a
+# box that is expected to be authenticated and where cloning nothing is a bug.
+repos_require_gh_auth: false
 
 # Upgrade all installed packages during a run. Default true preserves the
 # historical behavior; set false to converge configuration without touching
