@@ -95,8 +95,9 @@ instead of ~1,000-line bash scripts. It supersedes the bash scripts in
   added and validated 2026-08-06): same bar — `failed=0` from pristine
   (`ok=67`/`changed=39`), `changed=0` on re-run, profile autodetected. Docker
   Engine 29.7.2 comes up `enabled` + `active` and the daemon answers, which is
-  the whole premise of splitting this profile off `crostini`. ChromeOS M147 made
-  the containerless VM the default for new Linux installs, and the Chromebook is
+  the whole premise of splitting this profile off `crostini`. ChromeOS shipped
+  the containerless VM in M143 behind `chrome://flags#containerless-crostini`,
+  then made it the default for new Linux installs in M147; the Chromebook is
   now on it: `systemd-detect-virt` reports `kvm`, there is no
   `/run/systemd/container` or `/dev/.lxd-mounts`, `/sys/fs/cgroup` is
   `cgroup2fs`, and `/dev/kvm` is exposed. Ansible sees
@@ -107,7 +108,11 @@ instead of ~1,000-line bash scripts. It supersedes the bash scripts in
   `docker-ce-cli` with no daemon to talk to. Validated on a Lenovo IdeaPad
   Flex 5i Chromebook Plus (HWID board `TAEKO`, `brya` baseboard, i3-1315U);
   the host has 8 GB soldered LPDDR4x, of which the VM is given ~6.6 GB — the
-  tightest-memory target in the fleet.
+  tightest-memory target in the fleet. Note that the box's own login MOTD says
+  the containerless design became default "starting in ChromeOS version 143 and
+  newer" — that wording conflates availability (M143, behind the flag) with
+  default-for-new-installs (M147). M147 is the number that matters for
+  profile-routing purposes; don't "correct" it to 143 off the MOTD.
 - **`ubuntu_laptop` is proven idempotent on a provisioned host; a pristine
   first-run remains unproven** (#14). Run on a ThinkPad T14 Gen 2i, Ubuntu
   26.04, profile autodetected from `ansible_form_factor` (2026-08-06). This
