@@ -31,6 +31,7 @@
         url: https://api.github.com/repos/mikefarah/yq/releases/latest
         return_content: true
       register: yq_release
+      check_mode: false
 
     - name: Download the yq binary
       ansible.builtin.get_url:

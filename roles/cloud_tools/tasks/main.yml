@@ -10,6 +10,7 @@
   register: aws_check
   changed_when: false
   failed_when: false
+  check_mode: false
 
 - name: Install AWS CLI v2
   when: "'aws-cli/2' not in (aws_check.stdout | default('')) and 'aws-cli/2' not in (aws_check.stderr | default(''))"
@@ -49,6 +50,7 @@
         url: https://api.github.com/repos/fwdcloudsec/granted/releases/latest
         return_content: true
       register: granted_release
+      check_mode: false
 
     - name: Download and unpack Granted into /usr/local/bin
       ansible.builtin.unarchive:
@@ -92,6 +94,7 @@
     return_content: true
   register: kubectl_stable
   changed_when: false
+  check_mode: false
 
 - name: Install kubectl
   ansible.builtin.get_url:
