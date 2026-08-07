@@ -34,3 +34,15 @@
     create: true
     mode: "0644"
   become: false
+
+# --- CLI helpers ------------------------------------------------------------
+# Ported from the workstation-bootstrap predecessor's scripts/, which symlinked
+# them into ~/.local/bin. Here they are rendered directly — no symlink farm,
+# and the repos_dir default comes from the same var the repos role clones into.
+# ~/.local/bin already exists and is on PATH (common role, .bashrc block).
+- name: Install the pull-all helper
+  ansible.builtin.template:
+    src: pull-all.j2
+    dest: "{{ target_home }}/.local/bin/pull-all"
+    mode: "0755"
+  become: false
