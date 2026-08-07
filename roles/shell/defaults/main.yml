@@ -4,3 +4,4 @@ bat_command: bat
 fd_command: fd
 github_default_owner: ""
 repos_dir: "{{ ansible_env.HOME }}/repos"
+github_org: ""

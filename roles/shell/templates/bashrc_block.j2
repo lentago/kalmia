@@ -3,7 +3,11 @@
 export PATH="$HOME/.local/bin:$HOME/bin:$HOME/go/bin:/usr/local/go/bin:$PATH"
 
 # --- Workstation config ---
-WS_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/workstation-bootstrap/config"
+# Pinned to ~/.config rather than $XDG_CONFIG_HOME so the file the shell role
+# renders and the file bash sources are always the same one — same reasoning as
+# the pinned NVM_DIR below, where an XDG_CONFIG_HOME set by the environment
+# (true on Crostini) moved the target out from under the role.
+WS_CONFIG="$HOME/.config/workstation-bootstrap/config"
 [[ -f "$WS_CONFIG" ]] && . "$WS_CONFIG"
 
 # --- nvm ---
