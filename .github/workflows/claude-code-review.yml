@@ -26,7 +26,7 @@ jobs:
       review_prompt: |
         This repository is lentago/kalmia — the Lentago Labs workstation/VM/container provisioning system (codename Kalmia), currently an Ansible rebuild of
         the workstation-bootstrap shell scripts. It provisions a cloud-infra dev
-        workstation across four profiles (crostini, xubuntu, fedora,
+        workstation across five profiles (crostini, baguette, xubuntu, fedora,
         ubuntu_laptop) using role-based tasks, a profile/feature-toggle model,
         and per-OS-family package maps. Focus your review on:
 
