@@ -29,7 +29,9 @@ base_system_upgrade: true
 # --- GitHub / repo cloning -------------------------------------------------
 github_user: "{{ lookup('env', 'GITHUB_USER') | default('', true) }}"
 github_org: "{{ lookup('env', 'GITHUB_ORG') | default('', true) }}"
-github_default_owner: "{{ lookup('env', 'GITHUB_DEFAULT_OWNER') | default('', true) }}"
+# Defaults to the Lentago org so the rendered config actually sets something and
+# the ghnew/ghclone aliases exist. Export GITHUB_DEFAULT_OWNER to override.
+github_default_owner: "{{ lookup('env', 'GITHUB_DEFAULT_OWNER') | default('lentago', true) }}"
 repos_dir: "{{ ansible_env.HOME }}/repos"
 
 # --- Git identity (auto-pulled from the gh profile when left empty) ---------

@@ -19,6 +19,23 @@
     mode: "0644"
   become: false
 
+# The .bashrc block has always sourced this file, but nothing ever created it:
+# GITHUB_DEFAULT_OWNER stayed unset, so the ghnew/ghclone aliases guarded on it
+# silently did not exist on any provisioned box.
+- name: Ensure the workstation config directory exists
+  ansible.builtin.file:
+    path: "{{ target_home }}/.config/workstation-bootstrap"
+    state: directory
+    mode: "0755"
+  become: false
+
+- name: Render the sourced workstation config
+  ansible.builtin.template:
+    src: workstation-config.j2
+    dest: "{{ target_home }}/.config/workstation-bootstrap/config"
+    mode: "0644"
+  become: false
+
 - name: Strip legacy bootstrap-script .bashrc blocks (migration)
   ansible.builtin.replace:
     path: "{{ target_home }}/.bashrc"

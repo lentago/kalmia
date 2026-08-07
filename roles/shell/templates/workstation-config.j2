@@ -1,0 +1,16 @@
+# ANSIBLE MANAGED — kalmia roles/shell. Rewritten on every run; edit
+# roles/shell/templates/workstation-config.j2, not this file.
+#
+# Sourced by the managed ~/.bashrc block. Non-secret environment defaults only:
+# no tokens. GH_TOKEN stays in the environment, never in a file on disk.
+{% if github_default_owner | length > 0 %}
+
+# Owner used by the ghnew / ghclone aliases.
+export GITHUB_DEFAULT_OWNER="{{ github_default_owner }}"
+{% endif %}
+{% if github_org | length > 0 %}
+
+# Read back by group_vars/all.yml on the next play run, so an interactive
+# `ansible-playbook site.yml` sees the same org this box was provisioned for.
+export GITHUB_ORG="{{ github_org }}"
+{% endif %}
