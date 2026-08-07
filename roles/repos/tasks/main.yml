@@ -42,6 +42,7 @@
   register: gh_auth
   changed_when: false
   failed_when: false
+  check_mode: false
   become: false
   environment:
     GH_TOKEN: "{{ lookup('env', 'GH_TOKEN') | default('', true) }}"
@@ -60,6 +61,7 @@
       ansible.builtin.command: gh api user -q .login
       register: gh_user_cmd
       changed_when: false
+      check_mode: false
       when: github_user | length == 0
 
     - name: Set the effective GitHub user
@@ -76,6 +78,7 @@
       ansible.builtin.command: "gh repo list {{ effective_github_user }} --limit 200 --json name -q .[].name"
       register: personal_repos
       changed_when: false
+      check_mode: false
 
     - name: Clone personal repositories
       ansible.builtin.git:
@@ -90,6 +93,7 @@
       ansible.builtin.command: "gh repo list {{ github_org }} --limit 200 --json name -q .[].name"
       register: org_repos
       changed_when: false
+      check_mode: false
       when: github_org | length > 0
 
     - name: Clone organization repositories
