@@ -147,14 +147,31 @@ Home-Claude-managed in the Lentago lab (pve5), outside this repo's CI.
 
 ## CI
 
+Four checks are merge-blocking (marked **required** below); see Workflow.
+
 - **Ansible Lint** (`.github/workflows/ansible-lint.yml`): `--syntax-check` +
-  `ansible-lint` on every non-draft PR.
+  `ansible-lint` on every non-draft PR. **required** (`ansible-lint`)
 - **ShellCheck** (`.github/workflows/shellcheck.yml`): static analysis of
-  `bootstrap.sh` via the shared workflow.
-- **Claude** workflows: `@claude` responder + (manual) PR review.
+  `bootstrap.sh` via the shared workflow. **required**
+  (`shellcheck / shellcheck`)
+- **docs-check** (`.github/workflows/docs-check.yml`): relative markdown link
+  resolution via the shared workflow. Deliberately not path-filtered — a
+  required check whose workflow never triggers stays "Expected" forever and
+  deadlocks every non-matching PR. **required** (`docs-check / docs-check`)
+- **terraform** (`.github/workflows/terraform.yml`): `changes` → `validate` →
+  `plan` → `apply` for the `terraform/` layer. `gate` is the aggregate job that
+  always runs on PRs, so a PR touching no Terraform passes it on skipped
+  dependencies. **required** (`gate`)
+- **Claude** workflows: `@claude` responder + (manual) PR review. Not required.
 
 ## Workflow
 
 PR workflow + auto-merge arming is fleet-wide; see `~/repos/CLAUDE.md`. Work on
 the branch created for the issue. The branch ruleset gates on PR + squash-merge
-(not on status checks), so Ansible Lint + ShellCheck are advisory signal.
+(squash is the only permitted merge method; zero required approvals) **and on
+four required status checks** — `gate`, `ansible-lint`, `shellcheck / shellcheck`,
+and `docs-check / docs-check`. They are merge-blocking, not advisory: a red check
+holds the PR. Branches do not have to be up to date with `main` to merge
+(`strict_required_status_checks_policy` is false), so a stale-but-passing branch
+still merges — which means a green PR can still break `main` if something landed
+underneath it.
