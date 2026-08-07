@@ -36,8 +36,15 @@ self-provisions a fresh box with one command.
 |---|---|---|
 | `xubuntu` | Xubuntu 24.04 (Proxmox VM) | apt |
 | `ubuntu_laptop` | Ubuntu Desktop LTS (bare-metal laptop) | apt |
-| `crostini` | Chromebook Crostini (Debian container) | apt |
+| `crostini` | Chromebook Crostini, legacy LXC container | apt |
+| `baguette` | Chromebook ChromeOS M147+, containerless VM | apt |
 | `fedora` | Fedora KDE (Proxmox VM) | dnf |
+
+Both Chromebook profiles keep the `penguin` hostname, so autodetection splits
+them on the LXC guest facts: legacy Crostini is an LXD container (Docker CLI
+only), while Baguette is a crosvm KVM guest with systemd, cgroups v2, and
+`/dev/kvm` — enough to run the full Docker Engine. ChromeOS does not
+auto-upgrade existing installs, so both targets coexist.
 
 ## Quick start
 
@@ -102,9 +109,15 @@ idempotently, with the profile autodetected. Fedora installs the shared
 toolchain plus Docker + VS Code from their dnf repos.
 
 **`crostini` is validated end-to-end** on a Chromebook running Debian 13
-trixie: same bar as the VMs, with the profile autodetected from the `penguin`
-hostname. It runs Docker CLI-only (no daemon in the container), with
-hostname-resolution and `~/.local/bin` fixes from the `common` role.
+trixie: same bar as the VMs. It runs Docker CLI-only (no daemon in the
+container), with hostname-resolution and `~/.local/bin` fixes from the `common`
+role.
+
+**`baguette` is new and not yet validated.** ChromeOS M147 made the
+containerless VM the default for new Linux installs, which invalidates the
+`crostini` profile's daemonless premise on upgraded Chromebooks — the hostname
+still matches, so the box would silently get a Docker CLI with no daemon behind
+it. This profile runs the full engine instead. It needs a pristine run.
 
 **`ubuntu_laptop` is runnable but not yet live-tested.** It adds TLP power
 management, ThinkPad charge thresholds, and fwupd via the `power` role.

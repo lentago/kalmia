@@ -21,13 +21,25 @@
     target_user: "{{ ansible_user_id }}"
     target_home: "{{ ansible_env.HOME }}"
 
+    # ChromeOS keeps the `penguin` hostname on both Linux architectures, so the
+    # hostname alone no longer identifies the target: legacy Crostini is an LXD
+    # container, Baguette (M147+) is a crosvm KVM guest. The container facts are
+    # what separate them — Baguette reports virtualization_type `kvm` with an
+    # empty tech_guest, exactly like bare metal with /dev/kvm. Always consume
+    # this through `| bool`; the folded scalar yields a string, and every
+    # non-empty string is truthy.
+    is_lxc_guest: >-
+      {{ (ansible_virtualization_type | default('')) in ['lxc', 'lxd', 'container']
+         or 'lxc' in (ansible_virtualization_tech_guest | default([])) }}
+
   pre_tasks:
     - name: Autodetect workstation profile when not provided
       ansible.builtin.set_fact:
         workstation_profile: >-
           {{
             'fedora' if ansible_distribution == 'Fedora'
-            else 'crostini' if ansible_hostname == 'penguin'
+            else 'crostini' if (ansible_hostname == 'penguin' and is_lxc_guest | bool)
+            else 'baguette' if ansible_hostname == 'penguin'
             else 'ubuntu_laptop' if (ansible_form_factor | default('')) in ['Laptop', 'Notebook', 'Portable', 'Sub-Notebook', 'Hand-Held']
             else 'xubuntu' if (ansible_virtualization_role | default('host')) == 'guest'
             else ''
@@ -39,7 +51,7 @@
         that: workstation_profile | length > 0
         fail_msg: >-
           Could not autodetect the workstation profile. Re-run with
-          -e workstation_profile=<crostini|xubuntu|fedora|ubuntu_laptop>.
+          -e workstation_profile=<crostini|baguette|xubuntu|fedora|ubuntu_laptop>.
         success_msg: "Workstation profile: {{ workstation_profile }}"
 
     - name: Load OS-family package-name map
