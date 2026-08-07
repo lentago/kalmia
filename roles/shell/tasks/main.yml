@@ -36,13 +36,19 @@
   become: false
 
 # --- CLI helpers ------------------------------------------------------------
-# Ported from the workstation-bootstrap predecessor's scripts/, which symlinked
-# them into ~/.local/bin. Here they are rendered directly — no symlink farm,
-# and the repos_dir default comes from the same var the repos role clones into.
+# The full set from the workstation-bootstrap predecessor's scripts/, which
+# symlinked them into ~/.local/bin via bootstrap/install-scripts.sh. Rendered
+# directly here — no symlink farm — and the repos-scanning pair take their
+# default directory from the same var the repos role clones into.
 # ~/.local/bin already exists and is on PATH (common role, .bashrc block).
-- name: Install the pull-all helper
+# Adding a helper: drop roles/shell/templates/<name>.j2 in and list it here.
+- name: Install the CLI helpers
   ansible.builtin.template:
-    src: pull-all.j2
-    dest: "{{ target_home }}/.local/bin/pull-all"
+    src: "{{ item }}.j2"
+    dest: "{{ target_home }}/.local/bin/{{ item }}"
     mode: "0755"
+  loop:
+    - pull-all
+    - clean-all
+    - gh-issue
   become: false
