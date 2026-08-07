@@ -35,6 +35,30 @@
     - tlp_stop_charge_threshold is not none
   notify: Restart TLP
 
+# The workstation-bootstrap predecessor wrote the same settings to
+# 01-thinkpad-charge-thresholds.conf, which sorts after ours in TLP's lexical
+# /etc/tlp.d/*.conf read order and silently wins. Converge already-provisioned
+# hosts by dropping the leftover once ours is confirmed present (#83).
+- name: Check for the managed charge-threshold drop-in
+  ansible.builtin.stat:
+    path: /etc/tlp.d/01-charge-thresholds.conf
+  register: tlp_managed_charge_thresholds
+
+- name: Check for the predecessor's charge-threshold drop-in
+  ansible.builtin.stat:
+    path: /etc/tlp.d/01-thinkpad-charge-thresholds.conf
+  register: tlp_legacy_charge_thresholds
+
+- name: Remove the predecessor's charge-threshold drop-in
+  ansible.builtin.file:
+    path: /etc/tlp.d/01-thinkpad-charge-thresholds.conf
+    state: absent
+  become: true
+  when:
+    - tlp_managed_charge_thresholds.stat.exists
+    - tlp_legacy_charge_thresholds.stat.exists
+  notify: Restart TLP
+
 - name: Enable and start TLP
   ansible.builtin.systemd_service:
     name: tlp
