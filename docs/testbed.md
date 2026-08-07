@@ -84,6 +84,26 @@ useful for catching drift, but expect a couple of things:
   everything else the play installs (Docker, languages, cloud tools, Starship,
   VS Code, Claude Code, …) starts absent.
 
+## Known check-mode noise
+
+`ansible-playbook site.yml --check` is a useful pre-flight, but two tasks
+always report `changed` under `--check` even when the live run converges to
+`changed=0`. Neither is a repo bug — both modules genuinely cannot determine
+state without acting, so they default to reporting change rather than risk a
+false "unchanged":
+
+- **`containers : Add the Docker GPG key`** — `get_url` can't fetch the
+  remote key under check mode to compare it against the one on disk.
+- **`cli_tools : Install tldr (pip, user scope)`** — `pip` can't determine
+  whether the package is already installed without invoking pip itself.
+
+Both are non-destructive (unlike the `/usr/local/go` deletion #75 fixed), so
+discount these two lines specifically when reading a `--check` run — every
+other `changed` line reflects real drift. A `stat`-based guard or a
+better-check-mode-aware module was considered for both, but would complicate
+the live path to tidy up the dry run; the live run's `changed=0` is the
+stronger signal and isn't worth compromising for this.
+
 ## Rebuilding the testbed from scratch
 
 If a VM is wedged beyond a snapshot rollback, Home Claude can recreate the
