@@ -111,8 +111,14 @@
 - name: Install VS Code extensions
   ansible.builtin.command: "code --install-extension {{ item }} --force"
   register: code_ext
-  changed_when: "'is already installed' not in code_ext.stdout"
+  # code --install-extension genuinely mutates, so it must not run under
+  # --check (check_mode: false would defeat the dry run) — the task is
+  # skipped instead, leaving code_ext.stdout unset. Gate on "is not skipped"
+  # rather than defaulting stdout to '', so a skipped run reports its
+  # (unknown) state as unchanged instead of unconditionally "changed".
+  changed_when: code_ext is not skipped and 'is already installed' not in code_ext.stdout
   failed_when:
+    - code_ext is not skipped
     - code_ext.rc != 0
     - "'is already installed' not in code_ext.stdout"
   loop: "{{ vscode_extensions }}"
