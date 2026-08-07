@@ -21,6 +21,11 @@ install_vscode: true
 install_claude_code: true
 clone_repos: false             # opt-in; needs gh auth or GH_TOKEN in the env
 
+# Upgrade all installed packages during a run. Default true preserves the
+# historical behavior; set false to converge configuration without touching
+# installed package versions.
+base_system_upgrade: true
+
 # --- GitHub / repo cloning -------------------------------------------------
 github_user: "{{ lookup('env', 'GITHUB_USER') | default('', true) }}"
 github_org: "{{ lookup('env', 'GITHUB_ORG') | default('', true) }}"
