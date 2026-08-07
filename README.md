@@ -119,8 +119,16 @@ containerless VM the default for new Linux installs, which invalidates the
 still matches, so the box would silently get a Docker CLI with no daemon behind
 it. This profile runs the full engine instead. It needs a pristine run.
 
-**`ubuntu_laptop` is runnable but not yet live-tested.** It adds TLP power
-management, ThinkPad charge thresholds, and fwupd via the `power` role.
+**`ubuntu_laptop` is proven idempotent on a provisioned host — a pristine
+first-run is still unproven** (#14). It was run on a ThinkPad T14 Gen 2i
+(Ubuntu 26.04, profile autodetected), converging from a
+`workstation-bootstrap`-provisioned state rather than a clean image, not
+from a pristine snapshot like the other profiles. Re-verified against merged
+`main`, a live run reaches `ok=61 changed=0 failed=0`, and `--check`
+completes (`ok=60 changed=2 failed=0`; the two changes are non-destructive
+module artifacts tracked in #80). All nine roles ran, including `power`
+(TLP, ThinkPad charge thresholds, fwupd) — exercised for the first time on
+any profile.
 
 ## Beyond workstations
 

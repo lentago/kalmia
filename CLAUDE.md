@@ -102,9 +102,25 @@ instead of ~1,000-line bash scripts. It supersedes the bash scripts in
   existed the hostname match sent the box to `crostini`, which installed
   `docker-ce-cli` with no daemon to talk to. Needs a pristine run to confirm
   `failed=0` / `changed=0` and that the engine actually starts.
-- **`ubuntu_laptop` is runnable by design but not yet live-tested** — it is bare
-  metal and adds TLP + ThinkPad charge thresholds + fwupd via the `power` role
-  (`enable_tlp`).
+- **`ubuntu_laptop` is proven idempotent on a provisioned host; a pristine
+  first-run remains unproven** (#14). Run on a ThinkPad T14 Gen 2i, Ubuntu
+  26.04, profile autodetected from `ansible_form_factor` (2026-08-06). This
+  was a convergence, not a clean build: the ThinkPad is a daily driver
+  previously provisioned by the `workstation-bootstrap` predecessor, with an
+  existing, drifted `.bashrc` for the `shell` role's legacy-block migration
+  path to strip. Three initial passes — `ok=42 changed=8 failed=1` (aborted
+  at `editors : Install VS Code`, #73), `ok=58 changed=9 failed=0`, then
+  `ok=57 changed=0 failed=0` idempotent — surfaced #73 (fixed in #74) and
+  #75, neither reachable by static CI. Re-verified on the same host against
+  merged `main` once #74/#78/#79 landed: a live run now reaches `ok=61
+  changed=0 failed=0` in a single pass, and `--check` completes
+  (`ok=60 changed=2 failed=0` — the two changes are non-destructive module
+  artifacts, tracked in #80). All nine roles ran, including `power` (TLP, the
+  ThinkPad charge-threshold drop-in, fwupd) — exercised for the first time on
+  any profile. Still unproven: clean-build behavior (every "already present"
+  branch is unexercised on this profile), whether a pristine box reaches
+  `failed=0` in one pass, and the `repos` role (gated behind `clone_repos`,
+  stayed `false` throughout).
 - **No pending role follow-ups.** All core and platform roles are in; remote
   desktop (XRDP) was dropped as unused. Static CI can't catch runtime-only
   failures (removed plugins, host deps, idempotency) — real testbed runs do.
