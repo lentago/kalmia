@@ -39,13 +39,49 @@
         name: code
         question: code/add-microsoft-repo
         vtype: boolean
-        value: "true"
+        value: "false"
 
     - name: Install VS Code
       ansible.builtin.apt:
         name: code
         state: present
         update_cache: true
+
+    # The postinst previously pre-seeded to "true" (see above) and re-created
+    # these on every `code` configure, keyed to a different Signed-By than our
+    # deb822 source — apt then refuses to read any sources at all (#73).
+    # Converge already-provisioned hosts by dropping the leftovers once ours
+    # is confirmed present.
+    - name: Check for the deb822 VS Code apt source
+      ansible.builtin.stat:
+        path: /etc/apt/sources.list.d/vscode.sources
+      register: vscode_deb822_source
+
+    - name: Check for a stale legacy VS Code apt source
+      ansible.builtin.stat:
+        path: /etc/apt/sources.list.d/vscode.list
+      register: vscode_legacy_list
+
+    - name: Remove the stale legacy VS Code apt source
+      ansible.builtin.file:
+        path: /etc/apt/sources.list.d/vscode.list
+        state: absent
+      when:
+        - vscode_deb822_source.stat.exists
+        - vscode_legacy_list.stat.exists
+
+    - name: Check for the dearmored Microsoft GPG key left by the legacy source
+      ansible.builtin.stat:
+        path: /etc/apt/keyrings/packages.microsoft.gpg
+      register: vscode_legacy_gpg
+
+    - name: Remove the dearmored Microsoft GPG key left by the legacy source
+      ansible.builtin.file:
+        path: /etc/apt/keyrings/packages.microsoft.gpg
+        state: absent
+      when:
+        - vscode_deb822_source.stat.exists
+        - vscode_legacy_gpg.stat.exists
 
 - name: Set up VS Code from the Microsoft dnf repository (Fedora)
   when:
