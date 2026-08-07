@@ -27,8 +27,12 @@ clone_repos: false             # opt-in; needs gh auth or GH_TOKEN in the env
 base_system_upgrade: true
 
 # --- GitHub / repo cloning -------------------------------------------------
+# github_org defaults to the Lentago org because that is where the work repos
+# live. Left empty it isn't an inert default: the org list/clone tasks are
+# guarded on it, so the role cloned personal repos only and still reported a
+# clean run. Export GITHUB_ORG to point a box somewhere else.
 github_user: "{{ lookup('env', 'GITHUB_USER') | default('', true) }}"
-github_org: "{{ lookup('env', 'GITHUB_ORG') | default('', true) }}"
+github_org: "{{ lookup('env', 'GITHUB_ORG') | default('lentago', true) }}"
 github_default_owner: "{{ lookup('env', 'GITHUB_DEFAULT_OWNER') | default('', true) }}"
 repos_dir: "{{ ansible_env.HOME }}/repos"
 

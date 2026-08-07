@@ -2,4 +2,6 @@
 clone_repos: false
 repos_dir: "{{ ansible_env.HOME }}/repos"
 github_user: ""
+# Safe standalone fallbacks. The fleet values (github_org defaults to the
+# Lentago org) come from group_vars/all.yml, which outranks role defaults.
 github_org: ""
