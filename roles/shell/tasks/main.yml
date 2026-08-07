@@ -34,3 +34,21 @@
     create: true
     mode: "0644"
   become: false
+
+# --- CLI helpers ------------------------------------------------------------
+# The full set from the workstation-bootstrap predecessor's scripts/, which
+# symlinked them into ~/.local/bin via bootstrap/install-scripts.sh. Rendered
+# directly here — no symlink farm — and the repos-scanning pair take their
+# default directory from the same var the repos role clones into.
+# ~/.local/bin already exists and is on PATH (common role, .bashrc block).
+# Adding a helper: drop roles/shell/templates/<name>.j2 in and list it here.
+- name: Install the CLI helpers
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ target_home }}/.local/bin/{{ item }}"
+    mode: "0755"
+  loop:
+    - pull-all
+    - clean-all
+    - gh-issue
+  become: false
