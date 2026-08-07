@@ -113,11 +113,14 @@ trixie: same bar as the VMs. It runs Docker CLI-only (no daemon in the
 container), with hostname-resolution and `~/.local/bin` fixes from the `common`
 role.
 
-**`baguette` is new and not yet validated.** ChromeOS M147 made the
-containerless VM the default for new Linux installs, which invalidates the
-`crostini` profile's daemonless premise on upgraded Chromebooks — the hostname
-still matches, so the box would silently get a Docker CLI with no daemon behind
-it. This profile runs the full engine instead. It needs a pristine run.
+**`baguette` is validated end-to-end** on a Chromebook running the
+containerless VM under Debian 13 trixie: same bar as the others. ChromeOS M147
+made the containerless VM the default for new Linux installs, which invalidates
+the `crostini` profile's daemonless premise on upgraded Chromebooks — the
+hostname still matches, so the box would silently get a Docker CLI with no
+daemon behind it. This profile runs the full engine instead, and the first
+pristine run confirmed it: the profile autodetected off the LXC guest facts and
+Docker Engine came up enabled and active rather than CLI-only.
 
 **`ubuntu_laptop` is proven idempotent on a provisioned host — a pristine
 first-run is still unproven** (#14). It was run on a ThinkPad T14 Gen 2i
