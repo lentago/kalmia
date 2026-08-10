@@ -24,7 +24,9 @@ pub (LXC 114)                     lunaria (LXC 118, 192.168.139.19)
   publish-morning-brief             lunaria-frames.service
   Drive → /srv/www/brief/             chromium --headless shot of
     index.html  (browser)             http://pub.lan/brief/tv.html
-    tv.html     (wall display)  →     → 720px pages → frame.png rotation
+    tv.html     (wall display)  →     + each LUNARIA_EXTRA_URLS pane
+  praxis publish → /srv/www/          (praxis Obsidian graph, …)
+    praxis/graph/tv.html      →     → 720px pages → frame.png rotation
                                     lunaria-stream.service
                                       ffmpeg frame.png → RTSP :8554
                                     mediamtx.service
@@ -39,6 +41,14 @@ only there); **lunaria is credential-free** — its only input is
 `http://pub.lan/`. The TV edition contract (1–4 exact 1280×720 screens) is
 defined in the claude.ai Morning-brief routine's prompt; when no TV edition
 exists, lunaria falls back to slicing the full brief.
+
+**Extra panes** (`lunaria_extra_urls`, 2026-08-10): further TV-contract pages
+appended to the rotation after the brief — a Phase-1.5 precursor of the
+brasenia pane bus. Each is shot like a TV edition; an unreachable or failing
+extra pane is skipped without touching the brief pages, so a broken pane can
+never blank the display. First pane: the praxis Obsidian-graph
+(`http://pub.lan/praxis/graph/tv.html`, regenerated on every praxis wiki
+publish).
 
 ## Build / rebuild
 
