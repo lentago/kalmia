@@ -6,6 +6,11 @@ height a multiple of 720 — see the Morning-brief routine's TV-edition spec).
 Fallback when it's missing: slice the full brief into 720-high pages, cutting
 on near-background rows so text lines don't get split.
 
+Any further argv URLs are extra TV-contract pane pages (the brasenia pane
+contract — e.g. the praxis Obsidian-graph pane): each is shot like a TV
+edition and its screens are appended to the rotation. An unreachable or
+failing extra pane is skipped so it can never take the brief down with it.
+
 Chromium notes: throwaway profile per shot (a persistent profile's HTTP cache
 once served a stale tv.html); --no-sandbox because unprivileged LXCs lack the
 user namespaces chromium's sandbox wants (input is our own pub.lan pages).
@@ -15,6 +20,7 @@ from PIL import Image, ImageChops
 
 TV_URL = sys.argv[1] if len(sys.argv) > 1 else "http://pub.lan/brief/tv.html"
 FULL_URL = sys.argv[2] if len(sys.argv) > 2 else "http://pub.lan/brief/"
+EXTRA_URLS = sys.argv[3:]
 OUT_DIR = os.environ.get("LUNARIA_PAGES", "/var/lib/lunaria/pages")
 W, PAGE_H, SEARCH = 1280, 720, 100
 BG_TOLERANCE = 12          # px diff below this counts as background
@@ -44,9 +50,9 @@ def write_pages(pages):
         page.save(os.path.join(OUT_DIR, f"page-{i:02d}.png"))
 
 
-def tv_available():
+def reachable(url):
     try:
-        return urllib.request.urlopen(TV_URL, timeout=10).status == 200
+        return urllib.request.urlopen(url, timeout=10).status == 200
     except Exception:
         return False
 
@@ -58,14 +64,19 @@ def content_mask(im, bg):
     return diff.point(lambda p: 255 if p > BG_TOLERANCE else 0)
 
 
-if tv_available():
-    im = shoot(TV_URL, PAGE_H * 4)
+def shoot_tv(url):
+    """Shoot a TV-contract page into 1..4 whole 1280x720 screens."""
+    im = shoot(url, PAGE_H * 4)
     bg = im.getpixel((5, 5))
     bbox = content_mask(im, bg).getbbox()
     content_bottom = bbox[3] if bbox else PAGE_H
     n = max(1, -(-content_bottom // PAGE_H))          # ceil to whole screens
-    write_pages([im.crop((0, i * PAGE_H, W, (i + 1) * PAGE_H)) for i in range(n)])
-    print(f"{n} page(s) (tv edition, content {content_bottom}px)")
+    return [im.crop((0, i * PAGE_H, W, (i + 1) * PAGE_H)) for i in range(n)]
+
+
+if reachable(TV_URL):
+    pages = shoot_tv(TV_URL)
+    summary = f"{len(pages)} page(s) (tv edition)"
 else:
     im = shoot(FULL_URL, 4000)
     bg = im.getpixel((5, 5))
@@ -93,5 +104,19 @@ else:
         page.paste(im.crop((0, y, W, cut)), (0, 0))
         pages.append(page)
         y = cut
-    write_pages(pages)
-    print(f"{len(pages)} pages (sliced full brief, content {content_bottom}px)")
+    summary = f"{len(pages)} pages (sliced full brief, content {content_bottom}px)"
+
+for url in EXTRA_URLS:
+    if not reachable(url):
+        print(f"extra pane {url} unreachable, skipping", file=sys.stderr)
+        continue
+    try:
+        extra = shoot_tv(url)
+    except Exception as exc:
+        print(f"extra pane {url} shoot FAILED ({exc}), skipping", file=sys.stderr)
+        continue
+    pages += extra
+    summary += f" + {len(extra)} extra ({url})"
+
+write_pages(pages)
+print(summary)

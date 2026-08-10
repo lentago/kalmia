@@ -27,3 +27,11 @@ lunaria_full_url: http://pub.lan/brief/
 lunaria_page_dwell: 12
 # Seconds between re-renders of the source page.
 lunaria_regen_interval: 600
+
+# Additional TV-contract pane pages (1280px wide, height an exact multiple of
+# 720 — the brasenia pane contract) appended to the rotation after the brief.
+# A Phase-1.5 precursor of the brasenia pane bus: each URL is shot like a TV
+# edition and its 720px screens join the frame rotation; an unreachable or
+# failing extra pane is skipped without touching the brief pages.
+lunaria_extra_urls:
+  - http://pub.lan/praxis/graph/tv.html

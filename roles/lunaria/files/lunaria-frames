@@ -10,6 +10,7 @@ DWELL="${LUNARIA_PAGE_DWELL:-12}"
 REGEN="${LUNARIA_REGEN_INTERVAL:-600}"
 TV_URL="${LUNARIA_TV_URL:-http://pub.lan/brief/tv.html}"
 FULL_URL="${LUNARIA_FULL_URL:-http://pub.lan/brief/}"
+EXTRA_URLS="${LUNARIA_EXTRA_URLS:-}"
 
 cd "$HOME_DIR"
 last_gen=0
@@ -17,7 +18,8 @@ last_gen=0
 while :; do
   now=$(date +%s)
   if (( now - last_gen > REGEN )); then
-    if /usr/local/bin/lunaria-shooter "$TV_URL" "$FULL_URL"; then
+    # shellcheck disable=SC2086  # EXTRA_URLS is a space-separated URL list
+    if /usr/local/bin/lunaria-shooter "$TV_URL" "$FULL_URL" $EXTRA_URLS; then
       last_gen=$now
       echo "pages regenerated"
     else
