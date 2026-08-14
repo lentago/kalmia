@@ -143,3 +143,70 @@
     - lunaria-frames.service
     - lunaria-stream.service
   become: true
+
+# ---------------------------------------------------------------------------
+# Cast receiver watchdog (brasenia ADR-0006, kalmia#99) — a second, additive
+# client path. This block installs a systemd timer that keeps the registered
+# Cast custom web receiver running on the household Chromecast; it touches
+# nothing in the mediamtx/shooter/rotator/encoder/Roku HLS path above.
+# ---------------------------------------------------------------------------
+- name: Install pychromecast (Cast watchdog dependency)
+  ansible.builtin.apt:
+    name: python3-pychromecast
+    state: present
+    update_cache: true
+  become: true
+  when: lunaria_cast_watchdog_enabled
+
+- name: Deploy the Cast watchdog script
+  ansible.builtin.copy:
+    src: lunaria-cast-watchdog
+    dest: /usr/local/bin/lunaria-cast-watchdog
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+  when: lunaria_cast_watchdog_enabled
+  notify: Restart lunaria-cast-watchdog timer
+
+- name: Render the Cast watchdog environment file
+  ansible.builtin.template:
+    src: lunaria-cast.env.j2
+    dest: /etc/default/lunaria-cast
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: lunaria_cast_watchdog_enabled
+  notify: Restart lunaria-cast-watchdog timer
+
+- name: Deploy the Cast watchdog systemd service
+  ansible.builtin.copy:
+    src: lunaria-cast-watchdog.service
+    dest: /etc/systemd/system/lunaria-cast-watchdog.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: lunaria_cast_watchdog_enabled
+  notify: Restart lunaria-cast-watchdog timer
+
+- name: Deploy the Cast watchdog systemd timer
+  ansible.builtin.template:
+    src: lunaria-cast-watchdog.timer.j2
+    dest: /etc/systemd/system/lunaria-cast-watchdog.timer
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: lunaria_cast_watchdog_enabled
+  notify: Restart lunaria-cast-watchdog timer
+
+- name: Enable and start the Cast watchdog timer
+  ansible.builtin.systemd_service:
+    name: lunaria-cast-watchdog.timer
+    daemon_reload: true
+    enabled: true
+    state: started
+  become: true
+  when: lunaria_cast_watchdog_enabled

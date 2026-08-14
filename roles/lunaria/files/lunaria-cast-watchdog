@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+"""Ensure the brasenia Cast custom web receiver is running on the household
+Chromecast, re-launching it when absent.
+
+This is the Cast path's equivalent of the mandatory Roku retry handler
+(brasenia ADR-0002): the receiver session runs independently once launched,
+but a power blip, a Chromecast OS update, an ambient-mode reclaim, or an input
+change can drop it. A systemd timer runs this check on a short cadence so the
+wall display recovers unattended (brasenia ADR-0006, kalmia#99).
+
+Config comes from /etc/default/lunaria-cast (rendered by the lunaria role):
+
+    CAST_APP_ID          the custom receiver's App ID from the Cast Developer
+                         Console (8 hex chars)
+    CAST_DEVICE_NAME     the household Chromecast's friendly name
+
+Both ship as clearly-marked placeholders because the receiver has not been
+registered yet. While either is a placeholder (or empty) this exits 0 without
+touching the network, so the timer stays green until registration happens.
+"""
+import os
+import sys
+
+PLACEHOLDER_PREFIX = "REPLACE_ME"
+
+
+def main() -> int:
+    app_id = os.environ.get("CAST_APP_ID", "").strip()
+    device = os.environ.get("CAST_DEVICE_NAME", "").strip()
+
+    if (
+        not app_id
+        or not device
+        or app_id.startswith(PLACEHOLDER_PREFIX)
+        or device.startswith(PLACEHOLDER_PREFIX)
+    ):
+        print(
+            "Cast watchdog not configured (placeholder App ID / device name); "
+            "skipping. Register the receiver and set CAST_APP_ID / "
+            "CAST_DEVICE_NAME in /etc/default/lunaria-cast (kalmia#99).",
+            file=sys.stderr,
+        )
+        return 0
+
+    # Imported lazily so the placeholder skip above stays dependency-free.
+    import pychromecast
+
+    chromecasts, browser = pychromecast.get_listed_chromecasts(
+        friendly_names=[device]
+    )
+    try:
+        if not chromecasts:
+            print(
+                f"Chromecast '{device}' not found on the network; "
+                "cannot launch receiver.",
+                file=sys.stderr,
+            )
+            return 1
+
+        cast = chromecasts[0]
+        cast.wait()
+
+        current = cast.status.app_id if cast.status else None
+        if current == app_id:
+            print(f"receiver {app_id} already running on '{device}'")
+            return 0
+
+        print(
+            f"receiver absent on '{device}' (current app_id={current}); "
+            f"launching {app_id}"
+        )
+        cast.start_app(app_id)
+        return 0
+    finally:
+        pychromecast.discovery.stop_discovery(browser)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -12,3 +12,25 @@ pub_rclone_config_path: "{{ pub_rclone_config_dir }}/rclone.conf"
 # Weekdays, 08:00-11:04 America/New_York every 15 minutes. The container
 # clock runs UTC — the explicit zone suffix is load-bearing.
 pub_timer_oncalendar: "Mon..Fri *-*-* 08..11:04/15:00 America/New_York"
+
+# --- Cast receiver publishing (brasenia ADR-0006, kalmia#99) ----------------
+# Serves brasenia's Cast custom web receiver at http://pub.lan/cast/ — the URL
+# registered in the Cast Developer Console. pub owns receiver *hosting* only;
+# the receiver HTML is authored in brasenia (lentago/brasenia#13) and served
+# here, never forked.
+pub_cast_publish_enabled: true
+
+# Source: the cast-app/ directory of a LOCAL brasenia checkout on pub. This is
+# a PLACEHOLDER path — brasenia#13 may not be merged/checked out here yet, and
+# the publisher skips cleanly while it is absent. Point it at a real checkout
+# once one exists.
+pub_cast_receiver_src: /srv/brasenia/cast-app
+
+# Destination on the web share pub serves. /srv/www is the NAS web share
+# (/volume1/lentago/web) mounted on pub, so this is /volume1/lentago/web/cast/
+# on the NAS and http://pub.lan/cast/ over HTTP.
+pub_cast_receiver_dest: /srv/www/cast
+
+# The receiver is static and changes only when brasenia does — a daily
+# republish keeps the share fresh and recovers if it is remounted/cleared.
+pub_cast_timer_oncalendar: "*-*-* 06:00:00 America/New_York"

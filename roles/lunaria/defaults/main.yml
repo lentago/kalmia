@@ -35,3 +35,23 @@ lunaria_regen_interval: 600
 # failing extra pane is skipped without touching the brief pages.
 lunaria_extra_urls:
   - http://pub.lan/praxis/graph/tv.html
+
+# --- Cast receiver watchdog (brasenia ADR-0006, kalmia#99) -------------------
+# The Chromecast is a *second* client alongside the Roku/HLS path — adding it
+# must not touch the Roku client (ADR-0006 acceptance test). This watchdog is
+# the Cast path's analogue of the mandatory Roku retry handler (ADR-0002): a
+# systemd timer that re-launches the registered custom web receiver on the
+# household Chromecast after power blips, Chromecast OS updates, ambient-mode
+# reclaims, or input changes.
+lunaria_cast_watchdog_enabled: true
+
+# PLACEHOLDERS. The custom web receiver has NOT been registered in the Cast
+# Developer Console yet, so there is no real App ID or device name to use. The
+# watchdog exits 0 without touching the network while either is a placeholder,
+# so provisioning stays green until registration. Override both via inventory
+# or `-e` once registered; do NOT commit real values.
+lunaria_cast_app_id: "REPLACE_ME_CAST_APP_ID"          # 8-hex-char App ID from the Cast Developer Console
+lunaria_cast_device_name: "REPLACE_ME_CHROMECAST_NAME"  # the household Chromecast's friendly name
+
+# How often the watchdog re-checks the receiver (a systemd time span).
+lunaria_cast_watchdog_interval: 60s

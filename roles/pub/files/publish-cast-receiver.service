@@ -1,0 +1,9 @@
+[Unit]
+Description=Publish the brasenia Cast receiver page to the pub.lan web share
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/default/publish-cast-receiver
+ExecStart=/usr/local/bin/publish-cast-receiver

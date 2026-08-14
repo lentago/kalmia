@@ -1,0 +1,11 @@
+[Unit]
+Description=Ensure the brasenia Cast receiver app is running on the Chromecast
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=lunaria
+WorkingDirectory=/var/lib/lunaria
+EnvironmentFile=/etc/default/lunaria-cast
+ExecStart=/usr/local/bin/lunaria-cast-watchdog

@@ -5,9 +5,11 @@
 # rclone.conf OAuth remote is credential material and is deliberately never
 # written by this role — see docs/pub.md for the manual seeding step.
 # ============================================================================
-- name: Install rclone
+- name: Install rclone and rsync
   ansible.builtin.apt:
-    name: rclone
+    name:
+      - rclone
+      - rsync
     state: present
     update_cache: true
   become: true
@@ -78,3 +80,57 @@
       credential material — seed it manually per docs/pub.md before relying
       on the timer; publish-morning-brief will fail until then.
   when: not pub_rclone_config.stat.exists
+
+# ---------------------------------------------------------------------------
+# Cast receiver publishing (brasenia ADR-0006, kalmia#99) — serves brasenia's
+# Cast custom web receiver at http://pub.lan/cast/. Additive: it touches
+# nothing in the Morning Brief / brief-serving path above.
+# ---------------------------------------------------------------------------
+- name: Deploy the publish-cast-receiver script
+  ansible.builtin.copy:
+    src: publish-cast-receiver
+    dest: /usr/local/bin/publish-cast-receiver
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+  when: pub_cast_publish_enabled
+
+- name: Render the publish-cast-receiver environment file
+  ansible.builtin.template:
+    src: publish-cast-receiver.env.j2
+    dest: /etc/default/publish-cast-receiver
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: pub_cast_publish_enabled
+
+- name: Deploy the publish-cast-receiver systemd service
+  ansible.builtin.copy:
+    src: publish-cast-receiver.service
+    dest: /etc/systemd/system/publish-cast-receiver.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: pub_cast_publish_enabled
+
+- name: Deploy the publish-cast-receiver systemd timer
+  ansible.builtin.template:
+    src: publish-cast-receiver.timer.j2
+    dest: /etc/systemd/system/publish-cast-receiver.timer
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: pub_cast_publish_enabled
+
+- name: Enable and start the publish-cast-receiver timer
+  ansible.builtin.systemd_service:
+    name: publish-cast-receiver.timer
+    daemon_reload: true
+    enabled: true
+    state: started
+  become: true
+  when: pub_cast_publish_enabled
