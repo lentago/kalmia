@@ -5,11 +5,14 @@
 ## Context
 
 The bullpen runner pool (claude-runner 1–5, VMIDs 110–112/116–117) provides
-GitHub Actions capacity for all Lentago Labs repos. The pool was initially placed
+agent-worker capacity — headless Claude workers that take queued jobs and open
+PRs across Lentago Labs repos (distinct from GitHub Actions CI: issue #37
+itself draws the line, calling LXC 115 "shared CI substrate, not agent
+capacity"). The pool was initially placed
 under kalmia's Terraform layer because kalmia was the first repo to have a
 Terraform layer and the runners live on the LAN Proxmox cluster.
 
-As claytonia (the product orchestration repo) grew its own `terraform/` root
+As claytonia (the agent-fleet repo) grew its own `terraform/` root
 (lentago/claytonia#51), two competing ownership models emerged:
 
 - **kalmia holds the runners** — consistent with "kalmia = local infra", but

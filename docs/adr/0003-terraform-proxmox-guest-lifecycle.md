@@ -14,7 +14,7 @@ The 2026-07-04 suite boundary decision (kalmia = local infra, solidago = cloud
 infra) made kalmia the natural home for this layer: the guests run on a LAN
 Proxmox cluster that solidago does not touch.
 
-At import time, 11 live guests existed across two nodes (pve4 and pve5): service
+At import time, 11 live guests existed across three nodes (pve4, pve5, and pve3): service
 LXCs, workstation VMs, testbed VMs, and one mission-critical VM (Home Assistant
 OS, VM 100) that is USB-pinned to pve3 via Z-Wave/Zigbee/Matter radio
 passthrough.

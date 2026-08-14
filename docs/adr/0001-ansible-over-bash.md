@@ -66,8 +66,9 @@ problem than the one being solved.
   and is a required merge check.
 - The bash scripts in `lentago/workstation-bootstrap` are kept during the
   transition period and superseded by this repo.
-- Roles are: `common`, `languages`, `cloud_tools`, `containers`, `power`,
-  `editors`, `cli_tools`, `shell`, `repos`.
+- The initial role set was: `common`, `languages`, `cloud_tools`, `containers`,
+  `power`, `editors`, `cli_tools`, `shell`, `repos` (`lunaria` and `pub` were
+  added later for non-workstation targets).
 - `become: false` is the play-level default; system tasks opt into `become:
   true`; user-space tasks (`nvm`, `.bashrc`, Starship, VS Code settings) run as
   the target user via `target_user` / `target_home` — never root's `$HOME`.
