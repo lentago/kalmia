@@ -5,6 +5,11 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+# oneshot units never time out by default, and the watchdog's cast.wait() has
+# no timeout of its own — a half-alive Chromecast would hang this unit forever
+# and (because the timer measures from last activation) stop the re-checks,
+# defeating the unattended-recovery purpose. Cap it; the timer retries in 60s.
+TimeoutStartSec=120
 User=lunaria
 WorkingDirectory=/var/lib/lunaria
 EnvironmentFile=/etc/default/lunaria-cast
