@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodically ensure the Cast receiver is running on the Chromecast
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec={{ lunaria_cast_watchdog_interval }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

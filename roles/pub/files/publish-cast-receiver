@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Publish brasenia's Cast custom web receiver page to the pub.lan web share so
+# it serves at http://pub.lan/cast/ — the URL registered in the Cast Developer
+# Console (brasenia ADR-0006, kalmia#99).
+#
+# Source is brasenia's cast-app/ directory (the receiver is authored in
+# brasenia, lentago/brasenia#13 — served here, never forked). Destination is
+# the web root pub serves: /srv/www/cast, which is the NAS web share
+# /volume1/lentago/web/cast/ mounted on pub. Config comes from the environment
+# (set by the systemd unit / EnvironmentFile):
+#
+#   CAST_RECEIVER_SRC   path to a local brasenia checkout's cast-app/ directory
+#   CAST_RECEIVER_DEST  publish target on the mounted web share
+#
+# Like publish-morning-brief, this is credential-free and skips cleanly rather
+# than failing when its inputs are absent: no web share mounted, or no cast-app/
+# source yet (brasenia#13 unmerged) → exit 0 with a note.
+set -euo pipefail
+SRC="${CAST_RECEIVER_SRC:?CAST_RECEIVER_SRC must be set}"
+DEST="${CAST_RECEIVER_DEST:-/srv/www/cast}"
+
+mountpoint -q /srv/www || { echo "web share not mounted; skipping" >&2; exit 0; }
+if [ ! -d "$SRC" ]; then
+    echo "cast-app source '$SRC' absent (brasenia#13 not checked out here?); skipping" >&2
+    exit 0
+fi
+
+mkdir -p "$DEST"
+rsync -a --delete "$SRC"/ "$DEST"/
+echo "published cast receiver from $SRC to $DEST (http://pub.lan/cast/)"
