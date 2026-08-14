@@ -45,13 +45,16 @@ lunaria_extra_urls:
 # reclaims, or input changes.
 lunaria_cast_watchdog_enabled: true
 
-# PLACEHOLDERS. The custom web receiver has NOT been registered in the Cast
-# Developer Console yet, so there is no real App ID or device name to use. The
-# watchdog exits 0 without touching the network while either is a placeholder,
-# so provisioning stays green until registration. Override both via inventory
-# or `-e` once registered; do NOT commit real values.
-lunaria_cast_app_id: "REPLACE_ME_CAST_APP_ID"          # 8-hex-char App ID from the Cast Developer Console
-lunaria_cast_device_name: "REPLACE_ME_CHROMECAST_NAME"  # the household Chromecast's friendly name
+# Registered 2026-08-14 (Cast Developer Console, unpublished Custom Receiver;
+# receiver URL http://pub.lan/cast/). Both values are deliberately COMMITTED:
+# neither is a secret — the App ID is public in brasenia's
+# cast-app/app-config.json and only launches on the dev-registered household
+# device, and the friendly name is broadcast in cleartext mDNS to every LAN
+# device. Committing them keeps rebuild-from-scratch real: an `-e`-only value
+# would silently revert the env file to a dormant placeholder on any future
+# provisioning run.
+lunaria_cast_app_id: "83A58DDE"
+lunaria_cast_device_name: "Family Room TV"
 
 # How often the watchdog re-checks the receiver (a systemd time span).
 lunaria_cast_watchdog_interval: 60s

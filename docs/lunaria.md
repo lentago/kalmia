@@ -114,26 +114,28 @@ watchdog is the Cast path's analogue of the mandatory Roku retry handler
 - Config is `/etc/default/lunaria-cast` (App ID + device name), rendered from
   role defaults.
 
-### Placeholders — not yet registered
+### Registered 2026-08-14 — values committed
 
-The custom web receiver has **not** been registered in the Cast Developer
-Console yet, so there is no real App ID or device name. `lunaria_cast_app_id`
-and `lunaria_cast_device_name` ship as clearly-marked `REPLACE_ME_…`
-placeholders, and the watchdog **exits 0 without touching the network** while
-either is a placeholder — provisioning stays green until registration. Once the
-receiver is registered (~$5 one-time console fee, the device registered for
-development), set the real values via inventory or `-e` and re-run `lunaria.yml`:
+The custom web receiver is registered in the Cast Developer Console as an
+**unpublished** Custom Receiver: App ID `83A58DDE`, receiver URL
+`http://pub.lan/cast/` (the console accepted plain HTTP for an unpublished
+app — no TLS leg needed, and no mixed content since the brief iframe is
+same-scheme). The household Chromecast ("Family Room TV", Cast-platform
+device) is serial-registered for development; the app never gets published,
+so it launches only on that device — the same posture as the sideloaded
+Roku dev channel.
 
-```bash
-ansible-playbook -i inventory/hosts.yml lunaria.yml \
-  -e lunaria_cast_app_id=XXXXXXXX \
-  -e lunaria_cast_device_name='Living Room TV'
-```
-
-Never commit the real App ID or device name. Set `lunaria_cast_watchdog_enabled: false`
+`lunaria_cast_app_id` and `lunaria_cast_device_name` are **committed in the
+role defaults** rather than passed via `-e`: neither is a secret (the App ID
+is public in brasenia's `cast-app/app-config.json`; the friendly name is
+broadcast in cleartext mDNS on the LAN), and an `-e`-only value would
+silently revert `/etc/default/lunaria-cast` to a dormant placeholder on any
+future provisioning run — exactly the failure mode a watchdog must not have.
+The placeholder-skip logic in the watchdog script remains as a safety valve
+for rebuilds from a stale checkout. Set `lunaria_cast_watchdog_enabled: false`
 to skip the watchdog block entirely.
 
 > **Runtime dependencies** (not visible to static CI): the container needs
 > `python3-pychromecast` from apt and mDNS/multicast reachability to the
-> Chromecast, plus internet at launch (Google's app-ID lookup). Unverified on
-> LXC 118 until the receiver is registered.
+> Chromecast, plus internet at launch (Google's app-ID lookup). Verified only
+> once the first live watchdog run launches the receiver on LXC 118.
