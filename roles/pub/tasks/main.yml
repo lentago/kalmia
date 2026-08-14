@@ -5,11 +5,12 @@
 # rclone.conf OAuth remote is credential material and is deliberately never
 # written by this role — see docs/pub.md for the manual seeding step.
 # ============================================================================
-- name: Install rclone and rsync
+- name: Install rclone, rsync, and git
   ansible.builtin.apt:
     name:
       - rclone
       - rsync
+      - git
     state: present
     update_cache: true
   become: true
@@ -86,6 +87,15 @@
 # Cast custom web receiver at http://pub.lan/cast/. Additive: it touches
 # nothing in the Morning Brief / brief-serving path above.
 # ---------------------------------------------------------------------------
+- name: Check out brasenia for the receiver source
+  ansible.builtin.git:
+    repo: "{{ pub_cast_repo_url }}"
+    dest: "{{ pub_cast_checkout }}"
+    version: main
+    update: true
+  become: true
+  when: pub_cast_publish_enabled
+
 - name: Deploy the publish-cast-receiver script
   ansible.builtin.copy:
     src: publish-cast-receiver

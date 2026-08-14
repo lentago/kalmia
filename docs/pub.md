@@ -90,12 +90,13 @@ is `/volume1/lentago/web/cast/` on the NAS and serves at **`http://pub.lan/cast/
 That URL — `http://pub.lan/cast/` — is what gets registered as the receiver's
 application URL in the Google Cast Developer Console.
 
-> **Dependency: brasenia#13.** The `cast-app/` receiver page may not be merged
-> or checked out on pub yet. `pub_cast_receiver_src` (default
-> `/srv/brasenia/cast-app`) is a **placeholder path**; the publisher skips
-> cleanly until a real brasenia checkout with `cast-app/` exists there. Point
-> it at the real checkout once one lands, or set
-> `pub_cast_publish_enabled: false` to skip the block.
+> **Checkout is role-managed (since 2026-08-14).** The role clones the public
+> brasenia repo (credential-free https) to `pub_cast_checkout`
+> (`/srv/brasenia`), and the publisher does an opportunistic `git pull
+> --ff-only` before each rsync, so the served receiver tracks brasenia `main`
+> within a day of a merge — no re-provisioning needed. If GitHub is
+> unreachable the pull is skipped and the existing checkout republishes; set
+> `pub_cast_publish_enabled: false` to skip the whole block.
 
 ## Rebuild flow
 

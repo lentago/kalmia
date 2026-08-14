@@ -25,6 +25,14 @@ if [ ! -d "$SRC" ]; then
     exit 0
 fi
 
+# Opportunistic freshness: if the source sits in a git checkout, ff-only pull
+# so the served receiver tracks brasenia main on the daily timer. Best-effort —
+# offline GitHub must not block republishing what's already checked out.
+if git -C "$SRC" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git -C "$SRC" pull --ff-only >/dev/null 2>&1 \
+        || echo "git pull failed (offline?); publishing existing checkout" >&2
+fi
+
 mkdir -p "$DEST"
 rsync -a --delete "$SRC"/ "$DEST"/
 echo "published cast receiver from $SRC to $DEST (http://pub.lan/cast/)"

@@ -20,11 +20,13 @@ pub_timer_oncalendar: "Mon..Fri *-*-* 08..11:04/15:00 America/New_York"
 # here, never forked.
 pub_cast_publish_enabled: true
 
-# Source: the cast-app/ directory of a LOCAL brasenia checkout on pub. This is
-# a PLACEHOLDER path — brasenia#13 may not be merged/checked out here yet, and
-# the publisher skips cleanly while it is absent. Point it at a real checkout
-# once one exists.
-pub_cast_receiver_src: /srv/brasenia/cast-app
+# The brasenia checkout the receiver is published from. The role clones the
+# public repo (credential-free https) to pub_cast_checkout, and the publisher
+# does an opportunistic ff-only pull before each rsync so the served receiver
+# tracks brasenia main within a day without re-running this role.
+pub_cast_repo_url: https://github.com/lentago/brasenia
+pub_cast_checkout: /srv/brasenia
+pub_cast_receiver_src: "{{ pub_cast_checkout }}/cast-app"
 
 # Destination on the web share pub serves. /srv/www is the NAS web share
 # (/volume1/lentago/web) mounted on pub, so this is /volume1/lentago/web/cast/
