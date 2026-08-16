@@ -1,7 +1,21 @@
 version: 2
 updates:
+  # Group updates per ecosystem into at most two PRs: "-routine" (minor/patch,
+  # reviewable on green checks) and "-major" (breaking changes, read
+  # deliberately). Ungrouped, each ecosystem's updates land as one PR per
+  # dependency per week; grouping everything into one PR would hide a major
+  # bump inside a pile of patches, so the split stays visible in the PR list.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    groups:
+      actions-routine:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      actions-major:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["major"]
