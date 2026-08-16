@@ -86,10 +86,20 @@ jobs:
     # Same-repo PRs only: fork PRs must never reach the LAN runner (defense
     # in depth alongside the repo's require-approval-for-all-outside-
     # collaborators Actions setting).
+    #
+    # Dependabot PRs are also excluded: `pull_request` runs triggered by
+    # Dependabot draw from a separate Dependabot secrets store, not this
+    # repo's normal Actions secrets, so PROXMOX_VE_API_TOKEN always resolves
+    # empty there and the preflight below fails by design. A dependency bump
+    # (e.g. an action SHA pin) never needs to plan against the hypervisor, so
+    # skip the job rather than widen where the Proxmox credential is
+    # reachable by adding it to the Dependabot secrets store. A skipped job
+    # counts as passing for the `gate` fan-in. See lentago/.github#114.
     if: >-
       needs.changes.outputs.tf == 'true' &&
       github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
     defaults:
       run:
         working-directory: terraform
