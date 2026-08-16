@@ -1,0 +1,62 @@
+---
+# lunaria HLS/RTMP config - minimal.
+# hlsVariant mpegts is CRITICAL for Roku compatibility: the default
+# lowLatency variant uses LL-HLS/fMP4, which Roku handles poorly.
+hls: true
+hlsAddress: :8888
+hlsVariant: mpegts
+hlsSegmentDuration: 2s
+hlsSegmentCount: 7
+# Remux continuously so the first client join is fast.
+hlsAlwaysRemux: true
+
+rtsp: true
+rtspAddress: :8554
+
+# RTMP live-ingest (kalmia#102): generic `live` path for LAN publishers,
+# first client DJI Fly. Only HLS out + RTSP in (board) + RTMP in (live) are
+# used; keep the rest off.
+rtmp: true
+rtmpAddress: :1935
+webrtc: false
+srt: false
+moq: false
+
+# Internal auth. The passwordless "any" user keeps existing behavior
+# unchanged: unauthenticated publish for `board` (lunaria-stream pushes over
+# localhost RTSP) and unauthenticated read/playback for HLS/RTSP (the Roku
+# and LAN clients never had credentials, and this is LAN-only by construction
+# per firewall policy). RTMP publish to `live` is scoped to a dedicated
+# credentialed user below, so a random LAN host cannot put video on the TV.
+authInternalUsers:
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: publish
+        path: board
+      - action: read
+        path:
+      - action: playback
+        path:
+{% if lunaria_rtmp_publish_pass %}
+  - user: {{ lunaria_rtmp_publish_user | to_json }}
+    pass: {{ lunaria_rtmp_publish_pass | to_json }}
+    ips: []
+    permissions:
+      - action: publish
+        path: live
+{% endif %}
+
+paths:
+  board:
+
+  # Generic RTMP live-ingest path (kalmia#102). Named for the protocol, not
+  # the producer — DJI Fly is the first client, but any RTMP publisher
+  # (OBS, Larix, ...) with the credential above publishes here unchanged.
+  # Publish with e.g. rtmp://<host>:1935/live?user={{ lunaria_rtmp_publish_user }}&pass=<credential>
+  # `fallback` sends readers back to `board` while no one is publishing to
+  # `live`; the brasenia-side retry handler (ADR-0002) rejoins `live` within
+  # ~1s once a publisher appears.
+  live:
+    fallback: /board

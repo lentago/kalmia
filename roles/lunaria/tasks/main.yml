@@ -77,9 +77,19 @@
     access_time: preserve
   become: true
 
+- name: Warn when the RTMP live-ingest credential has not been seeded
+  ansible.builtin.debug:
+    msg: >-
+      LUNARIA_RTMP_PUBLISH_PASS is not set in the environment. This role
+      never commits credential material — source it from a host-local env
+      file (e.g. ~/.config/kalmia/lunaria-rtmp.env) before running the play;
+      see docs/lunaria.md. Until then mediamtx.yml grants no one publish
+      access to `live`, so RTMP live-ingest stays disabled (fails closed).
+  when: not lunaria_rtmp_publish_pass
+
 - name: Deploy the mediamtx config
-  ansible.builtin.copy:
-    src: mediamtx.yml
+  ansible.builtin.template:
+    src: mediamtx.yml.j2
     dest: "{{ lunaria_mediamtx_dir }}/mediamtx.yml"
     owner: "{{ lunaria_user }}"
     group: "{{ lunaria_user }}"
