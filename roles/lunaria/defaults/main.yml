@@ -58,3 +58,20 @@ lunaria_cast_device_name: "Family Room TV"
 
 # How often the watchdog re-checks the receiver (a systemd time span).
 lunaria_cast_watchdog_interval: 60s
+
+# --- RTMP live-ingest (kalmia#102) -------------------------------------------
+# Generic RTMP publish path for LAN producers (first client: DJI Fly's
+# custom-RTMP live streaming; H.264/AAC remux only, no transcode). The path
+# name is protocol-shaped, not producer-shaped — adding a second producer
+# (OBS, Larix, ...) must require no mediamtx.yml changes.
+lunaria_rtmp_publish_user: live
+
+# Publish credential for the `live` path, sourced from the environment —
+# never committed, same pattern as roles/repos' GH_TOKEN. Locally, source it
+# from a host-local env file before running the play (e.g.
+# ~/.config/kalmia/lunaria-rtmp.env, alongside the existing
+# ~/.config/kalmia/proxmox.env precedent); see docs/lunaria.md. Empty by
+# default: with no credential, mediamtx.yml.j2 omits the live-publisher auth
+# entry entirely, so RTMP publish to `live` fails closed (401) rather than
+# falling open.
+lunaria_rtmp_publish_pass: "{{ lookup('env', 'LUNARIA_RTMP_PUBLISH_PASS') | default('', true) }}"

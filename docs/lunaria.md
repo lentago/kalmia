@@ -88,6 +88,71 @@ publish).
   Rebuild-from-scratch is terraform apply + the provision play; nothing to
   back up.
 
+## RTMP live-ingest (`live` path — kalmia#102)
+
+mediamtx also accepts LAN RTMP publishers on a generic `live` path,
+remuxed through the same Roku-validated HLS leg (`hlsVariant: mpegts`) the
+`board` path already uses. Runtime half of a two-repo change; the product
+concept, ADR, and `VideoScene.xml` repoint are
+[brasenia#17](https://github.com/lentago/brasenia/issues/17). First client:
+DJI Fly's custom-RTMP live streaming (H.264/AAC, remux only — no transcode,
+no recording; the drone's SD card holds the higher-quality original).
+
+- **Generic by design.** The path is named for the protocol (`live`), not
+  the producer — adding a second producer (OBS, Larix, ...) requires no
+  `mediamtx.yml` changes, just the same publish URL with a different
+  encoder.
+- **LAN-only, credentialed.** RTMP was off (`rtmp: false`) before this;
+  turning it on makes port `:1935` reachable to the whole
+  `192.168.139.0/24` LAN (no Firewalla port-forward — never exposed beyond
+  it). A publisher needs the `live`-path credential to push video; this
+  does not weaken the LXC 118 credential-free design (brasenia ADR-0005) —
+  that rule keeps a compromised display leg from reaching *other* systems,
+  and a publish token only grants putting video on this one TV.
+- **Fallback.** The Roku points at `live` with mediamtx's (deprecated but
+  still functional in v1.19.2) `fallback: /board` — readers land on `board`
+  while no one is publishing to `live`, and rejoin `live` within the
+  existing 3s retry handler (brasenia ADR-0002) once a publisher appears.
+  If brasenia-side bench validation finds Roku's HLS client mishandles the
+  fallback redirect (see the `?cookieCheck=1` history above), the fallback
+  line is the only thing to revert — plan B is a manual v0 repoint via
+  `lunaria_tv_url` instead.
+- **`board` is unaffected.** `lunaria-stream`'s localhost RTSP push to
+  `board` keeps working unauthenticated, exactly as before; only the new
+  `live` path requires a credential.
+
+### Seeding the RTMP publish credential (manual — no ansible-vault precedent)
+
+`roles/lunaria/files/mediamtx.yml` became
+`roles/lunaria/templates/mediamtx.yml.j2`: the `live`-path publish password
+is sourced from the `LUNARIA_RTMP_PUBLISH_PASS` environment variable at
+play time (same `lookup('env', ...)` pattern as `GH_TOKEN` in the `repos`
+role) and is never committed. If the variable is unset, the rendered
+config simply grants no one publish access to `live` — RTMP live-ingest
+stays off (fails closed) rather than falling open.
+
+1. Generate a random credential and stash it in a host-local env file,
+   following the existing `~/.config/kalmia/proxmox.env` precedent:
+   ```bash
+   mkdir -p ~/.config/kalmia
+   umask 077
+   printf 'export LUNARIA_RTMP_PUBLISH_PASS=%s\n' "$(openssl rand -hex 20)" \
+     >> ~/.config/kalmia/lunaria-rtmp.env
+   ```
+2. Before running the play, source it:
+   ```bash
+   source ~/.config/kalmia/lunaria-rtmp.env
+   ansible-playbook -i inventory/hosts.yml lunaria.yml
+   ```
+3. Give DJI Fly's custom-RTMP field the publish URL (`lunaria_rtmp_publish_user`
+   defaults to `live` and is committed — not a secret):
+   ```
+   rtmp://192.168.139.19:1935/live?user=live&pass=<the credential>
+   ```
+   Re-running the play without sourcing the env file first is safe — it
+   redeploys the config with no live-publisher credential and RTMP
+   live-ingest goes back to fails-closed until re-seeded.
+
 ## Cast receiver watchdog (second client — brasenia ADR-0006, #99)
 
 The household Chromecast joined as a **second viewport client** alongside the
