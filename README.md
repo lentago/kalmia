@@ -21,6 +21,51 @@ containers. It has three layers, split by what they own:
 - **Forge** ([`forge/`](forge/)) — the versioned machine *images* those guests
   are cut from.
 
+```mermaid
+graph TB
+    subgraph github ["GitHub Actions (cloud)"]
+        PR("pull request")
+        PUSH("push to main")
+        VALIDATE["validate / ubuntu-latest\nfmt · init · validate"]
+    end
+
+    subgraph aws ["AWS S3 (cloud)"]
+        STATE[("state backend + lock table")]
+    end
+
+    subgraph runner ["LAN self-hosted runner (LXC 115)"]
+        PLAN["plan — posts diff as PR comment"]
+        APPLY["apply — serialised, no cancel-in-progress"]
+    end
+
+    subgraph pve ["homelab-cluster (Proxmox)"]
+        GUESTS["every VM + LXC\nexcept claytonia's runner pool"]
+    end
+
+    FORGE["forge/ — substrate.sh\nbuilds versioned LXC templates"]
+    ANSIBLE["Ansible — separate plane\nsite.yml / pub.yml / lunaria.yml\nidempotent roles provision inside each guest"]
+
+    PR --> VALIDATE
+    VALIDATE -->|"same-repo PRs only — fork PRs\nnever reach the LAN runner"| PLAN
+    PUSH --> APPLY
+    PLAN <-->|"GitHub OIDC — no long-lived AWS keys"| STATE
+    APPLY <-->|"GitHub OIDC"| STATE
+    APPLY -->|"owns existence + shape"| GUESTS
+    FORGE -.->|"images consumed by Terraform"| GUESTS
+    GUESTS -.->|"Ansible self-provisions inside"| ANSIBLE
+```
+
+> **Terraform plane:** merge to `main` is the deploy button. `plan` and `apply`
+> run on the LAN self-hosted runner (LXC 115) because the Proxmox API is
+> unreachable from GitHub-hosted runners; `apply` is serialised so two quick
+> merges can't race on the same state. GitHub OIDC eliminates long-lived AWS keys
+> for the S3 state backend. Fork PRs are blocked from the LAN runner by a
+> same-repo guard in the workflow, reinforced by the repo's
+> require-approval-for-outside-collaborators Actions setting. **Ansible plane:**
+> independent — Terraform owns guest existence and shape; Ansible provisions
+> inside them. **Forge:** `substrate.sh` produces versioned LXC templates that
+> Terraform resources consume.
+
 It supersedes the shell scripts in
 [`workstation-bootstrap`](https://github.com/lentago/workstation-bootstrap):
 same toolchain, prompt, and workflow, expressed as Ansible roles instead of
