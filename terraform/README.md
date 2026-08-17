@@ -188,6 +188,80 @@ unsupported — fine here, `ha-manager` is deliberately unused (VM 100 pinning).
 - Read the full plan before declaring a diff benign — the whole diff, not a
   grep of it.
 
+## Rails — non-`nesting` feature flags require root@pam pre-create
+
+PVE enforces a privilege boundary on LXC feature flags: the `terraform@pve`
+token may create containers, but **only `root@pam` may set features other than
+`nesting`**. Applying a new container carrying `keyctl`, `fuse`, `mknod`, etc.
+from CI fails with HTTP 403 even though `terraform plan` returns a clean diff.
+
+> **Reviewer warning:** a plan that shows a feature-flagged container as
+> `create` will pass the CI plan job and fail the CI apply job — **the 403
+> lands post-merge**. Any new LXC resource with a non-`nesting` feature flag is
+> a pre-create gate: the operator must stand up the container before the PR is
+> merged.
+
+The k3s pool (`#121`, VMIDs 119/122) was the module's first attempted create
+with `keyctl = true`; it surfaced this constraint. Every earlier feature-flagged
+guest (n8n, VMID 113: `nesting + keyctl`) predates the module and was adopted
+via import, which masked it. The recipe below resolved it.
+
+### Pre-create + import (k3s pool — worked example)
+
+**1. Create both containers on their target nodes as root@pam:**
+
+```bash
+# k3s-1 — pve5, VMID 119
+ssh root@pve5.local
+pct create 119 local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst \
+  --hostname k3s-1 --unprivileged 1 \
+  --features nesting=1,keyctl=1 \
+  --cores 4 --memory 6144 --swap 0 \
+  --rootfs local-lvm:24 \
+  --net0 name=eth0,bridge=vmbr0,ip=dhcp \
+  --nameserver 192.168.139.1 --searchdomain local \
+  --ostype debian --onboot 1
+pct start 119
+
+# k3s-2 — pve4, VMID 122
+ssh root@pve4.local
+pct create 122 local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst \
+  --hostname k3s-2 --unprivileged 1 \
+  --features nesting=1,keyctl=1 \
+  --cores 4 --memory 6144 --swap 0 \
+  --rootfs local-lvm:24 \
+  --net0 name=eth0,bridge=vmbr0,ip=dhcp \
+  --nameserver 192.168.139.1 --searchdomain local \
+  --ostype debian --onboot 1
+pct start 122
+```
+
+**2. Import both containers into state** (run from `terraform/` with credentials
+set):
+
+```bash
+terraform import 'proxmox_virtual_environment_container.k3s["k3s-1"]' pve5/119
+terraform import 'proxmox_virtual_environment_container.k3s["k3s-2"]' pve4/122
+```
+
+**3. Verify plan, then push and merge.** The CI apply reconciles without 403 —
+the containers already exist, so no create is attempted.
+
+### Post-import normalization
+
+The first CI apply after import writes provider defaults for `client_timeout_*`
+fields and the `console` block (`cmode: tty`, `console: 1`, `tty: 2`) into the
+live config. Both equal PVE's implicit defaults — no behavior change, no restart
+— and settle to a clean plan on the following apply. Same pattern as the phase-1
+LXC imports; see § Import gotchas.
+
+### Forward: encoding as `import {}` blocks
+
+The `import {}` block approach (used in `lentago/.github`'s settings module)
+would let the `.tf` itself carry the import and remove the separate operator
+step. Not implemented — record here if a third feature-flagged container
+prompts the investment.
+
 ## VM import notes (learned in phase 3)
 
 - **`reboot_after_update = false` on every imported VM.** The first apply
