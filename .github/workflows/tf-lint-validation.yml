@@ -1,0 +1,13 @@
+# TEMPORARY validation vehicle — exercises the shared tf-lint reusable against
+# a real caller before the v1.2.0 tag is cut (RELEASING.md test-before-publish
+# discipline). This PR is closed unmerged; real adoption lands pinned @v1.2.0.
+name: Terraform Lint (validation)
+
+on:
+  pull_request:
+
+jobs:
+  tf-lint:
+    uses: lentago/shared-workflows/.github/workflows/tf-lint.yml@main
+    with:
+      working_directory: terraform
