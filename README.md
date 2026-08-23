@@ -240,7 +240,7 @@ The profile autodetects from host facts when unset. Run a subset with tags, e.g.
 | `editors` | VS Code (+ extensions), Claude Code |
 | `cli_tools` | jq, yq, bat, fd, ripgrep, fzf, tmux, direnv, Starship, … |
 | `shell` | marker-managed `.bashrc` block + Starship config + the `pull-all` / `clean-all` / `gh-issue` helpers |
-| `repos` | GitHub CLI + clone your personal and org repos (on by default) |
+| `repos` | GitHub CLI + clone your personal and org repos into `~/repos/<owner>/<name>` (on by default) |
 
 ## Status
 

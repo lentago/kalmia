@@ -28,9 +28,10 @@ ok=0
 unchanged=0
 fail=0
 
-for dir in "$REPOS_DIR"/*/; do
+# Checkouts are owner-grouped (<owner>/<name>); flat <name>/ still works.
+for dir in "$REPOS_DIR"/*/ "$REPOS_DIR"/*/*/; do
     [[ -d "$dir/.git" ]] || continue
-    name=$(basename "$dir")
+    name=${dir#"$REPOS_DIR"/}; name=${name%/}
 
     default=$(git -C "$dir" symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null | sed 's|^origin/||' || true)
     if [[ -z "$default" ]] || ! git -C "$dir" checkout --quiet "$default" 2>/dev/null; then

@@ -43,7 +43,12 @@ github_org: "{{ lookup('env', 'GITHUB_ORG') | default('lentago', true) }}"
 # Defaults to the Lentago org so the rendered config actually sets something and
 # the ghnew/ghclone aliases exist. Export GITHUB_DEFAULT_OWNER to override.
 github_default_owner: "{{ lookup('env', 'GITHUB_DEFAULT_OWNER') | default('lentago', true) }}"
+# Clones are owner-grouped: {{ repos_dir }}/<owner>/<name> (e.g. repos/lentago/kalmia,
+# repos/cpitzi/theoria) — the fleet layout since 2026-08-12 (kalmia#126).
 repos_dir: "{{ ansible_env.HOME }}/repos"
+repos_dir_aliases:
+  ".github": dotgithub          # org meta-repo; a hidden dir is no fun
+repos_skip: []
 
 # --- Git identity (auto-pulled from the gh profile when left empty) ---------
 git_user_name: "{{ lookup('env', 'GIT_NAME') | default('', true) }}"
