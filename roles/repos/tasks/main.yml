@@ -1,6 +1,9 @@
 ---
 # ============================================================================
 # repos — GitHub CLI + clone personal and org repositories.
+# Clones land owner-grouped — {{ repos_dir }}/<owner>/<name> — with
+# repos_dir_aliases renaming awkward names (.github → dotgithub) and repos_skip
+# holding names back. Existing checkouts are never touched (update: false).
 # On by default (clone_repos); set it false to skip the role entirely. Needs gh
 # already authenticated or GH_TOKEN in the environment — without that, cloning
 # is skipped with a loud notice rather than aborting the run, unless
@@ -94,11 +97,14 @@
       ansible.builtin.set_fact:
         effective_github_user: "{{ github_user if (github_user | length > 0) else gh_user_cmd.stdout }}"
 
-    - name: Ensure the repos directory exists
+    # No mode: pre-existing directories keep whatever permissions they have.
+    - name: Ensure the repos directory and owner subdirectories exist
       ansible.builtin.file:
-        path: "{{ repos_dir }}"
+        path: "{{ item }}"
         state: directory
-        mode: "0755"
+      loop: >-
+        {{ [repos_dir, repos_dir ~ '/' ~ effective_github_user]
+           + ([repos_dir ~ '/' ~ github_org] if (github_org | length > 0) else []) }}
 
     - name: List personal repositories
       ansible.builtin.command: "gh repo list {{ effective_github_user }} --limit 200 --json name -q .[].name"
@@ -114,10 +120,10 @@
     - name: Clone personal repositories
       ansible.builtin.git:
         repo: "https://github.com/{{ effective_github_user }}/{{ item }}.git"
-        dest: "{{ repos_dir }}/{{ item }}"
+        dest: "{{ repos_dir }}/{{ effective_github_user }}/{{ repos_dir_aliases.get(item, item) }}"
         version: HEAD
         update: false
-      loop: "{{ personal_repos.stdout_lines }}"
+      loop: "{{ personal_repos.stdout_lines | reject('in', repos_skip) | list }}"
       register: personal_clone
       ignore_errors: true
 
@@ -130,7 +136,7 @@
           {{ personal_clone.results | default([]) | selectattr('failed', 'defined') | selectattr('failed')
              | map(attribute='item') | join(', ') }}
         success_msg: >-
-          {{ personal_repos.stdout_lines | length }} personal repositories present
+          {{ personal_repos.stdout_lines | reject('in', repos_skip) | list | length }} personal repositories present
         quiet: true
 
     - name: List organization repositories
@@ -143,10 +149,10 @@
     - name: Clone organization repositories
       ansible.builtin.git:
         repo: "https://github.com/{{ github_org }}/{{ item }}.git"
-        dest: "{{ repos_dir }}/{{ item }}"
+        dest: "{{ repos_dir }}/{{ github_org }}/{{ repos_dir_aliases.get(item, item) }}"
         version: HEAD
         update: false
-      loop: "{{ org_repos.stdout_lines | default([]) }}"
+      loop: "{{ org_repos.stdout_lines | default([]) | reject('in', repos_skip) | list }}"
       register: org_clone
       ignore_errors: true
       when: github_org | length > 0
@@ -160,6 +166,6 @@
           {{ org_clone.results | default([]) | selectattr('failed', 'defined') | selectattr('failed')
              | map(attribute='item') | join(', ') }}
         success_msg: >-
-          {{ org_repos.stdout_lines | default([]) | length }} {{ github_org }} repositories present
+          {{ org_repos.stdout_lines | default([]) | reject('in', repos_skip) | list | length }} {{ github_org }} repositories present
         quiet: true
       when: github_org | length > 0

@@ -111,14 +111,14 @@ venv() {
 projects() {
   echo ""
   echo "📂 {{ repos_dir }}:"
-  for dir in "{{ repos_dir }}"/*/; do
+  for dir in "{{ repos_dir }}"/*/ "{{ repos_dir }}"/*/*/; do
     [[ -d "$dir/.git" ]] || continue
     local name branch dirty
-    name=$(basename "$dir")
+    name=${dir#"{{ repos_dir }}"/}; name=${name%/}
     branch=$(git -C "$dir" branch --show-current 2>/dev/null || echo "—")
     dirty=""
     [[ -n "$(git -C "$dir" status --porcelain 2>/dev/null)" ]] && dirty=" *"
-    printf "  %-30s (%s)%s\n" "$name" "$branch" "$dirty"
+    printf "  %-40s (%s)%s\n" "$name" "$branch" "$dirty"
   done
   echo ""
 }

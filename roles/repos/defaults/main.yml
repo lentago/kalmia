@@ -9,3 +9,9 @@ github_user: ""
 # Lentago org) come from group_vars/all.yml, which outranks role defaults.
 github_org: ""
 repos_require_gh_auth: false
+# Clone-directory name overrides, keyed by repo name. The org meta-repo
+# `.github` would otherwise land as a hidden directory.
+repos_dir_aliases:
+  ".github": dotgithub
+# Repo names (personal or org) never cloned by this role.
+repos_skip: []
