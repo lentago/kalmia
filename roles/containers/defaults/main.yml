@@ -3,3 +3,8 @@ docker_install: true
 docker_daemon: true
 docker_apt_repo_url: "https://download.docker.com/linux/ubuntu"
 docker_dnf_repo_url: "https://download.docker.com/linux/fedora"
+
+# Docker's apt repo lags new Ubuntu releases by months. If the running
+# release's codename (e.g. "resolute" for 26.04) has no dists/ directory
+# upstream yet, fall back to this codename instead.
+docker_apt_repo_codename_fallback: "noble"
