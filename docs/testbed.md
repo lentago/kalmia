@@ -69,12 +69,12 @@ curl -fsSL https://raw.githubusercontent.com/lentago/kalmia/main/bootstrap.sh \
 The boxes are deliberately a notch newer than the profiles' nominal targets —
 useful for catching drift, but expect a couple of things:
 
-- **Xubuntu is 26.04; the `xubuntu` profile is written against 24.04.** Mostly
-  version-agnostic, but the Docker CE **apt repo is keyed on the release
-  codename** (`resolute`). Docker's repo lags Ubuntu releases — if there's no
-  `dists/resolute` upstream yet, the `containers` role won't find packages.
-  Override `docker_apt_repo_*` to a `noble` (24.04) codename for the run if it
-  bites, and note it as a real finding for the 26.04 target.
+- **Docker CE apt repo codename.** The apt repo is keyed on the release
+  codename (`resolute` for 26.04), and Docker's repo lags Ubuntu releases. The
+  `containers` role now probes `dists/<codename>/Release` upstream first and
+  falls back to `docker_apt_repo_codename_fallback` (`noble`) if it's 404 —
+  no manual override should be needed. If it still bites, that's a real
+  finding worth filing.
 - **The Fedora testbed is XFCE; the `fedora` profile comment says "Fedora KDE."**
   The toolchain is desktop-agnostic, so this doesn't change what the roles
   install — just don't be thrown by the label mismatch.

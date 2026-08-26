@@ -1,5 +1,5 @@
 ---
-# Xubuntu 24.04 on a Proxmox VM — full Docker Engine, SSH server.
+# Xubuntu 26.04 on a Proxmox VM — full Docker Engine, SSH server.
 docker_install: true
 docker_daemon: true
 docker_apt_repo_url: "https://download.docker.com/linux/ubuntu"
