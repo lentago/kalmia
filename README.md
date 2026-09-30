@@ -119,7 +119,9 @@ files. The patterns an IT-ops reader can lift wholesale:
 
 ## 🛠️ Make a change yourself
 
-This is a lab — the systems are real, the stakes are not. Pick a vector:
+These systems are real, and nothing critical rides on them. That makes this a
+safe place to try a change before you make the same kind of change in your own
+shop. Pick one:
 
 **Stand up a purpose-built container via Terraform.** Add a
 `proxmox_virtual_environment_container` resource to
@@ -189,7 +191,18 @@ auto-upgrade existing installs, so both targets coexist.
 
 ## Quick start
 
-> **Prerequisite:** the one-liner needs `curl`, and the clone path needs `git`.
+**What you're about to do:** run one command against a fresh Linux box and get
+back a fully configured dev workstation — Docker, cloud tooling, your shell,
+editors, the works.
+
+**Why bother:** it's the same toolchain every time, on any of the five target
+machine types above, without babysitting a thousand-line shell script by hand.
+
+**Time:** no fixed number — it's mostly unattended package installs and
+downloads, so it depends on your network and what's already on the box. You
+don't have to sit and watch it.
+
+> **Heads up.** The one-liner needs `curl`, and the clone path needs `git`.
 > Both are present on a typical desktop install, but a minimal image may ship
 > neither — `sudo apt install -y curl` (Debian/Ubuntu) or `sudo dnf install -y
 > curl` (Fedora) first if so. `bootstrap.sh` installs everything else.
@@ -214,6 +227,11 @@ ansible-playbook site.yml -e workstation_profile=xubuntu
 
 The profile autodetects from host facts when unset. Run a subset with tags, e.g.
 `ansible-playbook site.yml --tags cli,shell`.
+
+**How you know it worked:** the run ends with a play recap showing `failed=0`.
+Open a new shell (or `source ~/.bashrc`) and the tools from the [Roles](#roles)
+table below — `docker`, `code`, the CLI utilities — should all be on your
+`PATH`.
 
 ## How it works
 
@@ -298,9 +316,10 @@ artifact worth knowing about, not worth churning to fix.
 
 ---
 
-🌱 **Lentago Labs** is a team learning lab — real systems, non-critical stakes,
-modern operations patterns demonstrated in the open. Start at the
-[org profile](https://github.com/lentago), and read this repo on
-[DeepWiki](https://deepwiki.com/lentago/kalmia).
+> 🌱 **Lentago Labs** is a pro-bono operations practice for organizations that
+> run on volunteers, donations, and one overworked tech person. Everything here
+> is free to take, and we practice what we publish: our own estate runs this
+> way, in the open. Start at the [org profile](https://github.com/lentago), and
+> read this repo on [DeepWiki](https://deepwiki.com/lentago/kalmia).
 
 *Part of the [Lentago Labs](https://github.com/lentago) portfolio.*
