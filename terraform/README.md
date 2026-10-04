@@ -110,8 +110,9 @@ post-merge if it needs `root@pam`-only settings (see Rails below). Two layers:
   `proxmox_virtual_environment_container` / `_vm` whose actions include
   `delete` (destroy or replace) in the PR plan comment. The job **fails unless
   the PR body contains the exact line** `- [x] Guest recreate feasibility verified`,
-  which blocks the `gate`. Ticking the box does not retrigger the workflow
-  (`edited` isn't a trigger) — re-run the `plan` job after editing the body.
+  which blocks the `gate`. The body is read live from the API, so after ticking
+  the box just re-run the `plan` job (`edited` isn't a trigger, and a re-run
+  replays the original event payload — hence the live read).
   No labels are used (they're IaC-managed in `lentago/.github`). The Dependabot
   skip on `plan` is unchanged.
 

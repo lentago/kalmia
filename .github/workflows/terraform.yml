@@ -151,18 +151,20 @@ jobs:
 
       # ForceNew guard (#53): a plan that deletes/replaces a guest must carry an
       # explicit human ack in the PR body. Parses the saved plan with python3
-      # (jq isn't guaranteed on LXC 115). The PR body reaches the script via env,
-      # never interpolated into the shell.
+      # (jq isn't guaranteed on LXC 115). The PR body is fetched live from the API
+      # (a re-run replays the original event payload, so the event body would be
+      # stale after ticking the box); it is never interpolated into the shell.
       - name: Guard guest destroy/replace
         id: guard
         if: steps.plan.outcome == 'success'
         continue-on-error: true
         env:
-          PR_BODY: ${{ github.event.pull_request.body }}
+          GH_TOKEN: ${{ github.token }}
+          PR_API: ${{ github.event.pull_request.url }}
         run: |
           terraform show -json tfplan > tfplan.json
           python3 - <<'PY'
-          import json, os, sys
+          import json, os, sys, urllib.request
           GUEST_TYPES = {
               "proxmox_virtual_environment_container",
               "proxmox_virtual_environment_vm",
@@ -175,7 +177,12 @@ jobs:
               if rc.get("type") in GUEST_TYPES and "delete" in rc["change"]["actions"]
           ]
           lines = [f"- `{addr}` ({kind})" for addr, kind in hits]
-          acked = ACK in (os.environ.get("PR_BODY") or "")
+          req = urllib.request.Request(os.environ["PR_API"], headers={
+              "Authorization": "Bearer " + os.environ["GH_TOKEN"],
+              "Accept": "application/vnd.github+json",
+          })
+          body = json.load(urllib.request.urlopen(req)).get("body") or ""
+          acked = ACK in body
           with open("guard.md", "w") as f:
               if hits:
                   f.write("**Guest destroy/replace detected:**\n" + "\n".join(lines) + "\n\n")
@@ -199,7 +206,7 @@ jobs:
             const plan = process.env.PLAN || '(no plan output captured)';
             const outcome = process.env.OUTCOME;
             let guard = '';
-            try { guard = fs.readFileSync('guard.md', 'utf8'); } catch (e) {}
+            try { guard = fs.readFileSync('terraform/guard.md', 'utf8'); } catch (e) {}
             const body = [
               `### terraform plan (${outcome})`,
               ...(guard ? [guard] : []),
