@@ -78,7 +78,9 @@ resource "proxmox_virtual_environment_container" "n8n" {
   }
 
   lifecycle {
-    ignore_changes = [operating_system]
+    # Import-only: root@pam-created (keyctl); the API token cannot recreate it. Retire via #124.
+    prevent_destroy = true
+    ignore_changes  = [operating_system]
   }
 }
 
@@ -149,7 +151,9 @@ resource "proxmox_virtual_environment_container" "pub" {
   }
 
   lifecycle {
-    ignore_changes = [operating_system]
+    # Import-only: NAS bind mount is root@pam-only; the API token cannot recreate it.
+    prevent_destroy = true
+    ignore_changes  = [operating_system]
   }
 }
 
@@ -213,7 +217,9 @@ resource "proxmox_virtual_environment_container" "grafana_stack" {
   }
 
   lifecycle {
-    ignore_changes = [operating_system]
+    # Import-only: build template is gone and state is unrebuildable; guarded.
+    prevent_destroy = true
+    ignore_changes  = [operating_system]
   }
 }
 
@@ -272,6 +278,7 @@ resource "proxmox_virtual_environment_container" "lunaria" {
   }
 
   lifecycle {
+    # Pipeline-recreatable (token-created, no keyctl/bind mount): not guarded.
     ignore_changes = [operating_system]
   }
 }

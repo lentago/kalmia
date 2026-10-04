@@ -188,6 +188,31 @@ unsupported — fine here, `ha-manager` is deliberately unused (VM 100 pinning).
 - Read the full plan before declaring a diff benign — the whole diff, not a
   grep of it.
 
+## Destroy guards — which guests carry `prevent_destroy` (#50)
+
+The bpg provider treats some edits (e.g. adding a `mount_point`) as ForceNew,
+and an API-token apply cannot recreate guests that need `root@pam`-only
+features (bind mounts, `keyctl`). The 2026-07-12 CT 113 destruction was exactly
+that. `prevent_destroy = true` turns a destroy into a hard plan-time failure.
+Rule: guard every guest the token pipeline cannot rebuild; leave
+pipeline-recreatable guests unguarded so ordinary replacements still work.
+
+| Guest | Resource | Guarded | Class / why |
+|---|---|---|---|
+| n8n CT 113 | `container.n8n` | yes | Import-only: `keyctl`, root@pam-created. Stays guarded until its two-step retirement (#124) |
+| pub CT 114 | `container.pub` | yes | Import-only: NAS bind mount is root@pam-only |
+| grafana-stack CT 105 | `container.grafana_stack` | yes | Import-only: build template gone, live state unrebuildable |
+| xubuntu-ws VM 102, fedora-ws VM 104 | `vm.xubuntu_ws`, `vm.fedora_ws` | yes | Import-only: workstation disks hold unrecoverable state |
+| testbeds VM 120, 121 | `vm.testbed` | yes | Import-only: disks and `pristine` snapshots can't be rebuilt by the pipeline |
+| k3s CT 119, 122 | `container.k3s` | yes | `keyctl` ⇒ root@pam pre-create + import (see Rails below), so effectively import-only |
+| HAOS VM 100 | `vm.haos` | yes | Hardware-pinned USB radios (since #28) |
+| backup jobs | `backup-jobs.tf` | yes | Pre-existing |
+| lunaria CT 118 | `container.lunaria` | no | Pipeline-recreatable: token-created, no keyctl/bind mount |
+| gha-runner CT 115 | `container.gha_runner` | no | Pipeline-recreatable: token-created, no keyctl/bind mount. Note it runs this pipeline, so a self-replace mid-apply would need manual recovery |
+
+Intentionally replacing a guarded guest means removing the guard in a
+dedicated PR first (and, for import-only guests, pre-creating as root@pam).
+
 ## Rails — non-`nesting` feature flags require root@pam pre-create
 
 PVE enforces a privilege boundary on LXC feature flags: the `terraform@pve`

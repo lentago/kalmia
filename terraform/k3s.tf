@@ -112,8 +112,11 @@ resource "proxmox_virtual_environment_container" "k3s" {
   }
 
   lifecycle {
+    # Import-only in practice: keyctl is root@pam-only (see README § Rails), so the
+    # token cannot recreate these; guarded.
+    prevent_destroy = true
     # template_file_id is create-only and cannot be reconciled later — same
     # guard the other created/imported containers carry (see lunaria, 118).
-    ignore_changes = [operating_system]
+    ignore_changes  = [operating_system]
   }
 }
