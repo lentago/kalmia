@@ -15,7 +15,7 @@ own their capacity. kalmia keeps every other guest, including LXC 115
 Since #30 the layer also owns the cluster's two vzdump **backup jobs**
 ([`backup-jobs.tf`](backup-jobs.tf)) — the backup *policy* sits under the
 same drift detection as the guests it protects. Read that file's header
-before touching them: two live fields are unmanaged by the provider.
+before touching them: `guests-weekly` depends on its `exclude = ["100"]`.
 
 Suite boundary (2026-07-04): **kalmia = local infra, solidago = cloud infra.**
 
@@ -159,11 +159,11 @@ its plans are reviewed with extra care.
       is circular and a bad apply could lock out the runner; it stays a
       bootstrap concern.
 - [x] **4 — backup jobs**: the two cluster vzdump jobs (`haos-4h`,
-      `guests-weekly`) imported to a clean `plan: no changes` (#30). Provider
-      v0.111.1 cannot express `comment` or the weekly job's `exclude 100` —
-      both stay unmanaged live fields, guarded by `prevent_destroy`; adopting
-      upstream `exclude` (bpg/proxmox#2983) once released is #104. See the
-      [`backup-jobs.tf`](backup-jobs.tf) header before touching these jobs.
+      `guests-weekly`) imported to a clean `plan: no changes` (#30). Their
+      `comment` and the weekly job's `exclude 100` were live-only until
+      provider v0.115.0; both are now in config (#104), with
+      `prevent_destroy` kept. See the [`backup-jobs.tf`](backup-jobs.tf)
+      header before touching these jobs.
 
 **All 9 guests kalmia owns are under Terraform.** The bullpen runner pool
 (110–112, 116–117 — grown to five workers in #34/#35) was released to
