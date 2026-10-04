@@ -117,6 +117,6 @@ resource "proxmox_virtual_environment_container" "k3s" {
     prevent_destroy = true
     # template_file_id is create-only and cannot be reconciled later — same
     # guard the other created/imported containers carry (see lunaria, 118).
-    ignore_changes  = [operating_system]
+    ignore_changes = [operating_system]
   }
 }
