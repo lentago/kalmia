@@ -66,6 +66,57 @@
     state: started
   become: true
 
+# Handlers must flush before the read-back or sysfs still holds pre-restart
+# values (#85).
+- name: Apply pending TLP restarts before verifying thresholds
+  ansible.builtin.meta: flush_handlers
+
+- name: Check for the battery charge-threshold sysfs nodes
+  ansible.builtin.stat:
+    path: "/sys/class/power_supply/{{ tlp_battery }}/{{ item }}"
+  loop:
+    - charge_control_start_threshold
+    - charge_control_end_threshold
+  register: tlp_threshold_nodes
+  when:
+    - not ansible_check_mode
+    - tlp_start_charge_threshold is not none
+    - tlp_stop_charge_threshold is not none
+
+- name: Read back the applied start charge threshold
+  ansible.builtin.slurp:
+    src: "/sys/class/power_supply/{{ tlp_battery }}/charge_control_start_threshold"
+  register: tlp_applied_start
+  when:
+    - tlp_threshold_nodes is not skipped
+    - tlp_threshold_nodes.results | map(attribute='stat.exists') | min
+
+- name: Read back the applied stop charge threshold
+  ansible.builtin.slurp:
+    src: "/sys/class/power_supply/{{ tlp_battery }}/charge_control_end_threshold"
+  register: tlp_applied_stop
+  when:
+    - tlp_threshold_nodes is not skipped
+    - tlp_threshold_nodes.results | map(attribute='stat.exists') | min
+
+- name: Assert the charge thresholds reached sysfs
+  ansible.builtin.assert:
+    that:
+      - (tlp_applied_start.content | b64decode | trim | int) == (tlp_start_charge_threshold | int)
+      - (tlp_applied_stop.content | b64decode | trim | int) == (tlp_stop_charge_threshold | int)
+    fail_msg: >-
+      {{ tlp_battery }} charge thresholds in sysfs are
+      {{ tlp_applied_start.content | b64decode | trim }}/{{ tlp_applied_stop.content | b64decode | trim }}
+      (start/stop), expected {{ tlp_start_charge_threshold }}/{{ tlp_stop_charge_threshold }}.
+      The drop-in was written but another file in /etc/tlp.d/ is likely
+      overriding it: TLP reads /etc/tlp.d/*.conf in lexical order and the last
+      file wins, so anything sorting after 01-charge-thresholds.conf takes
+      precedence. Check with `tlp-stat -c`. Set tlp_assert_thresholds=false to
+      report this as an ignored failure instead of stopping.
+    quiet: true
+  ignore_errors: "{{ not (tlp_assert_thresholds | bool) }}"
+  when: tlp_applied_start is not skipped
+
 - name: Install fwupd
   ansible.builtin.package:
     name: "{{ fwupd_package }}"
