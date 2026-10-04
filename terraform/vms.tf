@@ -4,7 +4,7 @@
 #
 # Safety: every VM sets reboot_after_update = false — an imported guest must
 # never be rebooted by a config write Terraform makes during reconciliation.
-# HAOS (100) additionally carries prevent_destroy.
+# Every imported VM carries prevent_destroy (#50); see README.md § Destroy guards.
 #
 # Power state (#38): workstations and testbeds ignore `started` — their
 # momentary power is operator-/test-driven, and an apply must neither boot a
@@ -63,7 +63,9 @@ resource "proxmox_virtual_environment_vm" "xubuntu_ws" {
   # Momentary power is operator-driven (parked when unused) — manage shape,
   # not the power button. `started` is the create-time baseline only.
   lifecycle {
-    ignore_changes = [started]
+    # Import-only: imported disk/state is unrebuildable by the token; guarded.
+    prevent_destroy = true
+    ignore_changes  = [started]
   }
 }
 
@@ -121,7 +123,9 @@ resource "proxmox_virtual_environment_vm" "fedora_ws" {
 
   # Power: operator-driven — see xubuntu_ws.
   lifecycle {
-    ignore_changes = [started]
+    # Import-only: imported disk/state is unrebuildable by the token; guarded.
+    prevent_destroy = true
+    ignore_changes  = [started]
   }
 }
 
@@ -199,7 +203,9 @@ resource "proxmox_virtual_environment_vm" "testbed" {
   # Power cycles with the test loop (boot → provision → snapshot rollback);
   # an apply landing mid-run must never stop a testbed under test.
   lifecycle {
-    ignore_changes = [started]
+    # Import-only: imported disk + `pristine` snapshot are unrebuildable; guarded.
+    prevent_destroy = true
+    ignore_changes  = [started]
   }
 }
 

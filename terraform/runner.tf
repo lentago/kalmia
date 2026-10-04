@@ -3,6 +3,8 @@
 # workflow so merges to main can reach the LAN-only PVE API. In-guest
 # bootstrap (runner agent, systemd service) is documented in README.md § CI.
 
+# Pipeline-recreatable (token-created, no keyctl/bind mount) — deliberately NOT
+# prevent_destroy-guarded; see README.md § Destroy guards.
 resource "proxmox_virtual_environment_container" "gha_runner" {
   node_name     = "pve4"
   vm_id         = 115
