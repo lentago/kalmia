@@ -149,6 +149,44 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           exit "$PLAN_EXIT"
 
+      # ForceNew guard (#53): a plan that deletes/replaces a guest must carry an
+      # explicit human ack in the PR body. Parses the saved plan with python3
+      # (jq isn't guaranteed on LXC 115). The PR body reaches the script via env,
+      # never interpolated into the shell.
+      - name: Guard guest destroy/replace
+        id: guard
+        if: steps.plan.outcome == 'success'
+        continue-on-error: true
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          terraform show -json tfplan > tfplan.json
+          python3 - <<'PY'
+          import json, os, sys
+          GUEST_TYPES = {
+              "proxmox_virtual_environment_container",
+              "proxmox_virtual_environment_vm",
+          }
+          ACK = "- [x] Guest recreate feasibility verified"
+          plan = json.load(open("tfplan.json"))
+          hits = [
+              (rc["address"], "replace" if "create" in rc["change"]["actions"] else "destroy")
+              for rc in plan.get("resource_changes", [])
+              if rc.get("type") in GUEST_TYPES and "delete" in rc["change"]["actions"]
+          ]
+          lines = [f"- `{addr}` ({kind})" for addr, kind in hits]
+          acked = ACK in (os.environ.get("PR_BODY") or "")
+          with open("guard.md", "w") as f:
+              if hits:
+                  f.write("**Guest destroy/replace detected:**\n" + "\n".join(lines) + "\n\n")
+                  f.write("Acknowledged in PR body.\n" if acked else
+                          f"Blocked: tick `{ACK}` in the PR body (then re-run this job) after confirming the guest is recreatable by `terraform@pve!kalmia` and a recent vzdump exists. See terraform/README.md § ForceNew guard.\n")
+          if hits and not acked:
+              print("\n".join(lines))
+              print(f"::error::Plan deletes/replaces guest(s); PR body must contain: {ACK}")
+              sys.exit(1)
+          PY
+
       - name: comment on PR
         if: always()
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -157,10 +195,14 @@ jobs:
           OUTCOME: ${{ steps.plan.outcome }}
         with:
           script: |
+            const fs = require('fs');
             const plan = process.env.PLAN || '(no plan output captured)';
             const outcome = process.env.OUTCOME;
+            let guard = '';
+            try { guard = fs.readFileSync('guard.md', 'utf8'); } catch (e) {}
             const body = [
               `### terraform plan (${outcome})`,
+              ...(guard ? [guard] : []),
               '```',
               plan,
               '```',
@@ -174,6 +216,10 @@ jobs:
 
       - name: Fail if terraform plan failed
         if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+      - name: Fail if guest destroy/replace is unacknowledged
+        if: steps.guard.outcome == 'failure'
         run: exit 1
 
   apply:

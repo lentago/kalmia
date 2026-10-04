@@ -95,6 +95,26 @@ key + the lock table only), and reaches PVE via the `PROXMOX_VE_API_TOKEN`
 repo secret. The `apply` job serializes under a `terraform-apply` concurrency
 group.
 
+### ForceNew guard (#53)
+
+A ForceNew attribute change makes the provider destroy and recreate a guest
+(this is how CT 113 was lost on 2026-07-12), and the recreate can fail
+post-merge if it needs `root@pam`-only settings (see Rails below). Two layers:
+
+- **PR template** — the Terraform checklist asks the author to review the plan
+  for destroy/replace, confirm the guest is recreatable by `terraform@pve!kalmia`
+  (no bind mounts / `keyctl` / other `root@pam`-only settings, else pre-create),
+  and confirm a recent `vzdump` exists.
+- **`plan` job guard** — after `terraform plan -out=tfplan`, the workflow parses
+  `terraform show -json tfplan` (python3; no `jq` dependency) and lists every
+  `proxmox_virtual_environment_container` / `_vm` whose actions include
+  `delete` (destroy or replace) in the PR plan comment. The job **fails unless
+  the PR body contains the exact line** `- [x] Guest recreate feasibility verified`,
+  which blocks the `gate`. Ticking the box does not retrigger the workflow
+  (`edited` isn't a trigger) — re-run the `plan` job after editing the body.
+  No labels are used (they're IaC-managed in `lentago/.github`). The Dependabot
+  skip on `plan` is unchanged.
+
 ### Runner notes (LXC 115)
 
 - Agent in `/opt/actions-runner`, runs as user `runner`, systemd service
