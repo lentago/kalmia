@@ -3,16 +3,12 @@
 # on pve (i.e. /etc/pve/jobs.cfg). This puts the backup *policy* under the
 # same drift detection as the guests it protects.
 #
-# Provider limitation (v0.111.1): `proxmox_backup_job` tracks neither `comment`
-# nor the VMID `exclude` list. Both live jobs carry a comment, and
-# guests-weekly relies on `all 1` + `exclude 100` (everything EXCEPT HAOS).
-# Terraform leaves those two fields unmanaged: import and in-place updates
-# never touch them (the PVE update API is partial and the provider only
-# deletes keys it knows), but a destroy/recreate would drop them — recreating
-# guests-weekly without `exclude 100` would silently pull VM 100 into the
-# weekly job on top of its 4-hourly one. Hence `prevent_destroy` on both.
-# Upstream `exclude` support landed in bpg/terraform-provider-proxmox#2983
-# (post-v0.111.1, unreleased); adopting it once released is tracked in #104.
+# `comment` and the VMID `exclude` list were unmanaged live state until
+# provider v0.112.0 (exclude, bpg/terraform-provider-proxmox#2983) and
+# v0.115.0 (comment, #3107); both are now modelled and match jobs.cfg (#104).
+# guests-weekly's selection is `all 1` + `exclude 100` (everything EXCEPT
+# HAOS) — keep the pair together. `prevent_destroy` stays on both: a
+# recreate is still a backup-policy gap, even if it no longer loses fields.
 
 import {
   to = proxmox_backup_job.haos_4h
@@ -24,6 +20,7 @@ resource "proxmox_backup_job" "haos_4h" {
   schedule = "*/4:00"
   storage  = "neptune"
   enabled  = true
+  comment  = "HAOS 4-hourly auto-backup"
 
   # VM 100 (HAOS) only — the mission-critical ~4h RPO.
   vmid = ["100"]
@@ -42,8 +39,8 @@ resource "proxmox_backup_job" "haos_4h" {
   }
 
   lifecycle {
-    # Losing this job breaks the ~4h HAOS RPO, and recreation would drop the
-    # unmanaged comment. Deliberate removal = flip this flag first.
+    # Losing this job breaks the ~4h HAOS RPO. Deliberate removal = flip
+    # this flag first.
     prevent_destroy = true
   }
 }
@@ -58,11 +55,13 @@ resource "proxmox_backup_job" "guests_weekly" {
   schedule = "sun 03:00"
   storage  = "neptune"
   enabled  = true
+  comment  = "Non-critical guests weekly auto-backup"
 
-  # All guests except VM 100 — the exclusion lives in the unmanaged
-  # `exclude 100` field (see file header). Do not "fix" a plan diff here by
-  # dropping `all`; the live pairing is `all 1` + `exclude 100`.
-  all = true
+  # All guests except VM 100 (HAOS has its own 4-hourly job). The live
+  # pairing is `all 1` + `exclude 100`; dropping `exclude` would silently
+  # pull HAOS into the weekly job.
+  all     = true
+  exclude = ["100"]
 
   mode     = "snapshot"
   compress = "zstd"
@@ -76,8 +75,8 @@ resource "proxmox_backup_job" "guests_weekly" {
   }
 
   lifecycle {
-    # Recreation would drop the unmanaged `exclude 100` (and comment) — the
-    # weekly job would silently start including HAOS. See file header.
+    # Losing this job leaves every non-HAOS guest without backups.
+    # Deliberate removal = flip this flag first.
     prevent_destroy = true
   }
 }
