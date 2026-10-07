@@ -223,3 +223,54 @@
     - brasenia-focus
   become: true
   when: pub_viewport_enabled
+
+# ---------------------------------------------------------------------------
+# Caddy config (kalmia#144) — the Caddyfile and the directory-listing template
+# that make http://pub.lan/ a browsable, sortable index of the web share. Only
+# the *config* is managed here: the caddy package comes from the upstream apt
+# repo and is still installed by hand (docs/pub.md), so this block warns and
+# skips when the binary is absent rather than failing the play. The template
+# is deployed before the Caddyfile because `caddy validate` provisions the
+# file server, which parses the template the Caddyfile points at.
+# ---------------------------------------------------------------------------
+- name: Check whether Caddy is installed
+  ansible.builtin.stat:
+    path: /usr/bin/caddy
+  register: pub_caddy_bin
+  when: pub_caddy_manage_config
+
+- name: Warn when Caddy is not installed
+  ansible.builtin.debug:
+    msg: >-
+      /usr/bin/caddy is missing, so the Caddy config was not deployed. Install
+      caddy from the upstream apt repo per docs/pub.md and re-run the play.
+  when:
+    - pub_caddy_manage_config
+    - not pub_caddy_bin.stat.exists
+
+- name: Deploy the directory-listing template
+  ansible.builtin.copy:
+    src: caddy/browse.html
+    dest: /etc/caddy/browse.html
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when:
+    - pub_caddy_manage_config
+    - pub_caddy_bin.stat.exists
+  notify: Reload caddy
+
+- name: Deploy the Caddyfile
+  ansible.builtin.copy:
+    src: caddy/Caddyfile
+    dest: /etc/caddy/Caddyfile
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/bin/caddy validate --adapter caddyfile --config %s
+  become: true
+  when:
+    - pub_caddy_manage_config
+    - pub_caddy_bin.stat.exists
+  notify: Reload caddy

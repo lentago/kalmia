@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{if eq .Path "/"}}pub.lan — Home publish target{{else}}{{html .Path}} — pub.lan{{end}}</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 16px/1.6 system-ui, sans-serif; max-width: 52rem; margin: 3rem auto; padding: 0 1.5rem; }
+  h1 { font-size: 2rem; margin-bottom: 0; }
+  h2 { font-size: 1.1rem; margin: 2rem 0 .5rem; }
+  .sub { color: #888; margin-top: .25rem; }
+  code { background: rgba(127,127,127,.18); padding: .15em .4em; border-radius: 4px; font-size: .9em; }
+  .card { border: 1px solid rgba(127,127,127,.25); border-radius: 10px; padding: 1rem 1.25rem; margin: 1.5rem 0; }
+  a { color: #3b82f6; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+  th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid rgba(127,127,127,.2); }
+  th { color: #888; font-weight: 600; font-size: .8em; text-transform: uppercase; letter-spacing: .04em; }
+  th a { color: inherit; white-space: nowrap; }
+  th a:hover { color: #3b82f6; text-decoration: none; }
+  th a.active { color: #3b82f6; }
+  th .arrow { margin-left: .35em; font-size: .85em; }
+  td.size, td.date { color: #888; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr.dir a { font-weight: 600; }
+  .muted { color: #999; }
+  footer { color: #999; font-size: .85em; margin-top: 3rem; }
+</style>
+</head>
+<body>
+{{- if eq .Path "/" }}
+  <h1>pub.lan</h1>
+  <p class="sub">Always-on LAN webserver &middot; Caddy on LXC 114 (pve4) &middot; 192.168.139.9</p>
+
+  <div class="card">
+    <p><strong>This is a drop target.</strong> Anything placed in the NAS
+    <code>lentago</code> share under <code>web/</code> is served here live — files
+    render, folders become browsable indexes.</p>
+    <p style="margin-bottom:.3rem"><strong>How to publish:</strong></p>
+    <ul style="margin-top:.4rem; margin-bottom:.4rem">
+      <li>From the laptop: write to <code>/mnt/lentago/web/</code></li>
+      <li>From the runner fleet / PVE host: <code>/mnt/neptune-lentago/web/</code></li>
+      <li>Inside the container it&rsquo;s mounted at <code>/srv/www</code></li>
+    </ul>
+    <p class="muted" style="margin-bottom:0">Drop an <code>index.html</code> in a subfolder and
+    that folder renders as a page; drop loose files and the folder shows a listing like the one below.</p>
+  </div>
+  <h2>Published now</h2>
+{{- else }}
+  <h1 style="font-size:1.4rem">Index of {{html .Path}}</h1>
+  <p class="sub"><a href="/">&larr; pub.lan</a></p>
+{{- end }}
+
+{{- /* Sorting rides on Caddy's own browse parameters: ?sort=namedirfirst|size|time
+       and ?order=asc|desc. Caddy sorts the items server-side, remembers the choice
+       in `sort`/`order` cookies, and exposes the effective values as .Sort/.Order.
+       Clicking the active column flips the order; a fresh column starts with the
+       useful direction (names A→Z, sizes and dates largest/newest first). */}}
+{{- $sort := .Sort }}
+{{- $order := .Order }}
+{{- $byName := or (eq $sort "namedirfirst") (eq $sort "name") }}
+  <table>
+    <thead>
+      <tr>
+        <th><a class="{{if $byName}}active{{end}}" href="?sort=namedirfirst&amp;order={{if and $byName (eq $order "asc")}}desc{{else}}asc{{end}}">Name{{if $byName}}<span class="arrow">{{if eq $order "asc"}}&#9650;{{else}}&#9660;{{end}}</span>{{end}}</a></th>
+        <th><a class="{{if eq $sort "size"}}active{{end}}" href="?sort=size&amp;order={{if and (eq $sort "size") (eq $order "desc")}}asc{{else}}desc{{end}}">Size{{if eq $sort "size"}}<span class="arrow">{{if eq $order "asc"}}&#9650;{{else}}&#9660;{{end}}</span>{{end}}</a></th>
+        <th><a class="{{if eq $sort "time"}}active{{end}}" href="?sort=time&amp;order={{if and (eq $sort "time") (eq $order "desc")}}asc{{else}}desc{{end}}">Modified{{if eq $sort "time"}}<span class="arrow">{{if eq $order "asc"}}&#9650;{{else}}&#9660;{{end}}</span>{{end}}</a></th>
+      </tr>
+    </thead>
+    <tbody>
+    {{- if .CanGoUp }}
+      <tr class="dir"><td><a href="..">../</a></td><td class="size muted">—</td><td class="date muted">—</td></tr>
+    {{- end }}
+    {{- range .Items }}
+      <tr class="{{if .IsDir}}dir{{end}}">
+        <td><a href="{{html .URL}}">{{html .Name}}</a></td>
+        <td class="size">{{if .IsDir}}<span class="muted">—</span>{{else}}{{.HumanSize}}{{end}}</td>
+        <td class="date">{{.HumanModTime "Jan 2, 2006 15:04"}}</td>
+      </tr>
+    {{- end }}
+    </tbody>
+  </table>
+
+  <footer>{{.NumDirs}} folder{{if ne .NumDirs 1}}s{{end}}, {{.NumFiles}} file{{if ne .NumFiles 1}}s{{end}} &middot; Served by Caddy &middot; managed by Home Claude</footer>
+</body>
+</html>

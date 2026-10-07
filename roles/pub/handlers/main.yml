@@ -9,3 +9,12 @@
     - brasenia-focus.service
   become: true
   when: pub_viewport_enabled
+
+# The packaged caddy.service reloads with `caddy reload --force`, so a changed
+# browse template is re-read even when the Caddyfile itself did not change.
+- name: Reload caddy
+  ansible.builtin.systemd_service:
+    name: caddy.service
+    state: reloaded
+  become: true
+  when: pub_caddy_manage_config

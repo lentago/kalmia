@@ -1,0 +1,15 @@
+# pub.lan — Claude/LAN publish target. Serves the NAS drop folder with
+# directory browsing. Drop files/folders into the lentago share under web/
+# (laptop: /mnt/lentago/web, fleet/PVE host: /mnt/neptune-lentago/web) and
+# they appear live. Add `reverse_proxy /app/* localhost:PORT` here later
+# for dynamic content.
+#
+# Managed by kalmia (roles/pub/files/caddy/Caddyfile) — edit there, then
+# re-run pub.yml on the container; the role validates and reloads Caddy.
+:80 {
+	root * /srv/www
+	encode gzip
+	file_server {
+		browse /etc/caddy/browse.html
+	}
+}

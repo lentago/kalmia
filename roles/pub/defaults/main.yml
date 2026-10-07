@@ -2,10 +2,18 @@
 # ============================================================================
 # pub — Morning Brief publish relay for the pub LXC (114, pve4). Syncs the
 # claude.ai "Morning brief" routine's Google Drive output down to the web
-# root Caddy serves at http://pub.lan/brief/. Caddy itself is out of scope
-# here — see kalmia#54.
+# root Caddy serves at http://pub.lan/brief/. The caddy package itself stays
+# out of scope (kalmia#54); its config is managed by this role since kalmia#144.
 # ============================================================================
 pub_script_path: /usr/local/bin/publish-morning-brief
+
+# --- Caddy config (kalmia#144) -----------------------------------------------
+# roles/pub/files/caddy/{Caddyfile,browse.html} are the source of truth for
+# /etc/caddy on pub: the site block that serves the web share with directory
+# browsing, and the listing template with sortable Name / Size / Modified
+# headers. The caddy *package* (upstream apt repo) is not managed here; with the
+# binary absent the block warns and skips instead of failing the play.
+pub_caddy_manage_config: true
 pub_rclone_config_dir: /root/.config/rclone
 pub_rclone_config_path: "{{ pub_rclone_config_dir }}/rclone.conf"
 
