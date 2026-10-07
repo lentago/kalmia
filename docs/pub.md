@@ -33,6 +33,15 @@ server-side and remembers the choice in `sort`/`order` cookies, so it carries
 across folders; no JavaScript is involved. `http://pub.lan/?sort=time&order=desc`
 is the "what was just published" view.
 
+One path is not a file: `handle /viewport/pipeline.json` forwards requests to
+drosera's pipeline producer on LXC 105 (`grafana-stack`, 192.168.139.20:8611;
+#146, lentago/drosera#266). That guest holds the Loki credentials but mounts no
+web share, so the change-pipeline document reaches the viewport bus (the
+`web/viewport/` folder on the share, where brasenia's producers read and write
+the wall display's panes) through pub rather than as a file on the share, and
+pub keeps no credential of its own (brasenia ADR-0005). While the producer is down the path answers 502; the brasenia
+producers read that as "no rows". Check: `curl -s http://pub.lan/viewport/pipeline.json | jq .schema`.
+
 The caddy package is not installed by the role. On a rebuild, install it from
 the upstream repo first (the Debian/Ubuntu steps at
 <https://caddyserver.com/docs/install#debian-ubuntu-raspbian>; the container
