@@ -1,5 +1,5 @@
 # ============================================================================
-# ShellCheck — static analysis of bootstrap.sh (the one surviving shell shim).
+# ShellCheck — static analysis of every tracked *.sh (bootstrap.sh, forge/runner/*.sh).
 # Thin wrapper around lentago/shared-workflows/shellcheck.yml. No `scripts`
 # input → discovers all *.sh files in the repo.
 # ============================================================================
