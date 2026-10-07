@@ -50,9 +50,11 @@ never blank the display. First pane: the praxis Obsidian-graph
 (`http://pub.lan/praxis/graph/tv.html`, regenerated on every praxis wiki
 publish).
 
-**Following the viewport pointer** (#142, the Roku/HLS adapter for
-brasenia#26): `lunaria-frames` polls `lunaria_pointer_url`
-(`http://pub.lan/viewport/current.json`, the compositor's decision) every
+**Following the viewport pointer** (#142). The viewport pointer is the file
+the brasenia compositor writes on pub, `http://pub.lan/viewport/current.json`,
+naming what the wall should show right now; this runtime is the Roku/HLS
+adapter, the leg that turns that page into the video stream the Roku plays
+(brasenia#26). `lunaria-frames` polls `lunaria_pointer_url` every
 `lunaria_pointer_poll` seconds (5) over HTTP. When the pointer names a pane
 (`fallback` null) or the status card (`fallback: "status"`), the TV shows that
 URL alone, shot as a TV-contract page. When the pointer says
@@ -63,7 +65,9 @@ that updates in place is re-rendered. When the pointer is unreadable (pub
 down, a non-404 error, bad JSON, a schema other than 1), the existing pages
 keep rotating and the journal gets one line after 30 s, plus one when it is
 readable again; a failed shoot also keeps the existing pages and is retried
-after 30 s.
+after 30 s. Capture runs in the background (into `pages.next`, swapped in
+when complete), so a stalled Chromium never stops the rotation or the
+polling.
 
 ## Build / rebuild
 

@@ -43,7 +43,13 @@ except ValueError:
 if not isinstance(pointer, dict) or pointer.get("schema") != 1:
     unreadable("not a schema 1 pointer")
 
-decided = pointer.get("decided_at") or "-"
+decided = pointer.get("decided_at")
+if decided is None:
+    decided = "-"
+elif not isinstance(decided, str) or not decided or any(c.isspace() for c in decided):
+    # lunaria-frames reads one tab-separated line; a stray tab or newline here
+    # would hide a change and delay the re-shoot.
+    unreadable("malformed decided_at")
 fallback = pointer.get("fallback")
 url = pointer.get("url")
 if fallback == "briefing":
