@@ -1,34 +1,89 @@
 #!/usr/bin/env bash
-# Rotate the rendered brief pages through frame.png (the encoder's input),
-# re-shooting the source page every LUNARIA_REGEN_INTERVAL seconds. On shoot
-# failure the existing pages keep rotating — a stale brief beats a dead screen.
+# Rotate the rendered pages through frame.png (the encoder's input), showing
+# whatever the brasenia viewport pointer (LUNARIA_POINTER_URL, polled every
+# LUNARIA_POINTER_POLL seconds) names:
+#   pane / status        the pointer's url alone, shot as a TV-contract page
+#   briefing, or a 404   the brief plus LUNARIA_EXTRA_URLS (no compositor yet)
+# The rotation is re-shot when the pointer's url or decided_at changes, and
+# every LUNARIA_REGEN_INTERVAL seconds so a pane that updates in place is
+# re-rendered. An unreadable pointer or a failed shoot leaves the existing
+# pages rotating — a stale page beats a dead screen.
 set -euo pipefail
 
 HOME_DIR="${LUNARIA_HOME:-/var/lib/lunaria}"
 PAGES="${LUNARIA_PAGES:-$HOME_DIR/pages}"
 DWELL="${LUNARIA_PAGE_DWELL:-12}"
 REGEN="${LUNARIA_REGEN_INTERVAL:-600}"
+POLL="${LUNARIA_POINTER_POLL:-5}"
 TV_URL="${LUNARIA_TV_URL:-http://pub.lan/brief/tv.html}"
 FULL_URL="${LUNARIA_FULL_URL:-http://pub.lan/brief/}"
 EXTRA_URLS="${LUNARIA_EXTRA_URLS:-}"
+STALE=30   # seconds of unreadable pointer before it is logged (once)
+RETRY=30   # seconds before re-trying a target whose shoot failed
 
 cd "$HOME_DIR"
-last_gen=0
+
+kind="" url="" decided=""   # what the pointer wants shown ("" until read)
+shown=""                    # kind/url/decided_at whose pages are on disk
+last_gen=0                  # when the current pages were shot
+failed="" retry_at=0        # last target whose shoot failed, and when to retry
+bad_since=0 bad_logged=0    # unreadable-pointer bookkeeping
+idx=0 next_poll=0 next_flip=0
+
+shoot() {
+  if [ "$kind" = briefing ]; then
+    # shellcheck disable=SC2086  # EXTRA_URLS is a space-separated URL list
+    /usr/local/bin/lunaria-shooter "$TV_URL" "$FULL_URL" $EXTRA_URLS
+  else
+    /usr/local/bin/lunaria-shooter --pane "$url"
+  fi
+}
 
 while :; do
-  now=$(date +%s)
-  if (( now - last_gen > REGEN )); then
-    # shellcheck disable=SC2086  # EXTRA_URLS is a space-separated URL list
-    if /usr/local/bin/lunaria-shooter "$TV_URL" "$FULL_URL" $EXTRA_URLS; then
-      last_gen=$now
-      echo "pages regenerated"
+  printf -v now '%(%s)T' -1
+
+  if (( now >= next_poll )); then
+    next_poll=$(( now + POLL ))
+    if out=$(/usr/local/bin/lunaria-pointer 2>&1); then
+      if (( bad_logged )); then
+        echo "pointer readable again"
+      fi
+      bad_since=0 bad_logged=0
+      IFS=$'\t' read -r kind url decided <<<"$out"
     else
-      echo "shoot FAILED, keeping existing pages" >&2
+      (( bad_since )) || bad_since=$now
+      if (( ! bad_logged && now - bad_since >= STALE )); then
+        echo "pointer unreadable for ${STALE}s (${out:-no output}), keeping current pages" >&2
+        bad_logged=1
+        # Never read since start: fall back to today's brief rotation.
+        [ -n "$kind" ] || kind=briefing url=- decided=-
+      fi
     fi
   fi
-  for p in "$PAGES"/page-*.png; do
-    [ -e "$p" ] || continue
-    cp "$p" "frame.tmp.$$.png" && mv "frame.tmp.$$.png" frame.png
-    sleep "$DWELL"
-  done
+
+  want="$kind $url $decided"
+  if [ -n "$kind" ] && { [ "$want" != "$shown" ] || (( now - last_gen > REGEN )); } \
+     && { [ "$want" != "$failed" ] || (( now >= retry_at )); }; then
+    if shoot; then
+      printf -v now '%(%s)T' -1
+      shown=$want last_gen=$now failed="" idx=0 next_flip=0
+      echo "pages regenerated ($kind $url)"
+    else
+      printf -v now '%(%s)T' -1
+      failed=$want retry_at=$(( now + RETRY ))
+      echo "shoot FAILED ($kind $url), keeping existing pages" >&2
+    fi
+  fi
+
+  if (( now >= next_flip )); then
+    next_flip=$(( now + DWELL ))
+    pages=("$PAGES"/page-*.png)
+    if [ -e "${pages[0]}" ]; then
+      (( idx < ${#pages[@]} )) || idx=0
+      cp "${pages[idx]}" "frame.tmp.$$.png" && mv "frame.tmp.$$.png" frame.png
+      idx=$(( idx + 1 ))
+    fi
+  fi
+
+  sleep 1
 done

@@ -11,6 +11,11 @@ contract — e.g. the praxis Obsidian-graph pane): each is shot like a TV
 edition and its screens are appended to the rotation. An unreachable or
 failing extra pane is skipped so it can never take the brief down with it.
 
+`lunaria-shooter --pane URL` shoots URL alone as a TV-contract page (the
+viewport pointer's winning pane or status card) and replaces the rotation
+with its screens. It exits non-zero without touching the existing pages when
+URL is unreachable or the shot fails.
+
 Chromium notes: throwaway profile per shot (a persistent profile's HTTP cache
 once served a stale tv.html); --no-sandbox because unprivileged LXCs lack the
 user namespaces chromium's sandbox wants (input is our own pub.lan pages).
@@ -18,6 +23,7 @@ user namespaces chromium's sandbox wants (input is our own pub.lan pages).
 import os, shutil, subprocess, sys, tempfile, urllib.request
 from PIL import Image, ImageChops
 
+PANE_URL = sys.argv[2] if len(sys.argv) == 3 and sys.argv[1] == "--pane" else None
 TV_URL = sys.argv[1] if len(sys.argv) > 1 else "http://pub.lan/brief/tv.html"
 FULL_URL = sys.argv[2] if len(sys.argv) > 2 else "http://pub.lan/brief/"
 EXTRA_URLS = sys.argv[3:]
@@ -73,6 +79,14 @@ def shoot_tv(url):
     n = max(1, -(-content_bottom // PAGE_H))          # ceil to whole screens
     return [im.crop((0, i * PAGE_H, W, (i + 1) * PAGE_H)) for i in range(n)]
 
+
+if PANE_URL:
+    if not reachable(PANE_URL):
+        sys.exit(f"pane {PANE_URL} unreachable")
+    pages = shoot_tv(PANE_URL)
+    write_pages(pages)
+    print(f"{len(pages)} page(s) (pane {PANE_URL})")
+    sys.exit(0)
 
 if reachable(TV_URL):
     pages = shoot_tv(TV_URL)
