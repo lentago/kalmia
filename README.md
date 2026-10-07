@@ -2,7 +2,7 @@
      Regenerate there; do not hand-edit the banner or badge URLs. -->
 <a href="https://lentago.dev"><img src="./assets/banner.svg" alt="kalmia — Provisioning · workstations, VMs, containers" width="100%"></a>
 
-[![main](https://img.shields.io/github/check-runs/lentago/kalmia/main?style=flat-square&labelColor=0e2b1a&color=1b4b2e&label=main)](https://github.com/lentago/kalmia/actions) [![License](https://img.shields.io/github/license/lentago/kalmia?style=flat-square&labelColor=0e2b1a&color=1b4b2e)](https://github.com/lentago/kalmia/blob/main/LICENSE) [![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-1b4b2e?style=flat-square&labelColor=0e2b1a&logo=readthedocs&logoColor=E0A81C)](https://deepwiki.com/lentago/kalmia)
+[![main](https://img.shields.io/github/check-runs/lentago/kalmia/main?style=flat-square&labelColor=0e2b1a&color=1b4b2e&label=main)](https://github.com/lentago/kalmia/actions) [![License](https://img.shields.io/github/license/lentago/kalmia?style=flat-square&labelColor=0e2b1a&color=1b4b2e)](https://github.com/lentago/kalmia/blob/main/LICENSE)
 
 ![Terraform](https://img.shields.io/badge/Terraform-1b4b2e?style=flat-square&labelColor=0e2b1a&logo=terraform&logoColor=E0A81C) ![Ansible](https://img.shields.io/badge/Ansible-1b4b2e?style=flat-square&labelColor=0e2b1a&logo=ansible&logoColor=E0A81C) ![Proxmox](https://img.shields.io/badge/Proxmox-1b4b2e?style=flat-square&labelColor=0e2b1a&logo=proxmox&logoColor=E0A81C)
 
@@ -75,28 +75,6 @@ same toolchain, prompt, and workflow, expressed as Ansible roles instead of
 with [Claude](https://claude.ai) (Anthropic). I direct the work and review the
 output; Claude writes the code. I'm an infrastructure operator, not a software
 engineer — please don't read this repo as a portfolio of coding ability.
-
-## 📚 Ask this codebase (DeepWiki)
-
-<a href="https://deepwiki.com/lentago/kalmia"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki" height="32"></a>
-
-> [DeepWiki](https://deepwiki.com/lentago/kalmia) maintains an AI-generated wiki
-> over this repository — architecture pages, diagrams, and a Q&A box grounded in
-> the actual code. Every public Lentago Labs repo is indexed
-> ([deepwiki.com/lentago](https://deepwiki.com/lentago)); it is the fastest way
-> to orient before reading source. It is AI-generated: trust it to orient you,
-> verify against the code before you act on it.
-
-**Good first questions:**
-
-- How does kalmia's terraform apply avoid two concurrent merges racing on the
-  same Proxmox state, and what runner executes the apply?
-- What is the two-layer design of the forge runner image, and why does the
-  software layer stay unbaked and always-main instead of pinned into the image?
-- Which Ansible role or terraform resource currently still uses the legacy
-  `lunaria` name, and what does issue
-  [#63](https://github.com/lentago/kalmia/issues/63) track to complete the
-  brasenia rename?
 
 ## 🧭 What this repo demonstrates
 
@@ -319,7 +297,6 @@ artifact worth knowing about, not worth churning to fix.
 > 🌱 **Lentago Labs** is a pro-bono operations practice for organizations that
 > run on volunteers, donations, and one overworked tech person. Everything here
 > is free to take, and we practice what we publish: our own estate runs this
-> way, in the open. Start at the [org profile](https://github.com/lentago), and
-> read this repo on [DeepWiki](https://deepwiki.com/lentago/kalmia).
+> way, in the open. Start at the [org profile](https://github.com/lentago).
 
 *Part of the [Lentago Labs](https://github.com/lentago) portfolio.*
