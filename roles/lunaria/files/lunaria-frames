@@ -1,34 +1,137 @@
 #!/usr/bin/env bash
-# Rotate the rendered brief pages through frame.png (the encoder's input),
-# re-shooting the source page every LUNARIA_REGEN_INTERVAL seconds. On shoot
-# failure the existing pages keep rotating — a stale brief beats a dead screen.
+# Rotate the rendered pages through frame.png (the encoder's input), showing
+# whatever the brasenia viewport pointer (LUNARIA_POINTER_URL, polled every
+# LUNARIA_POINTER_POLL seconds) names:
+#   pane / status        the pointer's url alone, shot as a TV-contract page
+#   briefing, or a 404   the brief plus LUNARIA_EXTRA_URLS (no compositor yet)
+# The rotation is re-shot when the pointer's url or decided_at changes, and
+# every LUNARIA_REGEN_INTERVAL seconds so a pane that updates in place is
+# re-rendered. Capture runs in the background into pages.next and is swapped
+# in when it finishes, so a stalled chromium never stops the rotation or the
+# pointer polling. An unreadable pointer or a failed shoot leaves the existing
+# pages rotating — a stale page beats a dead screen.
 set -euo pipefail
 
 HOME_DIR="${LUNARIA_HOME:-/var/lib/lunaria}"
 PAGES="${LUNARIA_PAGES:-$HOME_DIR/pages}"
+STAGE="$PAGES.next"   # a sibling of PAGES, so the swap below is one rename
 DWELL="${LUNARIA_PAGE_DWELL:-12}"
 REGEN="${LUNARIA_REGEN_INTERVAL:-600}"
+POLL="${LUNARIA_POINTER_POLL:-5}"
 TV_URL="${LUNARIA_TV_URL:-http://pub.lan/brief/tv.html}"
 FULL_URL="${LUNARIA_FULL_URL:-http://pub.lan/brief/}"
 EXTRA_URLS="${LUNARIA_EXTRA_URLS:-}"
+STALE=30   # seconds of unreadable pointer before it is logged (once)
+RETRY=30   # seconds before re-trying a target whose shoot failed
+
+for v in DWELL REGEN POLL; do
+  if ! [[ "${!v}" =~ ^[1-9][0-9]{0,8}$ ]]; then
+    echo "lunaria-frames: $v must be a positive integer of seconds, got '${!v}'" >&2
+    exit 1
+  fi
+done
 
 cd "$HOME_DIR"
-last_gen=0
+mkdir -p "$PAGES"
+
+kind="" url="" decided=""   # what the pointer wants shown ("" until read)
+shown=""                    # kind/url/decided_at whose pages are on disk
+last_gen=0                  # when the current pages were shot
+failed="" retry_at=0        # last target whose shoot failed, and when to retry
+bad_since=0 bad_logged=0    # unreadable-pointer bookkeeping
+idx=0 next_poll=0 next_flip=0
+shoot_pid=0 shoot_want=""   # background capture in flight, and its target
+shoot_log="$HOME_DIR/shoot.log"
+
+# Capture the current target into $STAGE in the background. The subshell
+# records the shooter's exit code in $STAGE/.rc when it is done; the loop
+# polls for that file (a zombie still answers kill -0, so that is no test).
+start_shoot() {
+  rm -rf "$STAGE"; mkdir -p "$STAGE"
+  shoot_want="$kind $url $decided"
+  (
+    set +e
+    if [ "$kind" = briefing ]; then
+      # shellcheck disable=SC2086  # EXTRA_URLS is a space-separated URL list
+      LUNARIA_PAGES="$STAGE" /usr/local/bin/lunaria-shooter "$TV_URL" "$FULL_URL" $EXTRA_URLS >"$shoot_log" 2>&1
+    else
+      LUNARIA_PAGES="$STAGE" /usr/local/bin/lunaria-shooter --pane "$url" >"$shoot_log" 2>&1
+    fi
+    echo $? >"$STAGE/.rc"
+  ) &
+  shoot_pid=$!
+}
+
+# The background capture has written its exit code: swap the pages in (or
+# keep the old ones) and reap the subshell.
+finish_shoot() {
+  local rc
+  rc=$(<"$STAGE/.rc")
+  wait "$shoot_pid" 2>/dev/null || true
+  shoot_pid=0
+  printf -v now '%(%s)T' -1
+  if [ "$rc" = 0 ] && compgen -G "$STAGE/page-*.png" >/dev/null; then
+    # Install the new set by renaming directories: the old pages stay until
+    # the replacement is in place, and the flip loop just skips the one
+    # moment the glob is empty.
+    rm -rf "$PAGES.old"
+    mv "$PAGES" "$PAGES.old"
+    mv "$STAGE" "$PAGES"
+    rm -rf "$PAGES.old"
+    shown=$shoot_want last_gen=$now failed="" idx=0 next_flip=0
+    echo "pages regenerated ($shoot_want): $(tail -n1 "$shoot_log")"
+  else
+    failed=$shoot_want retry_at=$(( now + RETRY ))
+    echo "shoot FAILED ($shoot_want), keeping existing pages: $(tail -n1 "$shoot_log")" >&2
+  fi
+}
 
 while :; do
-  now=$(date +%s)
-  if (( now - last_gen > REGEN )); then
-    # shellcheck disable=SC2086  # EXTRA_URLS is a space-separated URL list
-    if /usr/local/bin/lunaria-shooter "$TV_URL" "$FULL_URL" $EXTRA_URLS; then
-      last_gen=$now
-      echo "pages regenerated"
+  printf -v now '%(%s)T' -1
+
+  if (( now >= next_poll )); then
+    next_poll=$(( now + POLL ))
+    if out=$(/usr/local/bin/lunaria-pointer 2>&1); then
+      if (( bad_logged )); then
+        echo "pointer readable again"
+      fi
+      bad_since=0 bad_logged=0
+      IFS=$'\t' read -r kind url decided <<<"$out"
     else
-      echo "shoot FAILED, keeping existing pages" >&2
+      (( bad_since )) || bad_since=$now
+      # Never read since start and nothing on disk: show today's brief
+      # rotation at once rather than a blank screen while waiting out the
+      # grace period. Pages left from the previous run keep rotating instead.
+      if [ -z "$kind" ] && ! compgen -G "$PAGES/page-*.png" >/dev/null; then
+        kind=briefing url=- decided=-
+      fi
+      if (( ! bad_logged && now - bad_since >= STALE )); then
+        echo "pointer unreadable for ${STALE}s (${out:-no output}), keeping current pages" >&2
+        bad_logged=1
+      fi
     fi
   fi
-  for p in "$PAGES"/page-*.png; do
-    [ -e "$p" ] || continue
-    cp "$p" "frame.tmp.$$.png" && mv "frame.tmp.$$.png" frame.png
-    sleep "$DWELL"
-  done
+
+  if (( shoot_pid )) && [ -f "$STAGE/.rc" ]; then
+    finish_shoot
+  fi
+
+  want="$kind $url $decided"
+  if (( ! shoot_pid )) && [ -n "$kind" ] \
+     && { [ "$want" != "$shown" ] || (( now - last_gen > REGEN )); } \
+     && { [ "$want" != "$failed" ] || (( now >= retry_at )); }; then
+    start_shoot
+  fi
+
+  if (( now >= next_flip )); then
+    next_flip=$(( now + DWELL ))
+    pages=("$PAGES"/page-*.png)
+    if [ -e "${pages[0]}" ]; then
+      (( idx < ${#pages[@]} )) || idx=0
+      cp "${pages[idx]}" "frame.tmp.$$.png" && mv "frame.tmp.$$.png" frame.png
+      idx=$(( idx + 1 ))
+    fi
+  fi
+
+  sleep 1
 done

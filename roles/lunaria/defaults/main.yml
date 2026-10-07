@@ -28,6 +28,14 @@ lunaria_page_dwell: 12
 # Seconds between re-renders of the source page.
 lunaria_regen_interval: 600
 
+# The brasenia viewport pointer (compositor decision on pub, Contracts v1) and
+# how often it is polled, in seconds. The rotation follows the pointer: a
+# pane or status url is shot alone; fallback "briefing" or a 404 (no
+# compositor) shows the brief plus lunaria_extra_urls. LXC 118 has no NAS
+# mount; it reads the pointer through pub over HTTP.
+lunaria_pointer_url: http://pub.lan/viewport/current.json
+lunaria_pointer_poll: 5
+
 # Additional TV-contract pane pages (1280px wide, height an exact multiple of
 # 720 — the brasenia pane contract) appended to the rotation after the brief.
 # A Phase-1.5 precursor of the brasenia pane bus: each URL is shot like a TV

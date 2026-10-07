@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Read the brasenia viewport pointer (current.json, Contracts v1) for
+lunaria-frames.
+
+Prints one tab-separated line, kind<TAB>url<TAB>decided_at, and exits 0:
+
+  pane      the winning pane's URL (fallback null)
+  status    the compositor's status card URL (fallback "status")
+  briefing  "-" for the URL: lunaria shoots its own brief rotation
+            (fallback "briefing", or a 404 — no compositor yet)
+
+decided_at is "-" when absent. Anything else (non-404 HTTP error,
+unreachable pub, bad JSON, schema other than 1) prints the reason and exits
+1; lunaria-frames decides how long to tolerate that.
+"""
+import json, os, sys, urllib.error, urllib.request
+
+URL = os.environ.get("LUNARIA_POINTER_URL",
+                     "http://pub.lan/viewport/current.json")
+
+
+def unreadable(reason):
+    print(reason)
+    sys.exit(1)
+
+
+try:
+    req = urllib.request.Request(URL, headers={"Cache-Control": "no-cache"})
+    with urllib.request.urlopen(req, timeout=4) as resp:
+        body = resp.read()
+except urllib.error.HTTPError as exc:
+    if exc.code == 404:
+        print("briefing\t-\t-")
+        sys.exit(0)
+    unreadable(f"HTTP {exc.code}")
+except Exception as exc:
+    unreadable(f"fetch failed: {exc}")
+
+try:
+    pointer = json.loads(body)
+except ValueError:
+    unreadable("bad JSON")
+if not isinstance(pointer, dict) or pointer.get("schema") != 1:
+    unreadable("not a schema 1 pointer")
+
+decided = pointer.get("decided_at")
+if decided is None:
+    decided = "-"
+elif not isinstance(decided, str) or not decided or any(c.isspace() for c in decided):
+    # lunaria-frames reads one tab-separated line; a stray tab or newline here
+    # would hide a change and delay the re-shoot.
+    unreadable("malformed decided_at")
+fallback = pointer.get("fallback")
+url = pointer.get("url")
+if fallback == "briefing":
+    print(f"briefing\t-\t{decided}")
+    sys.exit(0)
+if fallback not in (None, "status"):
+    unreadable(f"unknown fallback {fallback!r}")
+if not isinstance(url, str) or not url or any(c.isspace() for c in url):
+    unreadable("missing or malformed url")
+print(f"{fallback or 'pane'}\t{url}\t{decided}")
