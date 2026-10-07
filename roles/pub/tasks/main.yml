@@ -5,12 +5,13 @@
 # rclone.conf OAuth remote is credential material and is deliberately never
 # written by this role — see docs/pub.md for the manual seeding step.
 # ============================================================================
-- name: Install rclone, rsync, and git
+- name: Install rclone, rsync, git, and python3
   ansible.builtin.apt:
     name:
       - rclone
       - rsync
       - git
+      - python3
     state: present
     update_cache: true
   become: true
@@ -87,14 +88,15 @@
 # Cast custom web receiver at http://pub.lan/cast/. Additive: it touches
 # nothing in the Morning Brief / brief-serving path above.
 # ---------------------------------------------------------------------------
-- name: Check out brasenia for the receiver source
+- name: Check out brasenia for the receiver source and viewport runtime
   ansible.builtin.git:
     repo: "{{ pub_cast_repo_url }}"
     dest: "{{ pub_cast_checkout }}"
     version: main
     update: true
   become: true
-  when: pub_cast_publish_enabled
+  when: pub_cast_publish_enabled or pub_viewport_enabled
+  notify: Restart brasenia viewport services
 
 - name: Deploy the publish-cast-receiver script
   ansible.builtin.copy:
@@ -144,3 +146,80 @@
     state: started
   become: true
   when: pub_cast_publish_enabled
+
+# ---------------------------------------------------------------------------
+# brasenia viewport runtime (kalmia#140, brasenia#26 Phase 2) — the compositor
+# and focus producer, run from the checkout above as the unprivileged
+# `brasenia` system user. The share forces uid/gid 1000 and mode 0770 on every
+# file, so membership of the gid-1000 `webdrop` group is what grants writes
+# (the same group Caddy reads through); the role leaves ownership and mode of
+# the viewport directories to the share rather than forcing either.
+# ---------------------------------------------------------------------------
+- name: Ensure the share's gid-1000 group exists
+  ansible.builtin.group:
+    name: "{{ pub_viewport_group }}"
+    gid: "{{ pub_viewport_group_gid }}"
+    system: true
+  become: true
+  when: pub_viewport_enabled
+
+- name: Ensure the brasenia viewport service user exists
+  ansible.builtin.user:
+    name: "{{ pub_viewport_user }}"
+    system: true
+    create_home: false
+    shell: /usr/sbin/nologin
+    groups: "{{ pub_viewport_group }}"
+    append: true
+  become: true
+  when: pub_viewport_enabled
+  notify: Restart brasenia viewport services
+
+- name: Ensure the viewport bus directories exist on the web share
+  ansible.builtin.file:
+    path: "{{ pub_viewport_webroot }}/viewport/{{ item }}"
+    state: directory
+  loop:
+    - panes
+    - focus
+    - state
+  become: true
+  when:
+    - pub_viewport_enabled
+    - pub_viewport_webroot in (ansible_facts.mounts | map(attribute='mount'))
+
+- name: Warn when the web share is not mounted
+  ansible.builtin.debug:
+    msg: >-
+      {{ pub_viewport_webroot }} is not a mount point, so the viewport
+      directories were not created. The brasenia services skip on their
+      ConditionPathIsMountPoint until the NAS share is mounted.
+  when:
+    - pub_viewport_enabled
+    - pub_viewport_webroot not in (ansible_facts.mounts | map(attribute='mount'))
+
+- name: Deploy the brasenia viewport systemd services
+  ansible.builtin.template:
+    src: "{{ item }}.service.j2"
+    dest: "/etc/systemd/system/{{ item }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - brasenia-compositor
+    - brasenia-focus
+  become: true
+  when: pub_viewport_enabled
+  notify: Restart brasenia viewport services
+
+- name: Enable and start the brasenia viewport services
+  ansible.builtin.systemd_service:
+    name: "{{ item }}.service"
+    daemon_reload: true
+    enabled: true
+    state: started
+  loop:
+    - brasenia-compositor
+    - brasenia-focus
+  become: true
+  when: pub_viewport_enabled

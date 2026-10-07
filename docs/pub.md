@@ -98,6 +98,56 @@ application URL in the Google Cast Developer Console.
 > unreachable the pull is skipped and the existing checkout republishes; set
 > `pub_cast_publish_enabled: false` to skip the whole block.
 
+## brasenia viewport runtime (#140)
+
+pub also runs brasenia's two long-running viewport programs
+([brasenia#26](https://github.com/lentago/brasenia/issues/26) Phase 2) from
+the same role-managed `/srv/brasenia` checkout. Both are stdlib Python 3.9+
+(Debian 12 ships 3.11) and credential-free: their only inputs are the share
+and the public GitHub API. They read and write only under
+`/srv/www/viewport`, which is why they run here and not on LXC 118 (no NAS
+mount, by design).
+
+- `brasenia-compositor.service` ranks the pane bus every 5 s and writes
+  `viewport/current.json` (`python3 -m compositor`, WorkingDirectory
+  `/srv/brasenia`).
+- `brasenia-focus.service` turns session beacons in `viewport/focus/` into
+  open-PR panes every 30 s (`python3 -m focus_producer`, WorkingDirectory
+  `/srv/brasenia/producers/focus`).
+
+Both are `Type=simple`, `Restart=always`, and run as the unprivileged
+`brasenia` system user in the `webdrop` group. The share is a CIFS mount that
+forces every file to uid/gid 1000 at mode 0770, so gid-1000 membership is
+what grants writes (Caddy sits in the same group for reads); the role ensures
+the group and the user. It creates `/srv/www/viewport/{panes,focus,state}`
+(only when `/srv/www` is mounted) and leaves their ownership and mode to the
+share. Each unit carries `RequiresMountsFor=/srv/www`, so it orders after the
+share's mount unit, and `ConditionPathIsMountPoint=/srv/www`, so it skips
+rather than writing to the container rootfs when the share is missing. In
+this container the share is an LXC bind mount (`mp0`) present before init
+starts, so the condition only ever bites on a misconfigured rebuild; the
+compositor also creates the three directories itself on start. Toggle:
+`pub_viewport_enabled`.
+
+**How new code goes live.** No separate timer. The daily
+`publish-cast-receiver` run already does a `git pull --ff-only` of
+`/srv/brasenia`. When that pull moves `HEAD`, the script runs
+`systemctl try-restart brasenia-compositor brasenia-focus`, so a merge to
+brasenia `main` is running on pub within a day. Re-running the play also
+restarts both services if the checkout or a unit file changed. This rides on
+the Cast publisher: with `pub_cast_publish_enabled: false` there is no daily
+pull, so the services only update when the play is re-run.
+
+**Health check:**
+
+```bash
+systemctl status brasenia-compositor brasenia-focus && curl -s http://pub.lan/viewport/current.json
+```
+
+Both units should be `active (running)`. With an empty bus, `current.json`
+points at the briefing (`http://pub.lan/brief/…`). Logs:
+`journalctl -u brasenia-compositor -u brasenia-focus`.
+
 ## Rebuild flow
 
 1. `terraform apply` (recreates LXC 114 per `terraform/containers.tf`).
@@ -105,3 +155,5 @@ application URL in the Google Cast Developer Console.
 3. Seed the rclone secret (above).
 4. Confirm per the acceptance criteria in kalmia#54: the timer is active and
    a manual run exits 0 and populates `/srv/www/brief/`.
+5. Run the viewport health check (above): both brasenia services active and
+   `http://pub.lan/viewport/current.json` present.

@@ -1,0 +1,11 @@
+---
+- name: Restart brasenia viewport services
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    daemon_reload: true
+    state: restarted
+  loop:
+    - brasenia-compositor.service
+    - brasenia-focus.service
+  become: true
+  when: pub_viewport_enabled
