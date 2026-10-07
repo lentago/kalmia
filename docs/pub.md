@@ -6,8 +6,42 @@ Terraform-managed (`terraform/containers.tf`); the in-guest publisher —
 rclone, the `publish-morning-brief` script, and its systemd oneshot/timer —
 is codified by the `pub` role and the `pub.yml` playbook. See kalmia#54.
 
-Caddy (the webserver that actually serves `/srv/www`) is hand-state and
-**not** covered here — it's a follow-up candidate, tracked separately.
+Caddy (the webserver that actually serves `/srv/www`) is half covered: its
+**config** — the Caddyfile and the sortable directory-listing template — is
+role-managed since #144 (see [Caddy config](#caddy-config-and-the-sortable-index-144)),
+while the caddy **package** is still installed by hand from the upstream apt
+repo.
+
+## Caddy config and the sortable index (#144)
+
+`roles/pub/files/caddy/Caddyfile` and `roles/pub/files/caddy/browse.html` are
+deployed to `/etc/caddy/` (0644, root) when `pub_caddy_manage_config` is true
+and `/usr/bin/caddy` exists; otherwise the block logs a warning and skips. The
+Caddyfile is checked with `caddy validate --adapter caddyfile` before it is
+written, and any change to either file notifies the `Reload caddy` handler
+(`systemctl reload caddy`, which the packaged unit runs as `caddy reload
+--force`, so a template-only change is picked up too).
+
+The Caddyfile is the one-liner it always was: `:80`, `root * /srv/www`, gzip,
+`file_server` with `browse /etc/caddy/browse.html`. The template keeps the
+root page's drop-target card and the per-folder "Index of" header, and makes
+the listing sortable on Caddy's own browse parameters: the **Name**, **Size**
+and **Modified** headers link to `?sort=namedirfirst|size|time&order=asc|desc`,
+the active column shows an arrow, clicking it again flips the order (names
+start A→Z, sizes and dates start largest/newest first). Caddy sorts
+server-side and remembers the choice in `sort`/`order` cookies, so it carries
+across folders; no JavaScript is involved. `http://pub.lan/?sort=time&order=desc`
+is the "what was just published" view.
+
+The caddy package is not installed by the role. On a rebuild, install it from
+the upstream repo first (the Debian/Ubuntu steps at
+<https://caddyserver.com/docs/install#debian-ubuntu-raspbian>; the container
+has `caddy-stable.list` from that recipe), then run the play. Check:
+
+```bash
+caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile
+curl -s 'http://pub.lan/?sort=time&order=desc' | grep -m1 'class="active"'
+```
 
 ## Running the play
 

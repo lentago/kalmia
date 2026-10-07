@@ -5,8 +5,9 @@
 #
 #   ansible-playbook -i inventory/hosts.yml pub.yml
 #
-# Caddy — the webserver pub actually serves http://pub.lan/brief/ through —
-# is hand-state and out of scope here; see kalmia#54.
+# Caddy — the webserver pub actually serves http://pub.lan/ through — has its
+# config (Caddyfile + sortable listing template) managed by the role since
+# kalmia#144; the package itself is still hand-installed (kalmia#54).
 # ============================================================================
 - name: Provision the pub LXC Morning Brief publisher
   hosts: all
