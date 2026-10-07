@@ -149,11 +149,32 @@
 
 # ---------------------------------------------------------------------------
 # brasenia viewport runtime (kalmia#140, brasenia#26 Phase 2) — the compositor
-# and focus producer, run from the checkout above. They run as root like the
-# publish-* units: that identity is what is proven to write the bind-mounted
-# share from this unprivileged container, so the role leaves ownership and
-# mode of the viewport directories to the share rather than forcing either.
+# and focus producer, run from the checkout above as the unprivileged
+# `brasenia` system user. The share forces uid/gid 1000 and mode 0770 on every
+# file, so membership of the gid-1000 `webdrop` group is what grants writes
+# (the same group Caddy reads through); the role leaves ownership and mode of
+# the viewport directories to the share rather than forcing either.
 # ---------------------------------------------------------------------------
+- name: Ensure the share's gid-1000 group exists
+  ansible.builtin.group:
+    name: "{{ pub_viewport_group }}"
+    gid: "{{ pub_viewport_group_gid }}"
+    system: true
+  become: true
+  when: pub_viewport_enabled
+
+- name: Ensure the brasenia viewport service user exists
+  ansible.builtin.user:
+    name: "{{ pub_viewport_user }}"
+    system: true
+    create_home: false
+    shell: /usr/sbin/nologin
+    groups: "{{ pub_viewport_group }}"
+    append: true
+  become: true
+  when: pub_viewport_enabled
+  notify: Restart brasenia viewport services
+
 - name: Ensure the viewport bus directories exist on the web share
   ansible.builtin.file:
     path: "{{ pub_viewport_webroot }}/viewport/{{ item }}"

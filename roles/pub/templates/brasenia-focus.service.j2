@@ -2,10 +2,14 @@
 Description=brasenia focus producer: session beacons to open-PR panes on the viewport bus
 After=network-online.target
 Wants=network-online.target
+RequiresMountsFor={{ pub_viewport_webroot }}
 ConditionPathIsMountPoint={{ pub_viewport_webroot }}
 
 [Service]
 Type=simple
+User={{ pub_viewport_user }}
+Group={{ pub_viewport_group }}
+Environment=PYTHONDONTWRITEBYTECODE=1
 WorkingDirectory={{ pub_cast_checkout }}/producers/focus
 ExecStart=/usr/bin/python3 -m focus_producer --webroot {{ pub_viewport_webroot }} --url-base {{ pub_viewport_url_base }} --interval {{ pub_viewport_focus_interval }}
 Restart=always

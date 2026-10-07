@@ -115,13 +115,19 @@ mount, by design).
   open-PR panes every 30 s (`python3 -m focus_producer`, WorkingDirectory
   `/srv/brasenia/producers/focus`).
 
-Both are `Type=simple`, `Restart=always`. They run as root, like the
-`publish-*` units, because that is the identity proven to write the
-bind-mounted share from this unprivileged container. The role creates
-`/srv/www/viewport/{panes,focus,state}` (only when `/srv/www` is mounted) and
-leaves their ownership and mode to the share. Each unit carries
-`ConditionPathIsMountPoint=/srv/www`, so it skips rather than writing to the
-container rootfs when the share is missing. Toggle: `pub_viewport_enabled`.
+Both are `Type=simple`, `Restart=always`, and run as the unprivileged
+`brasenia` system user in the `webdrop` group. The share is a CIFS mount that
+forces every file to uid/gid 1000 at mode 0770, so gid-1000 membership is
+what grants writes (Caddy sits in the same group for reads); the role ensures
+the group and the user. It creates `/srv/www/viewport/{panes,focus,state}`
+(only when `/srv/www` is mounted) and leaves their ownership and mode to the
+share. Each unit carries `RequiresMountsFor=/srv/www`, so it orders after the
+share's mount unit, and `ConditionPathIsMountPoint=/srv/www`, so it skips
+rather than writing to the container rootfs when the share is missing. In
+this container the share is an LXC bind mount (`mp0`) present before init
+starts, so the condition only ever bites on a misconfigured rebuild; the
+compositor also creates the three directories itself on start. Toggle:
+`pub_viewport_enabled`.
 
 **How new code goes live.** No separate timer. The daily
 `publish-cast-receiver` run already does a `git pull --ff-only` of

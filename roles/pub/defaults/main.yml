@@ -46,6 +46,13 @@ pub_cast_timer_oncalendar: "*-*-* 06:00:00 America/New_York"
 # New brasenia code goes live via the publish-cast-receiver daily pull, which
 # restarts both services when it moves the checkout.
 pub_viewport_enabled: true
+# Runtime identity. The share is a CIFS mount that forces every file to
+# uid/gid 1000 at mode 0770 (see docs/pub.md), so a non-root writer needs the
+# gid-1000 group; `webdrop` is that group (Caddy is in it for reads). The role
+# ensures the group and a system user in it.
+pub_viewport_user: brasenia
+pub_viewport_group: webdrop
+pub_viewport_group_gid: 1000
 pub_viewport_webroot: /srv/www
 pub_viewport_url_base: http://pub.lan
 pub_viewport_compositor_interval: 5
