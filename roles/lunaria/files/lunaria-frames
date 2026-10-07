@@ -14,7 +14,7 @@ set -euo pipefail
 
 HOME_DIR="${LUNARIA_HOME:-/var/lib/lunaria}"
 PAGES="${LUNARIA_PAGES:-$HOME_DIR/pages}"
-STAGE="${LUNARIA_PAGES_NEXT:-$HOME_DIR/pages.next}"
+STAGE="$PAGES.next"   # a sibling of PAGES, so the swap below is one rename
 DWELL="${LUNARIA_PAGE_DWELL:-12}"
 REGEN="${LUNARIA_REGEN_INTERVAL:-600}"
 POLL="${LUNARIA_POINTER_POLL:-5}"
@@ -71,8 +71,13 @@ finish_shoot() {
   shoot_pid=0
   printf -v now '%(%s)T' -1
   if [ "$rc" = 0 ] && compgen -G "$STAGE/page-*.png" >/dev/null; then
-    rm -f "$PAGES"/page-*.png
-    mv "$STAGE"/page-*.png "$PAGES"/
+    # Install the new set by renaming directories: the old pages stay until
+    # the replacement is in place, and the flip loop just skips the one
+    # moment the glob is empty.
+    rm -rf "$PAGES.old"
+    mv "$PAGES" "$PAGES.old"
+    mv "$STAGE" "$PAGES"
+    rm -rf "$PAGES.old"
     shown=$shoot_want last_gen=$now failed="" idx=0 next_flip=0
     echo "pages regenerated ($shoot_want): $(tail -n1 "$shoot_log")"
   else
@@ -94,9 +99,12 @@ while :; do
       IFS=$'\t' read -r kind url decided <<<"$out"
     else
       (( bad_since )) || bad_since=$now
-      # Never read since start: show today's brief rotation at once rather
-      # than a blank screen while waiting out the grace period.
-      [ -n "$kind" ] || kind=briefing url=- decided=-
+      # Never read since start and nothing on disk: show today's brief
+      # rotation at once rather than a blank screen while waiting out the
+      # grace period. Pages left from the previous run keep rotating instead.
+      if [ -z "$kind" ] && ! compgen -G "$PAGES/page-*.png" >/dev/null; then
+        kind=briefing url=- decided=-
+      fi
       if (( ! bad_logged && now - bad_since >= STALE )); then
         echo "pointer unreadable for ${STALE}s (${out:-no output}), keeping current pages" >&2
         bad_logged=1
