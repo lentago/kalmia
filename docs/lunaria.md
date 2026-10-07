@@ -50,6 +50,21 @@ never blank the display. First pane: the praxis Obsidian-graph
 (`http://pub.lan/praxis/graph/tv.html`, regenerated on every praxis wiki
 publish).
 
+**Following the viewport pointer** (#142, the Roku/HLS adapter for
+brasenia#26): `lunaria-frames` polls `lunaria_pointer_url`
+(`http://pub.lan/viewport/current.json`, the compositor's decision) every
+`lunaria_pointer_poll` seconds (5) over HTTP. When the pointer names a pane
+(`fallback` null) or the status card (`fallback: "status"`), the TV shows that
+URL alone, shot as a TV-contract page. When the pointer says
+`fallback: "briefing"`, or is absent (404 — no compositor), the TV shows the
+brief plus the extra panes as above. The rotation is re-shot when `url` or
+`decided_at` changes and every `lunaria_regen_interval` seconds, so a pane
+that updates in place is re-rendered. When the pointer is unreadable (pub
+down, a non-404 error, bad JSON, a schema other than 1), the existing pages
+keep rotating and the journal gets one line after 30 s, plus one when it is
+readable again; a failed shoot also keeps the existing pages and is retried
+after 30 s.
+
 ## Build / rebuild
 
 1. **Guest**: created by `terraform/containers.tf` (CI apply-on-merge). No
