@@ -36,3 +36,17 @@ pub_cast_receiver_dest: /srv/www/cast
 # The receiver is static and changes only when brasenia does — a daily
 # republish keeps the share fresh and recovers if it is remounted/cleared.
 pub_cast_timer_oncalendar: "*-*-* 06:00:00 America/New_York"
+
+# --- brasenia viewport runtime (kalmia#140, brasenia#26 Phase 2) ------------
+# Runs brasenia's two long-running viewport programs from the same checkout:
+# the compositor (ranks the pane bus, writes viewport/current.json) and the
+# focus producer (session beacons → open-PR panes). Both are stdlib Python and
+# credential-free, and read/write only under <webroot>/viewport on the share —
+# which is why they live here and not on LXC 118 (no NAS mount by design).
+# New brasenia code goes live via the publish-cast-receiver daily pull, which
+# restarts both services when it moves the checkout.
+pub_viewport_enabled: true
+pub_viewport_webroot: /srv/www
+pub_viewport_url_base: http://pub.lan
+pub_viewport_compositor_interval: 5
+pub_viewport_focus_interval: 30

@@ -1,0 +1,13 @@
+[Unit]
+Description=brasenia compositor: rank the viewport pane bus, publish viewport/current.json
+ConditionPathIsMountPoint={{ pub_viewport_webroot }}
+
+[Service]
+Type=simple
+WorkingDirectory={{ pub_cast_checkout }}
+ExecStart=/usr/bin/python3 -m compositor --webroot {{ pub_viewport_webroot }} --url-base {{ pub_viewport_url_base }} --interval {{ pub_viewport_compositor_interval }}
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
