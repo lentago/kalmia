@@ -9,6 +9,21 @@
 :80 {
 	root * /srv/www
 	encode gzip
+
+	# The change-pipeline document (kalmia#146). drosera's pipeline producer runs
+	# on LXC 105 (grafana-stack, 192.168.139.20, a static reservation), where the
+	# Loki credentials live, and serves the document on :8611; 105 mounts no web
+	# share, so it reaches the viewport bus by proxy. Until the producer is up
+	# this path answers 502, which the brasenia producers treat as "no rows".
+	handle /viewport/pipeline.json {
+		reverse_proxy 192.168.139.20:8611 {
+			transport http {
+				dial_timeout 2s
+				response_header_timeout 5s
+			}
+		}
+	}
+
 	file_server {
 		browse /etc/caddy/browse.html
 	}
