@@ -65,3 +65,7 @@ pub_viewport_webroot: /srv/www
 pub_viewport_url_base: http://pub.lan
 pub_viewport_compositor_interval: 5
 pub_viewport_focus_interval: 30
+# The change-pipeline pane producer (kalmia#148, brasenia#36) reads
+# http://pub.lan/viewport/pipeline.json (the Caddy route from kalmia#146) and
+# keeps panes/change-pipeline/ up while a change is in flight.
+pub_viewport_pipeline_interval: 15

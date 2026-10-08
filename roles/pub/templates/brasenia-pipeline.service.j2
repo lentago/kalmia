@@ -1,0 +1,19 @@
+[Unit]
+Description=brasenia change-pipeline producer: in-flight changes from pipeline.json to a pane on the viewport bus
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor={{ pub_viewport_webroot }}
+ConditionPathIsMountPoint={{ pub_viewport_webroot }}
+
+[Service]
+Type=simple
+User={{ pub_viewport_user }}
+Group={{ pub_viewport_group }}
+Environment=PYTHONDONTWRITEBYTECODE=1
+WorkingDirectory={{ pub_cast_checkout }}/producers/pipeline
+ExecStart=/usr/bin/python3 -m pipeline_producer --webroot {{ pub_viewport_webroot }} --url-base {{ pub_viewport_url_base }} --interval {{ pub_viewport_pipeline_interval }}
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
