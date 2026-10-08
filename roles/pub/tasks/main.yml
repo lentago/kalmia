@@ -208,6 +208,7 @@
   loop:
     - brasenia-compositor
     - brasenia-focus
+    - brasenia-pipeline
   become: true
   when: pub_viewport_enabled
   notify: Restart brasenia viewport services
@@ -221,6 +222,7 @@
   loop:
     - brasenia-compositor
     - brasenia-focus
+    - brasenia-pipeline
   become: true
   when: pub_viewport_enabled
 

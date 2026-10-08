@@ -36,7 +36,7 @@ if git -C "$SRC" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     if git -C "$SRC" pull --ff-only >/dev/null 2>&1; then
         after=$(git -C "$SRC" rev-parse HEAD)
         if [ "$before" != "$after" ]; then
-            systemctl try-restart brasenia-compositor.service brasenia-focus.service \
+            systemctl try-restart brasenia-compositor.service brasenia-focus.service brasenia-pipeline.service \
                 && echo "brasenia moved ${before:0:7}..${after:0:7}; restarted viewport services" \
                 || echo "brasenia moved but restarting viewport services failed" >&2
         fi

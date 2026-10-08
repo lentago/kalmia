@@ -157,6 +157,13 @@ mount, by design).
 - `brasenia-focus.service` turns session beacons in `viewport/focus/` into
   open-PR panes every 30 s (`python3 -m focus_producer`, WorkingDirectory
   `/srv/brasenia/producers/focus`).
+- `brasenia-pipeline.service` (#148, brasenia#36) reads
+  `http://pub.lan/viewport/pipeline.json` every 15 s and keeps
+  `viewport/panes/change-pipeline/` up while a change is in flight
+  (`python3 -m pipeline_producer`, WorkingDirectory
+  `/srv/brasenia/producers/pipeline`). While the document is a 502 (drosera's
+  producer not yet deployed on LXC 105) it logs "unreadable" and writes
+  nothing.
 
 Both are `Type=simple`, `Restart=always`, and run as the unprivileged
 `brasenia` system user in the `webdrop` group. The share is a CIFS mount that
@@ -175,7 +182,7 @@ compositor also creates the three directories itself on start. Toggle:
 **How new code goes live.** No separate timer. The daily
 `publish-cast-receiver` run already does a `git pull --ff-only` of
 `/srv/brasenia`. When that pull moves `HEAD`, the script runs
-`systemctl try-restart brasenia-compositor brasenia-focus`, so a merge to
+`systemctl try-restart` of the three brasenia services, so a merge to
 brasenia `main` is running on pub within a day. Re-running the play also
 restarts both services if the checkout or a unit file changed. This rides on
 the Cast publisher: with `pub_cast_publish_enabled: false` there is no daily
@@ -184,12 +191,12 @@ pull, so the services only update when the play is re-run.
 **Health check:**
 
 ```bash
-systemctl status brasenia-compositor brasenia-focus && curl -s http://pub.lan/viewport/current.json
+systemctl status brasenia-compositor brasenia-focus brasenia-pipeline && curl -s http://pub.lan/viewport/current.json
 ```
 
-Both units should be `active (running)`. With an empty bus, `current.json`
+All three units should be `active (running)`. With an empty bus, `current.json`
 points at the briefing (`http://pub.lan/brief/…`). Logs:
-`journalctl -u brasenia-compositor -u brasenia-focus`.
+`journalctl -u brasenia-compositor -u brasenia-focus -u brasenia-pipeline`.
 
 ## Rebuild flow
 
