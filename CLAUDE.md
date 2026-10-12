@@ -32,7 +32,7 @@ The current form: an Ansible rebuild of the `workstation-bootstrap` shell
 scripts. It turns a
 fresh Linux box into a fully configured cloud-infrastructure dev workstation —
 the same toolchain (Docker, AWS/Terraform/k8s, Node/Go/Python, Starship,
-Claude Code, …) across four target profiles, expressed as idempotent roles
+Claude Code, …) across five target profiles, expressed as idempotent roles
 instead of ~1,000-line bash scripts. It supersedes the bash scripts in
 [`lentago/workstation-bootstrap`](https://github.com/lentago/workstation-bootstrap)
 (kept during the transition).
@@ -71,7 +71,7 @@ instead of ~1,000-line bash scripts. It supersedes the bash scripts in
   `failed_when` on `command`/`shell`. (Killing hand-rolled idempotency is the
   whole reason we left bash.)
 - **Use FQCN** (`ansible.builtin.*`, `community.general.*`) everywhere.
-- **Keep the four profiles in sync.** A change to one platform's behavior should
+- **Keep the five profiles in sync.** A change to one platform's behavior should
   be reflected for the others, adapted per package manager — the same rule the
   bash repo enforced.
 - **Prefer profile toggles + family vars** over hard-coding platform specifics
