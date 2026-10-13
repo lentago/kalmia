@@ -46,7 +46,8 @@ resource "proxmox_virtual_environment_container" "n8n" {
 
   # NAS bind-mount intentionally NOT declared here: Proxmox forbids bind mounts
   # via API token (root@pam only), so Terraform/CI cannot create one. Harvester
-  # NAS-raw output is handled outside this resource. See music-curator harvest/.
+  # NAS-raw output is handled outside this resource. See cpitzi/music-curator
+  # harvest/ (the repo left the lentago org on 2026-10-13).
 
   network_interface {
     name        = "eth0"
