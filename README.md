@@ -15,9 +15,10 @@ containers. It has three layers, split by what they own:
   role-based workstation provisioning that turns a fresh Linux box into a
   configured dev workstation across five targets.
 - **Terraform** ([`terraform/`](terraform/)) — which Proxmox guests *exist* on
-  the homelab cluster. Terraform owns **every VM and LXC on the cluster** (bar
-  one released to [claytonia](https://github.com/lentago/claytonia)), applied on
-  merge from a LAN self-hosted runner.
+  the on-prem Proxmox cluster, the machines in our own building. Terraform owns
+  **every VM and LXC on the cluster** (bar one released to
+  [claytonia](https://github.com/lentago/claytonia)), applied on merge from a LAN
+  self-hosted runner.
 - **Forge** ([`forge/`](forge/)) — the versioned machine *images* those guests
   are cut from.
 
