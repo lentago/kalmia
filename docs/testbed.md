@@ -6,7 +6,8 @@ the `xubuntu` and `fedora` profiles: boot a pristine box, run the play, confirm
 the end state, roll back, repeat. A-fresh-box bootstrap and idempotency are
 exactly what they let you exercise.
 
-They live on the Lentago lab cluster (Proxmox node **pve5**) and are
+They live on the on-prem cluster (the machines in our own building; Proxmox node
+**pve5**) and are
 managed by Home Claude (run from `~`); see `~/CLAUDE.md` for cluster topology.
 
 ## The two boxes
@@ -107,7 +108,7 @@ stronger signal and isn't worth compromising for this.
 ## Rebuilding the testbed from scratch
 
 If a VM is wedged beyond a snapshot rollback, Home Claude can recreate the
-baseline. The artifacts live in the Lentago lab, not in this repo:
+baseline. The artifacts live on the on-prem cluster, not in this repo:
 
 - Remastered unattended-install ISOs on the Neptune NAS iso store
   (`/mnt/pve/neptune/template/iso/`): `xubuntu-26.04-autoinstall.iso` (Ubuntu

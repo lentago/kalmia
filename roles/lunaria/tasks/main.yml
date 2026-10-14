@@ -158,7 +158,7 @@
 # ---------------------------------------------------------------------------
 # Cast receiver watchdog (brasenia ADR-0006, kalmia#99) — a second, additive
 # client path. This block installs a systemd timer that keeps the registered
-# Cast custom web receiver running on the household Chromecast; it touches
+# Cast custom web receiver running on the wall-display Chromecast; it touches
 # nothing in the mediamtx/shooter/rotator/encoder/Roku HLS path above.
 # ---------------------------------------------------------------------------
 - name: Install pychromecast (Cast watchdog dependency)

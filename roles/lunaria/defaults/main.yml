@@ -49,14 +49,14 @@ lunaria_extra_urls:
 # must not touch the Roku client (ADR-0006 acceptance test). This watchdog is
 # the Cast path's analogue of the mandatory Roku retry handler (ADR-0002): a
 # systemd timer that re-launches the registered custom web receiver on the
-# household Chromecast after power blips, Chromecast OS updates, ambient-mode
+# wall-display Chromecast after power blips, Chromecast OS updates, ambient-mode
 # reclaims, or input changes.
 lunaria_cast_watchdog_enabled: true
 
 # Registered 2026-08-14 (Cast Developer Console, unpublished Custom Receiver;
 # receiver URL http://pub.lan/cast/). Both values are deliberately COMMITTED:
 # neither is a secret — the App ID is public in brasenia's
-# cast-app/app-config.json and only launches on the dev-registered household
+# cast-app/app-config.json and only launches on the dev-registered wall-display
 # device, and the friendly name is broadcast in cleartext mDNS to every LAN
 # device. Committing them keeps rebuild-from-scratch real: an `-e`-only value
 # would silently revert the env file to a dormant placeholder on any future

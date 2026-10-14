@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ensure the brasenia Cast custom web receiver is running on the household
+"""Ensure the brasenia Cast custom web receiver is running on the wall-display
 Chromecast, re-launching it when absent.
 
 This is the Cast path's equivalent of the mandatory Roku retry handler
@@ -12,7 +12,7 @@ Config comes from /etc/default/lunaria-cast (rendered by the lunaria role):
 
     CAST_APP_ID          the custom receiver's App ID from the Cast Developer
                          Console (8 hex chars)
-    CAST_DEVICE_NAME     the household Chromecast's friendly name
+    CAST_DEVICE_NAME     the wall-display Chromecast's friendly name
 
 Both ship as clearly-marked placeholders because the receiver has not been
 registered yet. While either is a placeholder (or empty) this exits 0 without

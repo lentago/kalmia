@@ -108,7 +108,7 @@ If there's no existing config to copy, generate one with `rclone config` /
 
 ## Cast receiver publishing (#99)
 
-pub also hosts brasenia's Cast **custom web receiver** page for the household
+pub also hosts brasenia's Cast **custom web receiver** page for the wall-display
 Chromecast — the second viewport client
 ([brasenia ADR-0006](https://github.com/lentago/brasenia/blob/main/docs/adr/0006-cast-web-receiver-second-client.md);
 watchdog sender in [lunaria.md](lunaria.md#cast-receiver-watchdog-second-client--brasenia-adr-0006-99)).

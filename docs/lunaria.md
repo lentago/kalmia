@@ -174,7 +174,7 @@ stays off (fails closed) rather than falling open.
 
 ## Cast receiver watchdog (second client — brasenia ADR-0006, #99)
 
-The household Chromecast joined as a **second viewport client** alongside the
+The wall-display Chromecast joined as a **second viewport client** alongside the
 Roku/HLS path ([brasenia
 ADR-0006](https://github.com/lentago/brasenia/blob/main/docs/adr/0006-cast-web-receiver-second-client.md),
 [brasenia#12](https://github.com/lentago/brasenia/issues/12)). A Cast **custom
@@ -204,7 +204,7 @@ The custom web receiver is registered in the Cast Developer Console as an
 **unpublished** Custom Receiver: App ID `83A58DDE`, receiver URL
 `http://pub.lan/cast/` (the console accepted plain HTTP for an unpublished
 app — no TLS leg needed, and no mixed content since the brief iframe is
-same-scheme). The household Chromecast ("Family Room TV", Cast-platform
+same-scheme). The wall-display Chromecast ("Family Room TV", Cast-platform
 device) is serial-registered for development; the app never gets published,
 so it launches only on that device — the same posture as the sideloaded
 Roku dev channel.
