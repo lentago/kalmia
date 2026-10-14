@@ -18,6 +18,8 @@ storage `neptune`, LAN-wide).
   key authorized.
 - **Claude Code** (native installer) at `/home/claude/.local/bin/claude`.
 - The **gh CLI** (from GitHub's apt repo).
+- **Node 22 LTS**, system-wide from NodeSource's 22.x apt channel (pinned over
+  Debian's 18.x) — Astro 7 needs 22 (lentago/claytonia#140).
 - Runner scaffold dirs and **empty secret placeholders** at `/etc/claude-runner/`.
 - git bot identity + the GitHub-App credential helper wired for the `claude` user.
 - A `forge-firstboot` unit that regenerates ssh host keys on first boot.

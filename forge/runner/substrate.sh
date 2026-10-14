@@ -63,6 +63,23 @@ if ! command -v gh >/dev/null 2>&1; then
 fi
 gh --version | head -1
 
+echo ">>> [substrate] Node 22 LTS (NodeSource)"
+# Astro 7 needs Node 22 and Debian 12's own nodejs is 18.x (claytonia#140).
+# Mirrors claytonia provision/01 (#146) — keep the two identical in effect.
+# The pin keeps Debian's nodejs from outranking the NodeSource build.
+# The source and the pin are part of the image contract, so they are written on
+# every run (idempotent); only the install is skipped when Node 22 is already there.
+apt-get install -y -qq --no-install-recommends gnupg curl ca-certificates >/dev/null
+install -d -m 755 /etc/apt/keyrings
+curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor --yes -o /etc/apt/keyrings/nodesource.gpg
+chmod go+r /etc/apt/keyrings/nodesource.gpg
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" > /etc/apt/sources.list.d/nodesource.list
+printf 'Package: nodejs\nPin: origin deb.nodesource.com\nPin-Priority: 600\n' > /etc/apt/preferences.d/nodesource
+if [ "$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || true)" != 22 ]; then
+  apt-get update -qq && apt-get install -y -qq nodejs >/dev/null
+fi
+node --version
+
 echo ">>> [substrate] runner dirs"
 mkdir -p /opt/claude-runner/bin /opt/claude-runner/etc /etc/claude-runner
 install -d -o claude -g claude /home/claude/work
