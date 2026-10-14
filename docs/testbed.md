@@ -6,7 +6,8 @@ the `xubuntu` and `fedora` profiles: boot a pristine box, run the play, confirm
 the end state, roll back, repeat. A-fresh-box bootstrap and idempotency are
 exactly what they let you exercise.
 
-They live on the on-prem cluster (Proxmox node **pve5**) and are
+They live on the on-prem cluster (the machines in our own building; Proxmox node
+**pve5**) and are
 managed by Home Claude (run from `~`); see `~/CLAUDE.md` for cluster topology.
 
 ## The two boxes
