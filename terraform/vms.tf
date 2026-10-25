@@ -11,7 +11,7 @@
 # parked workstation nor stop a testbed mid-run. HAOS and the service LXCs
 # deliberately keep enforced power: re-starting those is desired state.
 
-# --- xubuntu-ws (102): running workstation, disk on `local` (qcow2) ---
+# --- xubuntu-ws (102): primary persistent Claude workspace, disk on `local-lvm` ---
 import {
   to = proxmox_virtual_environment_vm.xubuntu_ws
   id = "pve5/102"
@@ -40,10 +40,13 @@ resource "proxmox_virtual_environment_vm" "xubuntu_ws" {
 
   disk {
     interface    = "scsi0"
-    datastore_id = "local"
-    file_format  = "qcow2"
-    size         = 64 # grown from 32: primary persistent Claude workspace
+    # Moved off `local` (pve5's root fs) to thin LVM and grown 32 -> 64 GB
+    # out of band (`qm disk move` + `qm resize`); discard returns freed blocks.
+    datastore_id = "local-lvm"
+    file_format  = "raw"
+    size         = 64
     iothread     = true
+    discard      = "on"
   }
 
   network_device {
