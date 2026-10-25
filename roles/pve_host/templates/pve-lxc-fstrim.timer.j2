@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Nightly LXC fstrim
+
+[Timer]
+OnCalendar={{ pve_host_lxc_fstrim_on_calendar }}
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

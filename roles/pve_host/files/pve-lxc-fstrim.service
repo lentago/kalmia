@@ -1,0 +1,9 @@
+[Unit]
+Description=Trim running LXC volumes back to the lvmthin pool
+Documentation=https://github.com/lentago/kalmia/blob/main/docs/pve-host.md
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pve-lxc-fstrim
+Nice=10
+IOSchedulingClass=idle

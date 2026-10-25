@@ -1,0 +1,18 @@
+---
+# ============================================================================
+# Storage safety on the Proxmox VE nodes (lvmthin autoextend, nightly LXC
+# fstrim). Unlike site.yml this is PUSH, not self-provisioning: PVE nodes
+# carry no Ansible, so run it from a workstation whose key root accepts:
+#
+#   ansible-playbook -i pve,pve2,pve3,pve4,pve5, -u root pve-host.yml
+#
+# See docs/pve-host.md.
+# ============================================================================
+- name: Apply storage safety settings to Proxmox VE nodes
+  hosts: all
+  gather_facts: false
+  become: false
+
+  roles:
+    - role: pve_host
+      tags: [pve_host, storage]

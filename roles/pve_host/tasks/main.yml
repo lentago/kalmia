@@ -1,0 +1,80 @@
+---
+# ============================================================================
+# pve_host — storage safety on a Proxmox VE node: lvmthin autoextend and a
+# nightly LXC fstrim timer. Runs as root over SSH (PVE nodes have no sudo),
+# hence no `become`. See docs/pve-host.md.
+# ============================================================================
+- name: Configure lvmthin pool autoextend in lvmlocal.conf
+  ansible.builtin.blockinfile:
+    path: /etc/lvm/lvmlocal.conf
+    marker: "# {mark} kalmia pve_host: thin pool autoextend"
+    block: |
+      activation {
+        thin_pool_autoextend_threshold = {{ pve_host_thin_autoextend_threshold }}
+        thin_pool_autoextend_percent = {{ pve_host_thin_autoextend_percent }}
+      }
+
+- name: Read the effective thin pool autoextend threshold
+  ansible.builtin.command: lvmconfig --type full activation/thin_pool_autoextend_threshold
+  register: pve_host_lvm_threshold
+  changed_when: false
+  check_mode: false
+
+- name: Assert LVM picked up the autoextend threshold
+  ansible.builtin.assert:
+    that:
+      - pve_host_lvm_threshold.stdout == 'thin_pool_autoextend_threshold=' ~ pve_host_thin_autoextend_threshold
+    fail_msg: "lvmconfig reports {{ pve_host_lvm_threshold.stdout }}; lvmlocal.conf is not being read"
+  when: not ansible_check_mode
+
+# Autoextend is driven by dmeventd; an unmonitored pool never extends.
+- name: Read the thin pool monitoring state
+  ansible.builtin.command: lvs --noheadings -o seg_monitor pve/data
+  register: pve_host_pool_monitor
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Enable dmeventd monitoring on the thin pool
+  ansible.builtin.command: lvchange --monitor y pve/data
+  when:
+    - pve_host_pool_monitor.rc == 0
+    - pve_host_pool_monitor.stdout | trim != 'monitored'
+  changed_when: true
+
+- name: Deploy the pve-lxc-fstrim script
+  ansible.builtin.copy:
+    src: pve-lxc-fstrim
+    dest: /usr/local/sbin/pve-lxc-fstrim
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy the pve-lxc-fstrim systemd service
+  ansible.builtin.copy:
+    src: pve-lxc-fstrim.service
+    dest: /etc/systemd/system/pve-lxc-fstrim.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Deploy the pve-lxc-fstrim systemd timer
+  ansible.builtin.template:
+    src: pve-lxc-fstrim.timer.j2
+    dest: /etc/systemd/system/pve-lxc-fstrim.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Flush handlers so systemd sees the new units
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the pve-lxc-fstrim timer
+  ansible.builtin.systemd_service:
+    name: pve-lxc-fstrim.timer
+    enabled: true
+    state: started
+  # In --check the unit file was never written, so systemd can't find it.
+  ignore_errors: "{{ ansible_check_mode }}"
