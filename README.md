@@ -288,6 +288,11 @@ the legacy `lunaria` runtime names remain, rename tracked in
 ffmpeg → mediamtx HLS for the play-room Roku. Credential-free by design; the
 guest itself is defined in `terraform/containers.tf`.
 
+The third targets the hypervisors themselves: `pve-host.yml` + the `pve_host`
+role set lvmthin autoextend and a nightly LXC fstrim on every Proxmox node.
+Unlike the others it is pushed over SSH, since PVE nodes carry no Ansible —
+see [`docs/pve-host.md`](docs/pve-host.md).
+
 The Terraform layer that declares these guests carries its own naming-debt
 footnote: kalmia's state backend migrated to `solidago-tfstate-*` keys
 (2026-07-08), so this repo's own state sits under a `solidago` prefix — an

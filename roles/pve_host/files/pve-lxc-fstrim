@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Trim every running LXC's rootfs/volume mountpoints on this node so space the
+# guest frees goes back to the lvmthin pool. Bind mounts (the neptune CIFS
+# shares) are skipped. Deployed by kalmia's pve_host role.
+set -uo pipefail
+
+rc=0
+for id in $(pct list | awk 'NR > 1 && $2 == "running" { print $1 }'); do
+  if ! pct fstrim "$id" --ignore-mountpoints 1; then
+    echo "pct fstrim failed for CT $id" >&2
+    rc=1
+  fi
+done
+exit "$rc"

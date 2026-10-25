@@ -1,0 +1,12 @@
+---
+# Thin pool autoextend: grow pve/data by this percent of its size whenever it
+# crosses the threshold, out of the VG's free extents (~16 GiB per node). 10%
+# of a 141 GiB pool fits that headroom once; 20% would not, and lvextend
+# refuses a partial extension.
+pve_host_thin_autoextend_threshold: 80
+pve_host_thin_autoextend_percent: 10
+
+# Nightly trim of running LXC rootfs volumes on lvmthin (Proxmox never trims
+# containers on its own). After guests-weekly (sun 03:00) and clear of the
+# HAOS 4-hourly slots.
+pve_host_lxc_fstrim_on_calendar: "*-*-* 04:30:00"

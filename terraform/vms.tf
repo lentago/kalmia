@@ -11,7 +11,7 @@
 # parked workstation nor stop a testbed mid-run. HAOS and the service LXCs
 # deliberately keep enforced power: re-starting those is desired state.
 
-# --- xubuntu-ws (102): running workstation, disk on `local` (qcow2) ---
+# --- xubuntu-ws (102): primary persistent Claude workspace, disk on `local-lvm` ---
 import {
   to = proxmox_virtual_environment_vm.xubuntu_ws
   id = "pve5/102"
@@ -23,10 +23,16 @@ resource "proxmox_virtual_environment_vm" "xubuntu_ws" {
   name                = "xubuntu-ws"
   machine             = "q35"
   scsi_hardware       = "virtio-scsi-single"
-  on_boot             = false
+  on_boot             = true
   started             = true
   reboot_after_update = false
   boot_order          = ["scsi0", "net0"]
+
+  # qemu-guest-agent is installed in the guest; this attaches its virtio
+  # channel so vzdump can freeze the filesystem and PVE can run fstrim.
+  agent {
+    enabled = true
+  }
 
   cpu {
     cores   = 2
@@ -35,15 +41,18 @@ resource "proxmox_virtual_environment_vm" "xubuntu_ws" {
   }
 
   memory {
-    dedicated = 4096
+    dedicated = 8192
   }
 
+  # Moved off `local` (pve5's root fs) to thin LVM and grown 32 -> 64 GB
+  # out of band (`qm disk move` + `qm resize`); discard returns freed blocks.
   disk {
     interface    = "scsi0"
-    datastore_id = "local"
-    file_format  = "qcow2"
-    size         = 32
+    datastore_id = "local-lvm"
+    file_format  = "raw"
+    size         = 64
     iothread     = true
+    discard      = "on"
   }
 
   network_device {
@@ -60,8 +69,8 @@ resource "proxmox_virtual_environment_vm" "xubuntu_ws" {
     uuid = "1833a71b-1912-4817-be36-b7972fe9a7f4"
   }
 
-  # Momentary power is operator-driven (parked when unused) — manage shape,
-  # not the power button. `started` is the create-time baseline only.
+  # Always-on primary workspace (on_boot = true), but a running apply still
+  # never touches the power button: `started` is the create-time baseline only.
   lifecycle {
     # Import-only: imported disk/state is unrebuildable by the token; guarded.
     prevent_destroy = true
@@ -105,6 +114,7 @@ resource "proxmox_virtual_environment_vm" "fedora_ws" {
     datastore_id = "local-lvm"
     size         = 50
     iothread     = true
+    discard      = "on"
   }
 
   network_device {
@@ -173,6 +183,8 @@ resource "proxmox_virtual_environment_vm" "testbed" {
     dedicated = 4096
   }
 
+  # No discard: `qm rollback ... pristine` restores the snapshot's config,
+  # which would strip it again on every test loop (and drift this plan).
   disk {
     interface    = "scsi0"
     datastore_id = "local-lvm"
