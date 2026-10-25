@@ -42,7 +42,7 @@ resource "proxmox_virtual_environment_vm" "xubuntu_ws" {
     interface    = "scsi0"
     datastore_id = "local"
     file_format  = "qcow2"
-    size         = 32
+    size         = 64 # grown from 32: primary persistent Claude workspace
     iothread     = true
   }
 
