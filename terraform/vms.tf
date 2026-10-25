@@ -38,10 +38,10 @@ resource "proxmox_virtual_environment_vm" "xubuntu_ws" {
     dedicated = 4096
   }
 
+  # Moved off `local` (pve5's root fs) to thin LVM and grown 32 -> 64 GB
+  # out of band (`qm disk move` + `qm resize`); discard returns freed blocks.
   disk {
-    interface = "scsi0"
-    # Moved off `local` (pve5's root fs) to thin LVM and grown 32 -> 64 GB
-    # out of band (`qm disk move` + `qm resize`); discard returns freed blocks.
+    interface    = "scsi0"
     datastore_id = "local-lvm"
     file_format  = "raw"
     size         = 64
