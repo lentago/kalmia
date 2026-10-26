@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Sync the Family Brief document from Google Drive to the pub.lan web root so
+# it serves at http://pub.lan/family-brief/latest.json (kalmia#163).
+#
+# Drive side is written by the claude.ai "Family Brief" routine: the same JSON
+# it stores on its dashboard page, as a single latest.json replaced in place.
+# brasenia's family-brief producer (brasenia-family-brief.service) reads it and
+# keeps the family-today pane on the viewport bus. Config comes from the
+# environment (set by the systemd unit / EnvironmentFile):
+#
+#   FAMILY_BRIEF_SRC    rclone path of the Drive folder holding latest.json
+#   FAMILY_BRIEF_DEST   publish target on the mounted web share
+#
+# Like publish-morning-brief, this is credential-free (the rclone remote lives
+# only in /root/.config/rclone/rclone.conf) and skips cleanly when the web
+# share is not mounted. rclone copies into a local staging directory first, so
+# the share only ever sees a complete file: cp to latest.json.tmp, then mv into
+# place. The producer must never read a half-written document.
+set -euo pipefail
+SRC="${FAMILY_BRIEF_SRC:?FAMILY_BRIEF_SRC must be set}"
+DEST="${FAMILY_BRIEF_DEST:-/srv/www/family-brief}"
+
+mountpoint -q /srv/www || { echo "web share not mounted; skipping" >&2; exit 0; }
+
+STAGE=$(mktemp -d)
+trap 'rm -rf "$STAGE"' EXIT
+rclone copy "$SRC" "$STAGE" --include "latest.json" --timeout 60s
+
+if [ ! -f "$STAGE/latest.json" ]; then
+    echo "no latest.json in $SRC yet; nothing to publish" >&2
+    exit 0
+fi
+
+# A truncated or malformed upload stays off the share; the previous document
+# keeps serving until the routine writes a good one.
+if ! python3 -c 'import json, sys; json.load(open(sys.argv[1]))' "$STAGE/latest.json" 2>/dev/null; then
+    echo "latest.json from $SRC is not valid JSON; keeping the published copy" >&2
+    exit 1
+fi
+
+mkdir -p "$DEST"
+if ! cmp -s "$STAGE/latest.json" "$DEST/latest.json" 2>/dev/null; then
+    cp "$STAGE/latest.json" "$DEST/latest.json.tmp"
+    mv "$DEST/latest.json.tmp" "$DEST/latest.json"
+    echo "published latest.json to $DEST (http://pub.lan/family-brief/latest.json)"
+fi

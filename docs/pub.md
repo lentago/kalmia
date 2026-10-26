@@ -141,11 +141,49 @@ application URL in the Google Cast Developer Console.
 > unreachable the pull is skipped and the existing checkout republishes; set
 > `pub_cast_publish_enabled: false` to skip the whole block.
 
+## Family Brief document (#163)
+
+pub also publishes the claude.ai "Family Brief" routine's document for the wall
+display. The routine writes the JSON it stores on its dashboard page, byte for
+byte, as a single `latest.json` in a Drive folder (its STEP 5b), replacing the
+old copy. pub syncs that file to `/srv/www/family-brief/`, so it serves at
+**`http://pub.lan/family-brief/latest.json`**, and brasenia's family-brief
+producer turns it into the `family-today` pane (see the viewport runtime
+below). No Caddy change is involved; the existing `file_server` on `/srv/www`
+serves the path.
+
+- `/usr/local/bin/publish-family-brief` runs `rclone copy` of `latest.json`
+  from `pub_family_brief_src` into a local staging directory, checks that it
+  parses as JSON, then copies it to `latest.json.tmp` on the share and `mv`s
+  it into place, the same swap `publish-morning-brief` uses for `index.html`.
+  The producer never sees a half-written file, and a malformed upload leaves
+  the previous document serving. Like the other publishers it skips cleanly
+  (exit 0) when the share is not mounted or the folder has no `latest.json`
+  yet.
+- `publish-family-brief.service` (oneshot) + its `.timer` run every 15
+  minutes from 06:00 to 09:45 `America/New_York`, every day
+  (`pub_family_brief_timer_oncalendar`). The routine runs at about 06:47,
+  weekends included, which the weekday Morning Brief timer would miss.
+- Config is `/etc/default/publish-family-brief` (source + dest), rendered from
+  role defaults. It uses the same root `[Google Drive]` rclone remote as the
+  Morning Brief, so there is no second secret to seed.
+- **The folder name is a pair.** `pub_family_brief_src` defaults to
+  `Google Drive:Hobbies/Claude-Code/family-brief`, next to the Morning Brief's
+  folder. The routine's STEP 5b names the same folder; change both together.
+  Toggle: `pub_family_brief_enabled`.
+
+Check, after the morning run:
+
+```bash
+curl -s http://pub.lan/family-brief/latest.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["date"])'
+journalctl -u publish-family-brief --since today
+```
+
 ## brasenia viewport runtime (#140)
 
-pub also runs brasenia's two long-running viewport programs
+pub also runs brasenia's long-running viewport programs
 ([brasenia#26](https://github.com/lentago/brasenia/issues/26) Phase 2) from
-the same role-managed `/srv/brasenia` checkout. Both are stdlib Python 3.9+
+the same role-managed `/srv/brasenia` checkout. All are stdlib Python 3.9+
 (Debian 12 ships 3.11) and credential-free: their only inputs are the share
 and the public GitHub API. They read and write only under
 `/srv/www/viewport`, which is why they run here and not on LXC 118 (no NAS
@@ -164,8 +202,18 @@ mount, by design).
   `/srv/brasenia/producers/pipeline`). While the document is a 502 (drosera's
   producer not yet deployed on LXC 105) it logs "unreadable" and writes
   nothing.
+- `brasenia-family-brief.service` (#163, brasenia#48) reads
+  `http://pub.lan/family-brief/latest.json` every 60 s
+  (`pub_viewport_family_brief_interval`) and keeps
+  `viewport/panes/family-today/` up as an `ambient` pane while the brief is
+  dated today or yesterday (`python3 -m family_brief_producer`,
+  WorkingDirectory `/srv/brasenia/producers/family-brief`). An older brief
+  removes the pane; an unreachable document leaves it to its 30-minute TTL.
+  The unit needs brasenia#48 on `main`: until then the module is missing and
+  the unit restarts every 10 s, then comes up on its own once the daily pull
+  brings the producer in.
 
-Both are `Type=simple`, `Restart=always`, and run as the unprivileged
+All are `Type=simple`, `Restart=always`, and run as the unprivileged
 `brasenia` system user in the `webdrop` group. The share is a CIFS mount that
 forces every file to uid/gid 1000 at mode 0770, so gid-1000 membership is
 what grants writes (Caddy sits in the same group for reads); the role ensures
@@ -182,21 +230,24 @@ compositor also creates the three directories itself on start. Toggle:
 **How new code goes live.** No separate timer. The daily
 `publish-cast-receiver` run already does a `git pull --ff-only` of
 `/srv/brasenia`. When that pull moves `HEAD`, the script runs
-`systemctl try-restart` of the three brasenia services, so a merge to
+`systemctl try-restart` of the four brasenia services, so a merge to
 brasenia `main` is running on pub within a day. Re-running the play also
-restarts both services if the checkout or a unit file changed. This rides on
+restarts the services if the checkout or a unit file changed. This rides on
 the Cast publisher: with `pub_cast_publish_enabled: false` there is no daily
 pull, so the services only update when the play is re-run.
 
 **Health check:**
 
 ```bash
-systemctl status brasenia-compositor brasenia-focus brasenia-pipeline && curl -s http://pub.lan/viewport/current.json
+systemctl status brasenia-compositor brasenia-focus brasenia-pipeline brasenia-family-brief && curl -s http://pub.lan/viewport/current.json
 ```
 
-All three units should be `active (running)`. With an empty bus, `current.json`
+All four units should be `active (running)`. With an empty bus, `current.json`
 points at the briefing (`http://pub.lan/brief/…`). Logs:
-`journalctl -u brasenia-compositor -u brasenia-focus -u brasenia-pipeline`.
+`journalctl -u brasenia-compositor -u brasenia-focus -u brasenia-pipeline -u brasenia-family-brief`.
+A live family-brief producer logs `family-today: brief of <date> rendered for
+<date>`, and `/srv/www/viewport/panes/family-today/manifest.json` reads
+`"class": "ambient"`.
 
 ## Rebuild flow
 

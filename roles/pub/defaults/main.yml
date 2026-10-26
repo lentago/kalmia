@@ -21,6 +21,22 @@ pub_rclone_config_path: "{{ pub_rclone_config_dir }}/rclone.conf"
 # clock runs UTC — the explicit zone suffix is load-bearing.
 pub_timer_oncalendar: "Mon..Fri *-*-* 08..11:04/15:00 America/New_York"
 
+# --- Family Brief document (kalmia#163) --------------------------------------
+# Syncs latest.json, written by the claude.ai "Family Brief" routine, from
+# Drive to http://pub.lan/family-brief/latest.json, where brasenia's
+# family-brief producer reads it. Same root rclone remote as the Morning Brief.
+pub_family_brief_enabled: true
+pub_family_brief_script_path: /usr/local/bin/publish-family-brief
+# DEFAULT, NOT YET CONFIRMED: the folder does not exist yet. It sits next to the
+# Morning Brief's folder; whatever it ends up being, the routine's STEP 5b must
+# name the same folder, so change both together.
+pub_family_brief_src: "Google Drive:Hobbies/Claude-Code/family-brief"
+pub_family_brief_dest: /srv/www/family-brief
+# Every day, weekends included, 06:00-09:45 America/New_York every 15 minutes:
+# the routine runs at about 06:47, and the window leaves room for a late run.
+# The container clock runs UTC, so the explicit zone suffix is load-bearing.
+pub_family_brief_timer_oncalendar: "*-*-* 06..09:00/15:00 America/New_York"
+
 # --- Cast receiver publishing (brasenia ADR-0006, kalmia#99) ----------------
 # Serves brasenia's Cast custom web receiver at http://pub.lan/cast/ — the URL
 # registered in the Cast Developer Console. pub owns receiver *hosting* only;
@@ -69,3 +85,7 @@ pub_viewport_focus_interval: 30
 # http://pub.lan/viewport/pipeline.json (the Caddy route from kalmia#146) and
 # keeps panes/change-pipeline/ up while a change is in flight.
 pub_viewport_pipeline_interval: 15
+# The family-brief pane producer (kalmia#163, brasenia#48) reads
+# http://pub.lan/family-brief/latest.json and keeps panes/family-today/ up
+# while the brief is dated today or yesterday.
+pub_viewport_family_brief_interval: 60
