@@ -27,9 +27,8 @@ pub_timer_oncalendar: "Mon..Fri *-*-* 08..11:04/15:00 America/New_York"
 # family-brief producer reads it. Same root rclone remote as the Morning Brief.
 pub_family_brief_enabled: true
 pub_family_brief_script_path: /usr/local/bin/publish-family-brief
-# DEFAULT, NOT YET CONFIRMED: the folder does not exist yet. It sits next to the
-# Morning Brief's folder; whatever it ends up being, the routine's STEP 5b must
-# name the same folder, so change both together.
+# Folder confirmed by Chris 2026-10-26, next to the Morning Brief's folder. The
+# Family Brief routine's STEP 5b writes here; change both together.
 pub_family_brief_src: "Google Drive:Hobbies/Claude-Code/family-brief"
 pub_family_brief_dest: /srv/www/family-brief
 # Every day, weekends included, 06:00-09:45 America/New_York every 15 minutes:
