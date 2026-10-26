@@ -1,0 +1,19 @@
+[Unit]
+Description=brasenia family-brief producer: the Family Brief's today and tomorrow as a pane on the viewport bus
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor={{ pub_viewport_webroot }}
+ConditionPathIsMountPoint={{ pub_viewport_webroot }}
+
+[Service]
+Type=simple
+User={{ pub_viewport_user }}
+Group={{ pub_viewport_group }}
+Environment=PYTHONDONTWRITEBYTECODE=1
+WorkingDirectory={{ pub_cast_checkout }}/producers/family-brief
+ExecStart=/usr/bin/python3 -m family_brief_producer --webroot {{ pub_viewport_webroot }} --source {{ pub_viewport_url_base }}/family-brief/latest.json --interval {{ pub_viewport_family_brief_interval }}
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

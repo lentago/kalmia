@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Sync the Family Brief document from Google Drive to the pub.lan web root so
+# it serves at http://pub.lan/family-brief/latest.json (kalmia#163).
+#
+# Drive side is written by the claude.ai "Family Brief" routine: the same JSON
+# it stores on its dashboard page, as a single latest.json replaced in place.
+# brasenia's family-brief producer (brasenia-family-brief.service) reads it and
+# keeps the family-today pane on the viewport bus. Config comes from the
+# environment (set by the systemd unit / EnvironmentFile):
+#
+#   FAMILY_BRIEF_SRC    rclone path of the Drive folder holding latest.json
+#   FAMILY_BRIEF_DEST   publish target on the mounted web share
+#
+# Like publish-morning-brief, this is credential-free (the rclone remote lives
+# only in /root/.config/rclone/rclone.conf) and skips cleanly when the web
+# share is not mounted. rclone copies into a local staging directory first, so
+# the share only ever sees a complete file: cp to latest.json.tmp, then mv into
+# place. The producer must never read a half-written document.
+set -euo pipefail
+SRC="${FAMILY_BRIEF_SRC:?FAMILY_BRIEF_SRC must be set}"
+DEST="${FAMILY_BRIEF_DEST:-/srv/www/family-brief}"
+
+mountpoint -q /srv/www || { echo "web share not mounted; skipping" >&2; exit 0; }
+
+STAGE=$(mktemp -d)
+trap 'rm -rf "$STAGE"' EXIT
+# rclone exits 3 when the folder itself doesn't exist yet (the routine hasn't
+# written its first copy); treat that like a folder with no latest.json. Any
+# other rclone failure still fails the unit.
+rc=0
+rclone copy "$SRC" "$STAGE" --include "latest.json" --timeout 60s || rc=$?
+if [ "$rc" -eq 3 ]; then
+    echo "$SRC does not exist yet; nothing to publish" >&2
+    exit 0
+elif [ "$rc" -ne 0 ]; then
+    exit "$rc"
+fi
+
+if [ ! -f "$STAGE/latest.json" ]; then
+    echo "no latest.json in $SRC yet; nothing to publish" >&2
+    exit 0
+fi
+
+# A truncated or malformed upload stays off the share; the previous document
+# keeps serving until the routine writes a good one. The check is the one the
+# producer applies before drawing the pane: a JSON object with schema 1 and a
+# YYYY-MM-DD date. Anything the producer would reject never replaces a good copy.
+if ! python3 - "$STAGE/latest.json" <<'PY' 2>/dev/null
+import json, re, sys
+from datetime import date
+doc = json.load(open(sys.argv[1]))
+ok = (isinstance(doc, dict) and type(doc.get("schema")) is int and doc["schema"] == 1
+      and isinstance(doc.get("date"), str)
+      and re.fullmatch(r"\d{4}-\d{2}-\d{2}", doc["date"]) is not None)
+if ok:
+    date.fromisoformat(doc["date"])
+sys.exit(0 if ok else 1)
+PY
+then
+    echo "latest.json from $SRC is not a valid brief (JSON object, schema 1, YYYY-MM-DD date); keeping the published copy" >&2
+    exit 1
+fi
+
+mkdir -p "$DEST"
+if ! cmp -s "$STAGE/latest.json" "$DEST/latest.json" 2>/dev/null; then
+    cp "$STAGE/latest.json" "$DEST/latest.json.tmp"
+    mv "$DEST/latest.json.tmp" "$DEST/latest.json"
+    echo "published latest.json to $DEST (http://pub.lan/family-brief/latest.json)"
+fi

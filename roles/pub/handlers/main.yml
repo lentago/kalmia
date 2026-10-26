@@ -8,6 +8,7 @@
     - brasenia-compositor.service
     - brasenia-focus.service
     - brasenia-pipeline.service
+    - brasenia-family-brief.service
   become: true
   when: pub_viewport_enabled
 

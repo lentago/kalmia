@@ -80,8 +80,64 @@
     msg: >-
       {{ pub_rclone_config_path }} is missing. This role never writes
       credential material — seed it manually per docs/pub.md before relying
-      on the timer; publish-morning-brief will fail until then.
+      on the timers; publish-morning-brief and publish-family-brief fail
+      until then.
   when: not pub_rclone_config.stat.exists
+
+# ---------------------------------------------------------------------------
+# Family Brief document (kalmia#163) — syncs latest.json from the routine's
+# Drive folder to http://pub.lan/family-brief/latest.json for brasenia's
+# family-brief producer. Uses the same root rclone remote as the Morning
+# Brief; this block writes no credential material either.
+# ---------------------------------------------------------------------------
+- name: Deploy the publish-family-brief script
+  ansible.builtin.copy:
+    src: publish-family-brief
+    dest: "{{ pub_family_brief_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+  when: pub_family_brief_enabled
+
+- name: Render the publish-family-brief environment file
+  ansible.builtin.template:
+    src: publish-family-brief.env.j2
+    dest: /etc/default/publish-family-brief
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: pub_family_brief_enabled
+
+- name: Deploy the publish-family-brief systemd service
+  ansible.builtin.copy:
+    src: publish-family-brief.service
+    dest: /etc/systemd/system/publish-family-brief.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: pub_family_brief_enabled
+
+- name: Deploy the publish-family-brief systemd timer
+  ansible.builtin.template:
+    src: publish-family-brief.timer.j2
+    dest: /etc/systemd/system/publish-family-brief.timer
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: pub_family_brief_enabled
+
+- name: Enable and start the publish-family-brief timer
+  ansible.builtin.systemd_service:
+    name: publish-family-brief.timer
+    daemon_reload: true
+    enabled: true
+    state: started
+  become: true
+  when: pub_family_brief_enabled
 
 # ---------------------------------------------------------------------------
 # Cast receiver publishing (brasenia ADR-0006, kalmia#99) — serves brasenia's
@@ -149,7 +205,7 @@
 
 # ---------------------------------------------------------------------------
 # brasenia viewport runtime (kalmia#140, brasenia#26 Phase 2) — the compositor
-# and focus producer, run from the checkout above as the unprivileged
+# and producers, run from the checkout above as the unprivileged
 # `brasenia` system user. The share forces uid/gid 1000 and mode 0770 on every
 # file, so membership of the gid-1000 `webdrop` group is what grants writes
 # (the same group Caddy reads through); the role leaves ownership and mode of
@@ -209,6 +265,7 @@
     - brasenia-compositor
     - brasenia-focus
     - brasenia-pipeline
+    - brasenia-family-brief
   become: true
   when: pub_viewport_enabled
   notify: Restart brasenia viewport services
@@ -223,6 +280,7 @@
     - brasenia-compositor
     - brasenia-focus
     - brasenia-pipeline
+    - brasenia-family-brief
   become: true
   when: pub_viewport_enabled
 
