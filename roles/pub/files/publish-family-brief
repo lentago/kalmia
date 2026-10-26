@@ -24,7 +24,17 @@ mountpoint -q /srv/www || { echo "web share not mounted; skipping" >&2; exit 0; 
 
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
-rclone copy "$SRC" "$STAGE" --include "latest.json" --timeout 60s
+# rclone exits 3 when the folder itself doesn't exist yet (the routine hasn't
+# written its first copy); treat that like a folder with no latest.json. Any
+# other rclone failure still fails the unit.
+rc=0
+rclone copy "$SRC" "$STAGE" --include "latest.json" --timeout 60s || rc=$?
+if [ "$rc" -eq 3 ]; then
+    echo "$SRC does not exist yet; nothing to publish" >&2
+    exit 0
+elif [ "$rc" -ne 0 ]; then
+    exit "$rc"
+fi
 
 if [ ! -f "$STAGE/latest.json" ]; then
     echo "no latest.json in $SRC yet; nothing to publish" >&2
@@ -32,9 +42,22 @@ if [ ! -f "$STAGE/latest.json" ]; then
 fi
 
 # A truncated or malformed upload stays off the share; the previous document
-# keeps serving until the routine writes a good one.
-if ! python3 -c 'import json, sys; json.load(open(sys.argv[1]))' "$STAGE/latest.json" 2>/dev/null; then
-    echo "latest.json from $SRC is not valid JSON; keeping the published copy" >&2
+# keeps serving until the routine writes a good one. The check is the one the
+# producer applies before drawing the pane: a JSON object with schema 1 and a
+# YYYY-MM-DD date. Anything the producer would reject never replaces a good copy.
+if ! python3 - "$STAGE/latest.json" <<'PY' 2>/dev/null
+import json, re, sys
+from datetime import date
+doc = json.load(open(sys.argv[1]))
+ok = (isinstance(doc, dict) and type(doc.get("schema")) is int and doc["schema"] == 1
+      and isinstance(doc.get("date"), str)
+      and re.fullmatch(r"\d{4}-\d{2}-\d{2}", doc["date"]) is not None)
+if ok:
+    date.fromisoformat(doc["date"])
+sys.exit(0 if ok else 1)
+PY
+then
+    echo "latest.json from $SRC is not a valid brief (JSON object, schema 1, YYYY-MM-DD date); keeping the published copy" >&2
     exit 1
 fi
 

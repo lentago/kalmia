@@ -144,22 +144,25 @@ application URL in the Google Cast Developer Console.
 ## Family Brief document (#163)
 
 pub also publishes the claude.ai "Family Brief" routine's document for the wall
-display. The routine writes the JSON it stores on its dashboard page, byte for
-byte, as a single `latest.json` in a Drive folder (its STEP 5b), replacing the
-old copy. pub syncs that file to `/srv/www/family-brief/`, so it serves at
+display. Once the routine gains its STEP 5b (not added yet), it writes the
+JSON it stores on its dashboard page, byte for byte, as a single `latest.json`
+in a Drive folder, replacing the old copy. Until then the folder doesn't exist
+and the publisher skips. pub syncs that file to `/srv/www/family-brief/`, so it serves at
 **`http://pub.lan/family-brief/latest.json`**, and brasenia's family-brief
 producer turns it into the `family-today` pane (see the viewport runtime
-below). No Caddy change is involved; the existing `file_server` on `/srv/www`
+below; the producer lands with
+[brasenia#48](https://github.com/lentago/brasenia/pull/48)). No Caddy change is involved; the existing `file_server` on `/srv/www`
 serves the path.
 
 - `/usr/local/bin/publish-family-brief` runs `rclone copy` of `latest.json`
-  from `pub_family_brief_src` into a local staging directory, checks that it
-  parses as JSON, then copies it to `latest.json.tmp` on the share and `mv`s
+  from `pub_family_brief_src` into a local staging directory, checks it the
+  way the producer does (a JSON object with `schema` 1 and a `YYYY-MM-DD`
+  `date`), then copies it to `latest.json.tmp` on the share and `mv`s
   it into place, the same swap `publish-morning-brief` uses for `index.html`.
   The producer never sees a half-written file, and a malformed upload leaves
   the previous document serving. Like the other publishers it skips cleanly
-  (exit 0) when the share is not mounted or the folder has no `latest.json`
-  yet.
+  (exit 0) when the share is not mounted, the Drive folder doesn't exist, or
+  the folder has no `latest.json` yet.
 - `publish-family-brief.service` (oneshot) + its `.timer` run every 15
   minutes from 06:00 to 09:45 `America/New_York`, every day
   (`pub_family_brief_timer_oncalendar`). The routine runs at about 06:47,
@@ -167,9 +170,10 @@ serves the path.
 - Config is `/etc/default/publish-family-brief` (source + dest), rendered from
   role defaults. It uses the same root `[Google Drive]` rclone remote as the
   Morning Brief, so there is no second secret to seed.
-- **The folder name is a pair.** `pub_family_brief_src` defaults to
+- **The folder name is a pair.** `pub_family_brief_src` is
   `Google Drive:Hobbies/Claude-Code/family-brief`, next to the Morning Brief's
-  folder. The routine's STEP 5b names the same folder; change both together.
+  folder (confirmed 2026-10-26). STEP 5b must write to the same folder; change
+  both together.
   Toggle: `pub_family_brief_enabled`.
 
 Check, after the morning run:
