@@ -23,8 +23,9 @@ pane-rubric viewport this grows into): `http://pub.lan/brasenia/concept.md`.
 ```
 pub (LXC 114)                       lunaria (LXC 118, 192.168.139.19)
   family-brief producer               lunaria-frames.service
-    viewport/panes/family-today/  →     chromium --headless, 3x scale, of
-      detail.html (desk edition)          LUNARIA_PIN_URL (the pinned page)
+    compositor → viewport/        →     chromium --headless, 3x scale, of
+      current.json (the pointer)          the pointer's pane (its detail.html
+                                          desk edition when it has one)
                                         → 3840x2160 page → frame.png
                                       lunaria-stream.service
                                         ffmpeg frame.png → HEVC 5 fps →
@@ -50,12 +51,15 @@ never blank the display. First pane: the praxis Obsidian-graph
 (`http://pub.lan/praxis/graph/tv.html`, regenerated on every praxis wiki
 publish).
 
-**The 4K office stream** (#167). `lunaria_pin_url` pins the display to one
-page, the Family Brief's desk edition (`family-today/detail.html`, a
-1920×1080 layout that zooms to fit the 1280×720 viewport;
-lentago/brasenia#56): `lunaria-frames` never reads the viewport
-pointer and shoots that URL as a pane every `lunaria_regen_interval` seconds,
-with the same keep-the-old-pages rules as below. Pages keep the 1280×720 pane
+**The 4K office stream** (#167). The office Roku is the viewport's screen:
+`lunaria-frames` follows the pointer as described below
+(lentago/brasenia#59). When the pointer names a pane that also offers the
+`lunaria_prefer_rendition` file beside its `pane.html` (the Family Brief's
+`family-today/detail.html`, a 1920×1080 desk edition that zooms to fit the
+1280×720 viewport; lentago/brasenia#56), the shooter shoots that instead.
+`lunaria_pin_url` can pin the display to one page instead, never reading the
+pointer and re-shooting every `lunaria_regen_interval` seconds, with the
+same keep-the-old-pages rules. Pages keep the 1280×720 pane
 contract; `lunaria_scale: 3` has Chromium render them at 3840×2160 (device
 scale factor), and the clock overlay scales with them. The encoder writes
 HEVC (Roku plays H.264 only up to 1080p) with ffmpeg's own HLS muxer into
@@ -68,7 +72,7 @@ epoch-numbered segments mean an encoder restart never leaves a finished
 playlist behind or runs the sequence backwards: the stream 404s for ~10 s
 and the app's retry handler rejoins. At 5 fps the encoder is ~1.4 cores and
 ~620 MB, hence 4 cores / 4 GB; 10 fps did not fit 2 cores. An empty
-`lunaria_pin_url` restores pointer-following, and `lunaria_scale: 1` a
+`lunaria_prefer_rendition` always shoots `pane.html`, and `lunaria_scale: 1` a
 1280×720 stream.
 
 **Following the viewport pointer** (#142). The viewport pointer is the file
