@@ -1,0 +1,190 @@
+#!/usr/bin/python3
+"""pub-signals: an append-only signal sink for pages served from pub.lan.
+
+A page Caddy serves on pub POSTs a small JSON signal (a checkbox ticked or
+cleared) to /api/signals/<namespace>. Caddy proxies it here, and this service
+appends one JSON line to <webroot>/signals/<namespace>.jsonl on the web share.
+Whatever acts on the signals reads that log back, from the share or from
+GET /api/signals/<namespace>, which returns the latest action per id. Nothing
+is ever acknowledged or rewritten here: the consumer works out what is still
+pending by comparing the log with its own state.
+
+Credential-free and stdlib-only, like the brasenia programs this role runs. The
+only input is the request and the only output is one file per namespace.
+Namespaces and actions are allowlisted on the command line, ids and labels are
+length-capped, and oversized bodies are refused, so a LAN client can append
+bounded lines to known files and nothing else.
+
+Managed by kalmia (roles/pub/files/pub-signals, #165).
+"""
+
+import argparse
+import datetime
+import json
+import os
+import re
+import sys
+import threading
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+MAX_BODY = 4096
+MAX_ID = 300
+MAX_LABEL = 500
+PREFIX = "/api/signals"
+NAMESPACE_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
+
+
+def utc_now():
+    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+class Sink:
+    """The signal logs on the share, one JSON-lines file per namespace."""
+
+    def __init__(self, webroot, namespaces, actions):
+        self.dir = os.path.join(webroot, "signals")
+        self.namespaces = namespaces
+        self.actions = actions
+        self.lock = threading.Lock()
+
+    def path(self, namespace):
+        return os.path.join(self.dir, namespace + ".jsonl")
+
+    def append(self, namespace, record):
+        line = json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n"
+        with self.lock:
+            os.makedirs(self.dir, exist_ok=True)
+            with open(self.path(namespace), "a", encoding="utf-8") as f:
+                f.write(line)
+                f.flush()
+                os.fsync(f.fileno())
+
+    def state(self, namespace):
+        """Latest action per id, in log order. Unparseable lines are skipped."""
+        latest = {}
+        try:
+            with open(self.path(namespace), encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        rec = json.loads(line)
+                        latest[rec["id"]] = {
+                            "action": rec["action"],
+                            "ts": rec.get("ts"),
+                            "label": rec.get("label"),
+                        }
+                    except (ValueError, KeyError, TypeError):
+                        continue
+        except FileNotFoundError:
+            pass
+        return latest
+
+
+def make_handler(sink):
+    class Handler(BaseHTTPRequestHandler):
+        server_version = "pub-signals"
+
+        def send_json(self, status, body):
+            data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(data)
+
+        def namespace(self):
+            """The namespace in the path, '' for the bare prefix, None if foreign."""
+            path = self.path.split("?", 1)[0].rstrip("/")
+            if path == PREFIX:
+                return ""
+            if not path.startswith(PREFIX + "/"):
+                return None
+            ns = path[len(PREFIX) + 1:]
+            return ns if NAMESPACE_RE.match(ns) else None
+
+        def do_GET(self):
+            ns = self.namespace()
+            if ns == "":
+                self.send_json(HTTPStatus.OK, {
+                    "namespaces": sink.namespaces, "actions": sink.actions})
+            elif ns in sink.namespaces:
+                self.send_json(HTTPStatus.OK, {
+                    "namespace": ns, "state": sink.state(ns)})
+            else:
+                self.send_json(HTTPStatus.NOT_FOUND, {"error": "unknown namespace"})
+
+        def do_POST(self):
+            ns = self.namespace()
+            if not ns or ns not in sink.namespaces:
+                self.send_json(HTTPStatus.NOT_FOUND, {"error": "unknown namespace"})
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                length = -1
+            if length < 0 or length > MAX_BODY:
+                self.send_json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                               {"error": "body must be at most %d bytes" % MAX_BODY})
+                return
+            try:
+                body = json.loads(self.rfile.read(length) or b"null")
+            except ValueError:
+                body = None
+            if not isinstance(body, dict):
+                self.send_json(HTTPStatus.BAD_REQUEST, {"error": "body must be a JSON object"})
+                return
+            sid = body.get("id")
+            action = body.get("action")
+            label = body.get("label")
+            if not isinstance(sid, str) or not sid.strip() or len(sid) > MAX_ID:
+                self.send_json(HTTPStatus.BAD_REQUEST,
+                               {"error": "id must be a non-empty string of at most %d characters" % MAX_ID})
+                return
+            if action not in sink.actions:
+                self.send_json(HTTPStatus.BAD_REQUEST,
+                               {"error": "action must be one of %s" % ", ".join(sink.actions)})
+                return
+            if label is not None and not isinstance(label, str):
+                self.send_json(HTTPStatus.BAD_REQUEST, {"error": "label must be a string"})
+                return
+            client = (self.headers.get("X-Forwarded-For") or self.client_address[0]).split(",")[0].strip()
+            record = {"ts": utc_now(), "id": sid.strip(), "action": action, "client": client}
+            if label:
+                record["label"] = label[:MAX_LABEL]
+            try:
+                sink.append(ns, record)
+            except OSError as e:
+                self.log_message("append to %s failed: %s", ns, e)
+                self.send_json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": "could not write the signal"})
+                return
+            self.send_json(HTTPStatus.OK, {"ok": True, "ts": record["ts"]})
+
+        def log_message(self, fmt, *args):
+            sys.stderr.write("%s %s\n" % (self.address_string(), fmt % args))
+
+    return Handler
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
+    ap.add_argument("--webroot", required=True, help="the web share Caddy serves")
+    ap.add_argument("--bind", default="127.0.0.1")
+    ap.add_argument("--port", type=int, default=8620)
+    ap.add_argument("--namespace", action="append", required=True,
+                    help="an allowed namespace (repeatable)")
+    ap.add_argument("--action", action="append",
+                    help="an allowed action (repeatable; default dismiss and undo)")
+    args = ap.parse_args()
+    bad = [ns for ns in args.namespace if not NAMESPACE_RE.match(ns)]
+    if bad:
+        ap.error("invalid namespace(s): %s" % ", ".join(bad))
+    sink = Sink(args.webroot, args.namespace, args.action or ["dismiss", "undo"])
+    server = ThreadingHTTPServer((args.bind, args.port), make_handler(sink))
+    sys.stderr.write("pub-signals listening on %s:%d for %s\n"
+                     % (args.bind, args.port, ", ".join(sink.namespaces)))
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

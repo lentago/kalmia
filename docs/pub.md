@@ -253,6 +253,53 @@ A live family-brief producer logs `family-today: brief of <date> rendered for
 <date>`, and `/srv/www/viewport/panes/family-today/manifest.json` reads
 `"class": "ambient"`.
 
+## Signal sink (#165)
+
+Everything else pub serves is static. `pub-signals` is the one write path: a
+page served here can record a checkbox ticked or cleared, and whatever acts on
+it reads the log back later. It is stdlib Python and credential-free, like the
+viewport programs, and runs as the `pub-signals` system user in the share's
+gid-1000 `webdrop` group, the same write path they use.
+
+- **Route.** Caddy proxies `/api/signals*` to `127.0.0.1:8620`
+  (`pub_signals_port`; the Caddyfile hard-codes the port, so change both
+  together). The service binds localhost only, so the route is the only way in.
+- **Write.** `POST /api/signals/<namespace>` with a JSON object `{"id",
+  "action", "label"}` appends one line to
+  `/srv/www/signals/<namespace>.jsonl` (`ts` in UTC, `id`, `action`, `label`
+  when given, and `client` from `X-Forwarded-For`). `label` is optional
+  context for whoever reads the log.
+- **Read.** `GET /api/signals/<namespace>` returns `{"namespace", "state"}`,
+  the latest action per id, which is what a page needs to show which boxes are
+  already ticked. `GET /api/signals` lists the allowed namespaces and actions.
+  The raw log is also served statically at `http://pub.lan/signals/`, and the
+  workstation reads it at `/mnt/lentago/web/signals/`.
+- **Limits.** Namespaces (`pub_signals_namespaces`, first client `pe-wiki`)
+  and actions (`pub_signals_actions`: `dismiss`, `undo`) are allowlists; any
+  other value answers 404 or 400. Bodies over 4 KiB answer 413, ids are capped
+  at 300 characters and labels at 500. A LAN client can append bounded lines to
+  known files and nothing else.
+- **No acknowledgements.** The sink never rewrites a log. The consumer works
+  out what is still pending by comparing the log with its own state (an id
+  whose latest action is `dismiss` and that it still shows), so applying a
+  signal twice is harmless and nothing has to be marked done here.
+
+The unit carries the same `RequiresMountsFor` / `ConditionPathIsMountPoint`
+pair as the viewport units, so it skips rather than writing to the container
+rootfs when the share is missing. Toggle: `pub_signals_enabled`. Adding a
+client is a namespace in the defaults and a re-run of the play.
+
+**Health check:**
+
+```bash
+systemctl status pub-signals && curl -s http://pub.lan/api/signals
+curl -s -X POST http://pub.lan/api/signals/pe-wiki -d '{"id":"healthcheck","action":"undo"}'
+```
+
+The first call lists the namespaces and actions; the POST answers
+`{"ok": true, ...}` and appends a line (an `undo` for an id nothing shows is a
+no-op for any consumer). Logs: `journalctl -u pub-signals`.
+
 ## Rebuild flow
 
 1. `terraform apply` (recreates LXC 114 per `terraform/containers.tf`).
