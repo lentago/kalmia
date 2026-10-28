@@ -49,6 +49,15 @@ lunaria_bitrate_kbps: 6000
 # The Roku plays http://<LXC 118>:<port>/master.m3u8 (brasenia's VideoScene.xml).
 lunaria_hls_port: 8080
 
+# The Roku remote's peek (lentago/brasenia#80): Up/Down shows another pane at
+# once as an image over the live video, and never changes what the compositor
+# decided. lunaria-peek re-reads the compositor's line-up every
+# lunaria_peek_poll seconds, keeps a 1920x1080 image per item, re-shot every
+# lunaria_peek_regen seconds, and lunaria-hls-serve serves them at /peek/.
+lunaria_lineup_url: http://pub.lan/viewport/lineup.json
+lunaria_peek_poll: 10
+lunaria_peek_regen: 300
+
 # The briefing rotation (pointer fallback "briefing", or no compositor): the
 # Family Brief from brasenia's briefing slot (lentago/brasenia#76). The TV
 # edition is preferred: detail.html, the 1920x1080 desk edition, which zooms to
