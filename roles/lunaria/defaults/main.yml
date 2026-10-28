@@ -21,17 +21,23 @@ lunaria_timezone: America/New_York
 lunaria_mediamtx_version: v1.19.2
 lunaria_mediamtx_dir: /opt/mediamtx
 
-# --- The office Roku: 4K, pinned to the Family Brief (#167) -------------------
+# --- The office Roku: 4K, the viewport's screen (#167) -----------------------
 # The play-room Roku (720p) was retired 2026-10-28. Its replacement is a Roku
-# Streaming Stick Plus on a 4K display in the office.
+# Streaming Stick Plus on a 4K display in the office, and with the Chromecast
+# offline it is the viewport's only screen: it follows the compositor pointer
+# (lunaria_pointer_url, below; lentago/brasenia#59).
 #
-# Pin the display to this one page: the viewport pointer is never read, and
+# Set to pin the display to one page instead: the pointer is never read, and
 # the page is shot as a pane every lunaria_regen_interval seconds. Empty
-# follows the pointer instead (lunaria_pointer_url, below). detail.html is
-# the Family Brief's desk edition (lentago/brasenia#56): a 1920x1080 layout
-# with every decision and the to-do list, which zooms to fit the shooter's
-# 1280x720 viewport and so lands on 3840x2160 at an effective 2x.
-lunaria_pin_url: http://pub.lan/viewport/panes/family-today/detail.html
+# follows the pointer.
+lunaria_pin_url: ""
+# When the pointer names a pane's pane.html and the pane also offers this
+# sibling rendition, shoot the rendition. detail.html is the Family Brief's
+# desk edition (lentago/brasenia#56): a 1920x1080 layout with every decision
+# and the to-do list, which zooms to fit the 1280x720 viewport and lands on
+# 3840x2160 at an effective 2x. Panes without one show pane.html. Empty
+# always shoots pane.html.
+lunaria_prefer_rendition: detail.html
 # Device pixels per CSS pixel. Pages keep the 1280x720 pane contract; 3 renders
 # them at 3840x2160 for a 4K display (1 = the old 720p stream).
 lunaria_scale: 3

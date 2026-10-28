@@ -15,7 +15,9 @@ failing extra pane is skipped so it can never take the brief down with it.
 `lunaria-shooter --pane URL` shoots URL alone as a TV-contract page (the
 viewport pointer's winning pane or status card) and replaces the rotation
 with its screens. It exits non-zero without touching the existing pages when
-URL is unreachable or the shot fails.
+URL is unreachable or the shot fails. When LUNARIA_PREFER_RENDITION names a
+file (e.g. detail.html) and URL is a pane's .../pane.html, that sibling
+rendition is shot instead whenever the pane offers it (lentago/brasenia#59).
 
 Pages are laid out in CSS pixels (the 1280x720 contract) and rendered at
 LUNARIA_SCALE device pixels per CSS pixel: 1 gives 1280x720 screens, 3 gives
@@ -25,7 +27,7 @@ Chromium notes: throwaway profile per shot (a persistent profile's HTTP cache
 once served a stale tv.html); --no-sandbox because unprivileged LXCs lack the
 user namespaces chromium's sandbox wants (input is our own pub.lan pages).
 """
-import os, shutil, subprocess, sys, tempfile, urllib.request
+import os, re, shutil, subprocess, sys, tempfile, urllib.request
 from PIL import Image, ImageChops
 
 PANE_URL = sys.argv[2] if len(sys.argv) == 3 and sys.argv[1] == "--pane" else None
@@ -37,6 +39,9 @@ SCALE = os.environ.get("LUNARIA_SCALE", "1")
 if SCALE not in ("1", "2", "3", "4"):
     sys.exit(f"LUNARIA_SCALE must be 1-4, got {SCALE!r}")
 SCALE = int(SCALE)
+PREFER = os.environ.get("LUNARIA_PREFER_RENDITION", "")
+if PREFER and not re.fullmatch(r"[\w.-]+\.html", PREFER):
+    sys.exit(f"LUNARIA_PREFER_RENDITION must be a file name like detail.html, got {PREFER!r}")
 CSS_W, CSS_H = 1280, 720   # the TV contract, in CSS pixels
 W, PAGE_H, SEARCH = CSS_W * SCALE, CSS_H * SCALE, 100 * SCALE   # device pixels
 BG_TOLERANCE = 12          # px diff below this counts as background
@@ -91,12 +96,22 @@ def shoot_tv(url):
     return [im.crop((0, i * PAGE_H, W, (i + 1) * PAGE_H)) for i in range(n)]
 
 
+def rendition(url):
+    """The pane's preferred rendition (a sibling of pane.html) when it offers one."""
+    if PREFER and url.endswith("/pane.html"):
+        alt = url[:-len("pane.html")] + PREFER
+        if reachable(alt):
+            return alt
+    return url
+
+
 if PANE_URL:
-    if not reachable(PANE_URL):
-        sys.exit(f"pane {PANE_URL} unreachable")
-    pages = shoot_tv(PANE_URL)
+    url = rendition(PANE_URL)
+    if not reachable(url):
+        sys.exit(f"pane {url} unreachable")
+    pages = shoot_tv(url)
     write_pages(pages)
-    print(f"{len(pages)} page(s) (pane {PANE_URL})")
+    print(f"{len(pages)} page(s) (pane {url})")
     sys.exit(0)
 
 if reachable(TV_URL):
