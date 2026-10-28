@@ -24,7 +24,7 @@ pane-rubric viewport this grows into): `http://pub.lan/brasenia/concept.md`.
 pub (LXC 114)                       lunaria (LXC 118, 192.168.139.19)
   family-brief producer               lunaria-frames.service
     viewport/panes/family-today/  →     chromium --headless, 3x scale, of
-      pane.html (1280x720 CSS)            LUNARIA_PIN_URL (the pinned pane)
+      detail.html (desk edition)          LUNARIA_PIN_URL (the pinned page)
                                         → 3840x2160 page → frame.png
                                       lunaria-stream.service
                                         ffmpeg frame.png → HEVC 5 fps →
@@ -51,7 +51,9 @@ never blank the display. First pane: the praxis Obsidian-graph
 publish).
 
 **The 4K office stream** (#167). `lunaria_pin_url` pins the display to one
-page (the Family Brief pane): `lunaria-frames` never reads the viewport
+page, the Family Brief's desk edition (`family-today/detail.html`, a
+1920×1080 layout that zooms to fit the 1280×720 viewport;
+lentago/brasenia#56): `lunaria-frames` never reads the viewport
 pointer and shoots that URL as a pane every `lunaria_regen_interval` seconds,
 with the same keep-the-old-pages rules as below. Pages keep the 1280×720 pane
 contract; `lunaria_scale: 3` has Chromium render them at 3840×2160 (device
