@@ -105,9 +105,15 @@ pub_signals_webroot: /srv/www
 pub_signals_port: 8620
 # Allowlists: a POST to any other namespace, or with any other action, is
 # refused. pe-wiki is the first client, a private wiki's checklist that a
-# Claude Code session on the workstation polls from the share.
+# Claude Code session on the workstation polls from the share. rubric is the
+# brasenia viewport configurator (viewport/configure.html): `set` records a
+# rubric setting with its value in `label`, `undo` returns it to the default,
+# and the brasenia compositor applies the latest per setting
+# (lentago/brasenia ADR-0011).
 pub_signals_namespaces:
   - pe-wiki
+  - rubric
 pub_signals_actions:
   - dismiss
   - undo
+  - set

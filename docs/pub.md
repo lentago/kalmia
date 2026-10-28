@@ -274,8 +274,14 @@ gid-1000 `webdrop` group, the same write path they use.
   already ticked. `GET /api/signals` lists the allowed namespaces and actions.
   The raw log is also served statically at `http://pub.lan/signals/`, and the
   workstation reads it at `/mnt/lentago/web/signals/`.
+- **Clients.** `pe-wiki`, a private wiki's checklist (`dismiss` / `undo`),
+  and `rubric`, brasenia's viewport configurator at
+  `http://pub.lan/viewport/configure.html`. That page records `set` with the
+  new value in `label`, or `undo` to return a setting to its default. The
+  brasenia compositor reads `signals/rubric.jsonl` and applies the latest
+  action per setting (lentago/brasenia ADR-0011).
 - **Limits.** Namespaces (`pub_signals_namespaces`, first client `pe-wiki`)
-  and actions (`pub_signals_actions`: `dismiss`, `undo`) are allowlists; any
+  and actions (`pub_signals_actions`: `dismiss`, `undo`, `set`) are allowlists; any
   other value answers 404 or 400. Bodies over 4 KiB answer 413, ids are capped
   at 300 characters and labels at 500. A LAN client can append bounded lines to
   known files and nothing else.
