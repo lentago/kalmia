@@ -206,54 +206,13 @@ stays off (fails closed) rather than falling open.
    redeploys the config with no live-publisher credential and RTMP
    live-ingest goes back to fails-closed until re-seeded.
 
-## Cast receiver watchdog (second client — brasenia ADR-0006, #99)
+## Cast receiver watchdog — retired 2026-10-28
 
-The wall-display Chromecast joined as a **second viewport client** alongside the
-Roku/HLS path ([brasenia
-ADR-0006](https://github.com/lentago/brasenia/blob/main/docs/adr/0006-cast-web-receiver-second-client.md),
-[brasenia#12](https://github.com/lentago/brasenia/issues/12)). A Cast **custom
-web receiver** is a managed Chrome instance on the TV that fetches and renders
-the receiver page itself (served from pub — see [pub.md](pub.md#cast-receiver-publishing-99));
-the sender only has to *launch* it. The acceptance test is strict: **adding the
-Cast client must not touch the Roku client** — the watchdog below is purely
-additive and shares nothing with the mediamtx/shooter/rotator/encoder stack.
-
-The receiver session runs independently once launched, but a power blip, a
-Chromecast OS update, an ambient-mode reclaim, or an input change drops it. The
-watchdog is the Cast path's analogue of the mandatory Roku retry handler
-([brasenia ADR-0002](https://github.com/lentago/brasenia/blob/main/docs/adr/0002-mandatory-client-side-retry-handler.md)):
-
-- `/usr/local/bin/lunaria-cast-watchdog` (pychromecast) discovers the
-  Chromecast by friendly name, compares its running `app_id` against the
-  registered receiver's App ID, and calls `start_app()` when it differs.
-- `lunaria-cast-watchdog.service` (oneshot, run as `lunaria`) + its `.timer`
-  re-check on a short cadence (`lunaria_cast_watchdog_interval`, default 60s;
-  `OnBootSec=30s`) so recovery is unattended.
-- Config is `/etc/default/lunaria-cast` (App ID + device name), rendered from
-  role defaults.
-
-### Registered 2026-08-14 — values committed
-
-The custom web receiver is registered in the Cast Developer Console as an
-**unpublished** Custom Receiver: App ID `83A58DDE`, receiver URL
-`http://pub.lan/cast/` (the console accepted plain HTTP for an unpublished
-app — no TLS leg needed, and no mixed content since the brief iframe is
-same-scheme). The wall-display Chromecast ("Family Room TV", Cast-platform
-device) is serial-registered for development; the app never gets published,
-so it launches only on that device — the same posture as the sideloaded
-Roku dev channel.
-
-`lunaria_cast_app_id` and `lunaria_cast_device_name` are **committed in the
-role defaults** rather than passed via `-e`: neither is a secret (the App ID
-is public in brasenia's `cast-app/app-config.json`; the friendly name is
-broadcast in cleartext mDNS on the LAN), and an `-e`-only value would
-silently revert `/etc/default/lunaria-cast` to a dormant placeholder on any
-future provisioning run — exactly the failure mode a watchdog must not have.
-The placeholder-skip logic in the watchdog script remains as a safety valve
-for rebuilds from a stale checkout. Set `lunaria_cast_watchdog_enabled: false`
-to skip the watchdog block entirely.
-
-> **Runtime dependencies** (not visible to static CI): the container needs
-> `python3-pychromecast` from apt and mDNS/multicast reachability to the
-> Chromecast, plus internet at launch (Google's app-ID lookup). Verified only
-> once the first live watchdog run launches the receiver on LXC 118.
+The Chromecast that was the viewport's second client (brasenia ADR-0006) is
+gone, and Roku is the client platform
+([brasenia ADR-0010](https://github.com/lentago/brasenia/blob/main/docs/adr/0010-roku-is-the-client-platform.md)).
+The watchdog this role used to install (`lunaria-cast-watchdog` and its
+timer, `/etc/default/lunaria-cast`, `python3-pychromecast`; #99) is now
+removed by the role: the last block of `roles/lunaria/tasks/main.yml` makes
+sure it is absent. pub's publishing of the receiver page is retired
+separately (#174).

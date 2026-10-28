@@ -75,29 +75,6 @@ lunaria_pointer_poll: 5
 lunaria_extra_urls:
   - http://pub.lan/praxis/graph/tv.html
 
-# --- Cast receiver watchdog (brasenia ADR-0006, kalmia#99) -------------------
-# The Chromecast is a *second* client alongside the Roku/HLS path — adding it
-# must not touch the Roku client (ADR-0006 acceptance test). This watchdog is
-# the Cast path's analogue of the mandatory Roku retry handler (ADR-0002): a
-# systemd timer that re-launches the registered custom web receiver on the
-# wall-display Chromecast after power blips, Chromecast OS updates, ambient-mode
-# reclaims, or input changes.
-lunaria_cast_watchdog_enabled: true
-
-# Registered 2026-08-14 (Cast Developer Console, unpublished Custom Receiver;
-# receiver URL http://pub.lan/cast/). Both values are deliberately COMMITTED:
-# neither is a secret — the App ID is public in brasenia's
-# cast-app/app-config.json and only launches on the dev-registered wall-display
-# device, and the friendly name is broadcast in cleartext mDNS to every LAN
-# device. Committing them keeps rebuild-from-scratch real: an `-e`-only value
-# would silently revert the env file to a dormant placeholder on any future
-# provisioning run.
-lunaria_cast_app_id: "83A58DDE"
-lunaria_cast_device_name: "Family Room TV"
-
-# How often the watchdog re-checks the receiver (a systemd time span).
-lunaria_cast_watchdog_interval: 60s
-
 # --- RTMP live-ingest (kalmia#102) -------------------------------------------
 # Generic RTMP publish path for LAN producers (first client: DJI Fly's
 # custom-RTMP live streaming; H.264/AAC remux only, no transcode). The path

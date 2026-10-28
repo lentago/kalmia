@@ -27,9 +27,7 @@
     state: restarted
   become: true
 
-- name: Restart lunaria-cast-watchdog timer
+- name: Reload systemd
   ansible.builtin.systemd_service:
-    name: lunaria-cast-watchdog.timer
     daemon_reload: true
-    state: restarted
   become: true
