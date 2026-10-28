@@ -27,8 +27,11 @@ lunaria_mediamtx_dir: /opt/mediamtx
 #
 # Pin the display to this one page: the viewport pointer is never read, and
 # the page is shot as a pane every lunaria_regen_interval seconds. Empty
-# follows the pointer instead (lunaria_pointer_url, below).
-lunaria_pin_url: http://pub.lan/viewport/panes/family-today/pane.html
+# follows the pointer instead (lunaria_pointer_url, below). detail.html is
+# the Family Brief's desk edition (lentago/brasenia#56): a 1920x1080 layout
+# with every decision and the to-do list, which zooms to fit the shooter's
+# 1280x720 viewport and so lands on 3840x2160 at an effective 2x.
+lunaria_pin_url: http://pub.lan/viewport/panes/family-today/detail.html
 # Device pixels per CSS pixel. Pages keep the 1280x720 pane contract; 3 renders
 # them at 3840x2160 for a 4K display (1 = the old 720p stream).
 lunaria_scale: 3
