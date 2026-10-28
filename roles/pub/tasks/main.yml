@@ -140,68 +140,85 @@
   when: pub_family_brief_enabled
 
 # ---------------------------------------------------------------------------
-# Cast receiver publishing (brasenia ADR-0006, kalmia#99) — serves brasenia's
-# Cast custom web receiver at http://pub.lan/cast/. Additive: it touches
-# nothing in the Morning Brief / brief-serving path above.
+# brasenia checkout and its daily update (kalmia#140, #174). The viewport
+# services below run from this checkout; brasenia-update keeps it on main and
+# restarts them when it moves.
 # ---------------------------------------------------------------------------
-- name: Check out brasenia for the receiver source and viewport runtime
+- name: Check out brasenia for the viewport runtime
   ansible.builtin.git:
-    repo: "{{ pub_cast_repo_url }}"
-    dest: "{{ pub_cast_checkout }}"
+    repo: "{{ pub_brasenia_repo_url }}"
+    dest: "{{ pub_brasenia_checkout }}"
     version: main
     update: true
   become: true
-  when: pub_cast_publish_enabled or pub_viewport_enabled
+  when: pub_viewport_enabled
   notify: Restart brasenia viewport services
 
-- name: Deploy the publish-cast-receiver script
+- name: Deploy the brasenia-update script
   ansible.builtin.copy:
-    src: publish-cast-receiver
-    dest: /usr/local/bin/publish-cast-receiver
+    src: brasenia-update
+    dest: /usr/local/bin/brasenia-update
     owner: root
     group: root
     mode: "0755"
   become: true
-  when: pub_cast_publish_enabled
+  when: pub_viewport_enabled
 
-- name: Render the publish-cast-receiver environment file
+- name: Deploy the brasenia-update systemd service and timer
   ansible.builtin.template:
-    src: publish-cast-receiver.env.j2
-    dest: /etc/default/publish-cast-receiver
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
     owner: root
     group: root
     mode: "0644"
+  loop:
+    - brasenia-update.service
+    - brasenia-update.timer
   become: true
-  when: pub_cast_publish_enabled
+  when: pub_viewport_enabled
 
-- name: Deploy the publish-cast-receiver systemd service
-  ansible.builtin.copy:
-    src: publish-cast-receiver.service
-    dest: /etc/systemd/system/publish-cast-receiver.service
-    owner: root
-    group: root
-    mode: "0644"
-  become: true
-  when: pub_cast_publish_enabled
-
-- name: Deploy the publish-cast-receiver systemd timer
-  ansible.builtin.template:
-    src: publish-cast-receiver.timer.j2
-    dest: /etc/systemd/system/publish-cast-receiver.timer
-    owner: root
-    group: root
-    mode: "0644"
-  become: true
-  when: pub_cast_publish_enabled
-
-- name: Enable and start the publish-cast-receiver timer
+- name: Enable and start the brasenia-update timer
   ansible.builtin.systemd_service:
-    name: publish-cast-receiver.timer
+    name: brasenia-update.timer
     daemon_reload: true
     enabled: true
     state: started
   become: true
-  when: pub_cast_publish_enabled
+  when: pub_viewport_enabled
+
+# Retired Cast receiver publishing (brasenia ADR-0010, #174; it was #99). The
+# Chromecast client is gone, so this makes sure the publisher the role used to
+# install is absent: timer and service stopped and disabled, units, script and
+# env file removed, and the published page at http://pub.lan/cast/ deleted from
+# the share. Idempotent; a host built after the retirement has nothing to remove.
+- name: Check for the retired Cast receiver publisher
+  ansible.builtin.stat:
+    path: /etc/systemd/system/publish-cast-receiver.timer
+  register: pub_cast_timer
+
+- name: Stop and disable the retired Cast receiver publisher
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop:
+    - publish-cast-receiver.timer
+    - publish-cast-receiver.service
+  become: true
+  when: pub_cast_timer.stat.exists
+
+- name: Remove the retired Cast receiver publisher and its published page
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/publish-cast-receiver.timer
+    - /etc/systemd/system/publish-cast-receiver.service
+    - /usr/local/bin/publish-cast-receiver
+    - /etc/default/publish-cast-receiver
+    - "{{ pub_viewport_webroot }}/cast"
+  become: true
+  notify: Reload systemd
 
 # ---------------------------------------------------------------------------
 # brasenia viewport runtime (kalmia#140, brasenia#26 Phase 2) — the compositor

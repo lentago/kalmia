@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Keep pub's brasenia checkout on main and the viewport services on its code.
+# Run daily by brasenia-update.timer: a fast-forward-only pull of
+# BRASENIA_CHECKOUT, and when that moves HEAD, a try-restart of the four
+# brasenia viewport services, so a merge to brasenia main runs on pub within a
+# day. Best-effort and credential-free: an unreachable GitHub or a failed
+# restart is logged, never fatal. This used to ride on the Cast receiver
+# publisher, retired with the Cast client (brasenia ADR-0010, kalmia#174).
+set -euo pipefail
+SRC="${BRASENIA_CHECKOUT:?BRASENIA_CHECKOUT must be set}"
+SERVICES=(brasenia-compositor.service brasenia-focus.service
+          brasenia-pipeline.service brasenia-family-brief.service)
+
+if ! git -C "$SRC" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "no brasenia checkout at $SRC; skipping" >&2
+    exit 0
+fi
+before=$(git -C "$SRC" rev-parse HEAD)
+if ! git -C "$SRC" pull --ff-only >/dev/null 2>&1; then
+    echo "git pull failed (offline?); staying at ${before:0:7}" >&2
+    exit 0
+fi
+after=$(git -C "$SRC" rev-parse HEAD)
+if [ "$before" = "$after" ]; then
+    echo "brasenia already at ${after:0:7}"
+elif systemctl try-restart "${SERVICES[@]}"; then
+    echo "brasenia moved ${before:0:7}..${after:0:7}; restarted viewport services"
+else
+    echo "brasenia moved ${before:0:7}..${after:0:7} but restarting viewport services failed" >&2
+fi

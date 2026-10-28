@@ -12,6 +12,11 @@
   become: true
   when: pub_viewport_enabled
 
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  become: true
+
 - name: Restart pub-signals
   ansible.builtin.systemd_service:
     name: pub-signals.service

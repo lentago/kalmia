@@ -1,0 +1,10 @@
+[Unit]
+Description=Update pub's brasenia checkout and viewport services daily
+
+[Timer]
+OnCalendar={{ pub_brasenia_update_oncalendar }}
+Persistent=true
+RandomizedDelaySec=30
+
+[Install]
+WantedBy=timers.target

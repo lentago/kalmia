@@ -1,0 +1,9 @@
+[Unit]
+Description=Pull brasenia main into {{ pub_brasenia_checkout }} and restart the viewport services when it moves
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=BRASENIA_CHECKOUT={{ pub_brasenia_checkout }}
+ExecStart=/usr/local/bin/brasenia-update

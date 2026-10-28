@@ -10,7 +10,7 @@ Type=simple
 User={{ pub_viewport_user }}
 Group={{ pub_viewport_group }}
 Environment=PYTHONDONTWRITEBYTECODE=1
-WorkingDirectory={{ pub_cast_checkout }}/producers/family-brief
+WorkingDirectory={{ pub_brasenia_checkout }}/producers/family-brief
 ExecStart=/usr/bin/python3 -m family_brief_producer --webroot {{ pub_viewport_webroot }} --source {{ pub_viewport_url_base }}/family-brief/latest.json --interval {{ pub_viewport_family_brief_interval }}
 Restart=always
 RestartSec=10
