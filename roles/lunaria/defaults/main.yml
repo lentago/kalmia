@@ -49,10 +49,15 @@ lunaria_bitrate_kbps: 6000
 # The Roku plays http://<LXC 118>:<port>/master.m3u8 (brasenia's VideoScene.xml).
 lunaria_hls_port: 8080
 
-# Frame sources when following the pointer: the TV edition is preferred (exact
-# 1280x720 screens); the full brief is the fallback, sliced into 720px pages.
-lunaria_tv_url: http://pub.lan/brief/tv.html
-lunaria_full_url: http://pub.lan/brief/
+# The briefing rotation (pointer fallback "briefing", or no compositor): the
+# Family Brief from brasenia's briefing slot (lentago/brasenia#76). The TV
+# edition is preferred: detail.html, the 1920x1080 desk edition, which zooms to
+# fit the 1280x720 viewport and lands on 3840x2160. If it is unreachable, the
+# full page is shot and sliced into 720px pages: pane.html, the 1280x720 wall
+# layout. (Until 2026-10-28 these were the morning brief at /brief/, which
+# stopped publishing on 2026-08-31.)
+lunaria_tv_url: http://pub.lan/viewport/briefing/detail.html
+lunaria_full_url: http://pub.lan/viewport/briefing/pane.html
 
 # Seconds each screen stays up before rotating to the next.
 lunaria_page_dwell: 12
@@ -68,12 +73,13 @@ lunaria_pointer_url: http://pub.lan/viewport/current.json
 lunaria_pointer_poll: 5
 
 # Additional TV-contract pane pages (1280px wide, height an exact multiple of
-# 720 — the brasenia pane contract) appended to the rotation after the brief.
-# A Phase-1.5 precursor of the brasenia pane bus: each URL is shot like a TV
-# edition and its 720px screens join the frame rotation; an unreachable or
-# failing extra pane is skipped without touching the brief pages.
-lunaria_extra_urls:
-  - http://pub.lan/praxis/graph/tv.html
+# 720 — the brasenia pane contract) appended to the briefing rotation. Each URL
+# is shot like a TV edition and its 720px screens join the rotation; an
+# unreachable or failing extra pane is skipped without touching the brief
+# pages. Empty: the praxis Obsidian graph that used to follow the brief was
+# dropped on 2026-10-28 (its pub.lan export was retired on 2026-08-18), and
+# anything that should share the screen now claims a pane on the bus.
+lunaria_extra_urls: []
 
 # --- RTMP live-ingest (kalmia#102) -------------------------------------------
 # Generic RTMP publish path for LAN producers (first client: DJI Fly's

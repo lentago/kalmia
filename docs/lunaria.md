@@ -39,17 +39,21 @@ pub (LXC 114)                       lunaria (LXC 118, 192.168.139.19)
 
 Division of labor: **pub owns the Google Drive leg** (rclone credential lives
 only there); **lunaria is credential-free** — its only input is
-`http://pub.lan/`. The TV edition contract (1–4 exact 1280×720 screens) is
-defined in the claude.ai Morning-brief routine's prompt; when no TV edition
-exists, lunaria falls back to slicing the full brief.
+`http://pub.lan/`. The briefing rotation (the pointer's `briefing` fallback,
+or no compositor at all) shows the Family Brief from brasenia's briefing slot
+(lentago/brasenia#76): `lunaria_tv_url` is its `detail.html` desk edition,
+shot as a TV edition, and `lunaria_full_url` its `pane.html`, sliced if the
+TV edition is unreachable. Until 2026-10-28 these were the morning brief at
+`/brief/`, which stopped publishing on 2026-08-31.
 
 **Extra panes** (`lunaria_extra_urls`, 2026-08-10): further TV-contract pages
-appended to the rotation after the brief — a Phase-1.5 precursor of the
-brasenia pane bus. Each is shot like a TV edition; an unreachable or failing
-extra pane is skipped without touching the brief pages, so a broken pane can
-never blank the display. First pane: the praxis Obsidian-graph
-(`http://pub.lan/praxis/graph/tv.html`, regenerated on every praxis wiki
-publish).
+appended to the briefing rotation, a Phase-1.5 precursor of the brasenia pane
+bus. Each is shot like a TV edition; an unreachable or failing extra pane is
+skipped without touching the brief pages, so a broken pane can never blank the
+display. Empty since 2026-10-28: the one entry, the praxis Obsidian graph
+(`http://pub.lan/praxis/graph/tv.html`), was dropped. Its export had been
+retired on 2026-08-18, and anything that should share the screen now claims a
+pane on the bus.
 
 **The 4K office stream** (#167). The office Roku is the viewport's screen:
 `lunaria-frames` follows the pointer as described below
