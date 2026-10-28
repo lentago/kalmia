@@ -225,25 +225,27 @@ resource "proxmox_virtual_environment_container" "grafana_stack" {
 }
 
 # LXC 118 — lunaria, the wall-display compositor/streamer (concept:
-# http://pub.lan/lunaria/LUNARIA.md). Renders http://pub.lan/brief/tv.html
-# (headless chromium) into an H.264 HLS stream (mediamtx :8888) that the
-# play-room Roku's sideloaded dev channel plays. Deliberately credential-free:
-# pub owns the Drive leg; lunaria only reads pub.lan. No bind mounts and no
-# keyctl, so the API-token CI apply can create this container from scratch.
+# http://pub.lan/lunaria/LUNARIA.md). Renders the Family Brief pane from
+# pub.lan (headless chromium, 3x scale) into a 4K HEVC HLS stream (:8080)
+# that the office Roku's sideloaded dev channel plays. Deliberately
+# credential-free: pub owns the Drive leg; lunaria only reads pub.lan. No bind
+# mounts and no keyctl, so the API-token CI apply can create this container
+# from scratch. 4 cores / 4 GB because the 4K HEVC encoder alone is ~1.4 cores
+# and ~620 MB, beside chromium's 3x shots (#167).
 resource "proxmox_virtual_environment_container" "lunaria" {
   node_name     = "pve4"
   vm_id         = 118
-  description   = "lunaria — wall-display compositor (192.168.139.19). Renders pub.lan/brief/tv.html to HLS :8888 for the play-room Roku dev channel. Provisioned by lunaria.yml.\n"
+  description   = "lunaria — wall-display compositor (192.168.139.19). Renders the Family Brief pane to 4K HEVC HLS :8080 for the office Roku dev channel. Provisioned by lunaria.yml.\n"
   unprivileged  = true
   started       = true
   start_on_boot = true
 
   cpu {
-    cores = 2
+    cores = 4
   }
 
   memory {
-    dedicated = 2048
+    dedicated = 4096
     swap      = 512
   }
 

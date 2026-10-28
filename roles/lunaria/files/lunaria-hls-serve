@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""Serve lunaria-stream's HLS output (/run/lunaria-hls) to the Roku.
+
+One flat directory, GET/HEAD only: *.m3u8 playlists (sent no-cache, since a
+live playlist changes every segment) and *.ts segments. Everything else -
+ffmpeg's in-progress *.tmp files, directory listings, any path with a slash -
+is a 404, so a reader never sees a half-written file or anything outside the
+directory. The stream URL is http://<host>:LUNARIA_HLS_PORT/master.m3u8.
+Stdlib only, LAN-only and credential-free like the rest of LXC 118.
+"""
+import http.server, os
+
+DIR = os.environ.get("LUNARIA_HLS_DIR", "/run/lunaria-hls")
+PORT = int(os.environ.get("LUNARIA_HLS_PORT", "8080"))
+TYPES = {".m3u8": "application/vnd.apple.mpegurl", ".ts": "video/mp2t"}
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.reply(body=True)
+
+    def do_HEAD(self):
+        self.reply(body=False)
+
+    def reply(self, body):
+        name = self.path.split("?", 1)[0].lstrip("/")
+        ext = os.path.splitext(name)[1]
+        if "/" in name or ext not in TYPES:
+            self.send_error(404)
+            return
+        try:
+            with open(os.path.join(DIR, name), "rb") as f:
+                data = f.read()
+        except OSError:
+            self.send_error(404)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", TYPES[ext])
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-cache" if ext == ".m3u8" else "max-age=60")
+        self.end_headers()
+        if body:
+            self.wfile.write(data)
+
+    def log_message(self, *args):
+        pass   # a playing Roku fetches every 2 s; errors still reach stderr
+
+
+http.server.ThreadingHTTPServer(("", PORT), Handler).serve_forever()

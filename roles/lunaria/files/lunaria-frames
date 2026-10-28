@@ -10,6 +10,10 @@
 # in when it finishes, so a stalled chromium never stops the rotation or the
 # pointer polling. An unreadable pointer or a failed shoot leaves the existing
 # pages rotating — a stale page beats a dead screen.
+#
+# LUNARIA_PIN_URL, when set, pins the display to that one page: the pointer is
+# never read, and the page is shot as a pane (re-shot every
+# LUNARIA_REGEN_INTERVAL seconds) with the same keep-the-old-pages rules.
 set -euo pipefail
 
 HOME_DIR="${LUNARIA_HOME:-/var/lib/lunaria}"
@@ -21,6 +25,7 @@ POLL="${LUNARIA_POINTER_POLL:-5}"
 TV_URL="${LUNARIA_TV_URL:-http://pub.lan/brief/tv.html}"
 FULL_URL="${LUNARIA_FULL_URL:-http://pub.lan/brief/}"
 EXTRA_URLS="${LUNARIA_EXTRA_URLS:-}"
+PIN_URL="${LUNARIA_PIN_URL:-}"
 STALE=30   # seconds of unreadable pointer before it is logged (once)
 RETRY=30   # seconds before re-trying a target whose shoot failed
 
@@ -91,7 +96,9 @@ while :; do
 
   if (( now >= next_poll )); then
     next_poll=$(( now + POLL ))
-    if out=$(/usr/local/bin/lunaria-pointer 2>&1); then
+    if [ -n "$PIN_URL" ]; then
+      kind=pane url=$PIN_URL decided=pinned
+    elif out=$(/usr/local/bin/lunaria-pointer 2>&1); then
       if (( bad_logged )); then
         echo "pointer readable again"
       fi

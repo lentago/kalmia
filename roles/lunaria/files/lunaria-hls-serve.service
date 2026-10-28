@@ -1,0 +1,14 @@
+[Unit]
+Description=lunaria HLS server (/run/lunaria-hls -> the office Roku)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=lunaria
+EnvironmentFile=/etc/default/lunaria
+ExecStart=/usr/local/bin/lunaria-hls-serve
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
