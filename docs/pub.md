@@ -106,40 +106,28 @@ If there's no existing config to copy, generate one with `rclone config` /
 `rclone authorize` for a `Google Drive` remote scoped to the
 `Hobbies/Claude-Code/morning-brief` folder, then follow steps 2-3.
 
-## Cast receiver publishing (#99)
+## brasenia checkout and daily update (#174)
 
-pub also hosts brasenia's Cast **custom web receiver** page for the wall-display
-Chromecast — the second viewport client
-([brasenia ADR-0006](https://github.com/lentago/brasenia/blob/main/docs/adr/0006-cast-web-receiver-second-client.md);
-watchdog sender in [lunaria.md](lunaria.md#cast-receiver-watchdog-second-client--brasenia-adr-0006-99)).
-pub owns receiver **hosting only**; the receiver HTML is authored in brasenia
-([brasenia#13](https://github.com/lentago/brasenia/issues/13)) and served here,
-never forked.
+The role clones the public brasenia repo (credential-free https) to
+`pub_brasenia_checkout` (`/srv/brasenia`); the brasenia viewport services
+(below) run from it.
 
-- `/usr/local/bin/publish-cast-receiver` rsyncs the receiver from a local
-  brasenia checkout's `cast-app/` (`pub_cast_receiver_src`) into the web share
-  (`pub_cast_receiver_dest`, default `/srv/www/cast`). Like
-  `publish-morning-brief` it is credential-free and skips cleanly (exit 0) when
-  the web share is not mounted or the source is absent.
-- `publish-cast-receiver.service` (oneshot) + its `.timer` republish daily
-  (`pub_cast_timer_oncalendar`) — the receiver is static, so this only keeps the
-  share fresh and recovers if it is remounted/cleared.
-- Config is `/etc/default/publish-cast-receiver` (source + dest), rendered from
-  role defaults.
+- `/usr/local/bin/brasenia-update` does a `git pull --ff-only` of the
+  checkout and, when that moves `HEAD`, runs `systemctl try-restart` of the
+  four brasenia services. It is credential-free and best-effort: if GitHub is
+  unreachable it logs and stays on the current commit.
+- `brasenia-update.service` (oneshot) and its `.timer` run it daily
+  (`pub_brasenia_update_oncalendar`, 06:00 Eastern), so a merge to brasenia
+  `main` is running on pub within a day. To deploy at once:
+  `systemctl start brasenia-update`.
 
-**The registered URL.** `/srv/www` on pub is the NAS web share
-(`/volume1/lentago/web`) mounted here, so `pub_cast_receiver_dest=/srv/www/cast`
-is `/volume1/lentago/web/cast/` on the NAS and serves at **`http://pub.lan/cast/`**.
-That URL — `http://pub.lan/cast/` — is what gets registered as the receiver's
-application URL in the Google Cast Developer Console.
-
-> **Checkout is role-managed (since 2026-08-14).** The role clones the public
-> brasenia repo (credential-free https) to `pub_cast_checkout`
-> (`/srv/brasenia`), and the publisher does an opportunistic `git pull
-> --ff-only` before each rsync, so the served receiver tracks brasenia `main`
-> within a day of a merge — no re-provisioning needed. If GitHub is
-> unreachable the pull is skipped and the existing checkout republishes; set
-> `pub_cast_publish_enabled: false` to skip the whole block.
+**Retired: Cast receiver publishing (#99).** pub used to publish brasenia's
+Cast custom web receiver to `http://pub.lan/cast/` with `publish-cast-receiver`,
+which also carried the daily pull above. The Cast client was retired on
+2026-10-28 ([brasenia
+ADR-0010](https://github.com/lentago/brasenia/blob/main/docs/adr/0010-roku-is-the-client-platform.md)).
+The role now removes the publisher's units, script and env file and the
+published `/srv/www/cast`.
 
 ## Family Brief document (#163)
 
@@ -231,14 +219,11 @@ starts, so the condition only ever bites on a misconfigured rebuild; the
 compositor also creates the three directories itself on start. Toggle:
 `pub_viewport_enabled`.
 
-**How new code goes live.** No separate timer. The daily
-`publish-cast-receiver` run already does a `git pull --ff-only` of
-`/srv/brasenia`. When that pull moves `HEAD`, the script runs
-`systemctl try-restart` of the four brasenia services, so a merge to
-brasenia `main` is running on pub within a day. Re-running the play also
-restarts the services if the checkout or a unit file changed. This rides on
-the Cast publisher: with `pub_cast_publish_enabled: false` there is no daily
-pull, so the services only update when the play is re-run.
+**How new code goes live.** `brasenia-update` (above) pulls `/srv/brasenia`
+daily and restarts the four brasenia services when the pull moves `HEAD`, so
+a merge to brasenia `main` is running on pub within a day;
+`systemctl start brasenia-update` deploys at once. Re-running the play also
+restarts the services if the checkout or a unit file changed.
 
 **Health check:**
 
