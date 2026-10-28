@@ -3,10 +3,11 @@
 # lunaria — wall-display compositor for the LXC 118 (pve4), serving the
 # product now named lentago/brasenia (renamed from lentago/lunaria on
 # 2026-07-20; 'lunaria' is the legacy runtime name, rename tracked in #63).
-# Renders the Morning Brief TV edition from pub.lan into a continuous H.264
-# HLS stream the play-room Roku dev channel plays. Concept: docs/lunaria.md
-# and http://pub.lan/brasenia/concept.md. Deliberately credential-free — pub
-# owns the Google Drive leg; lunaria only reads http://pub.lan/.
+# Renders a pub.lan page (the Family Brief pane) into a continuous 4K HEVC
+# HLS stream the office Roku dev channel plays (#167). Concept:
+# docs/lunaria.md and http://pub.lan/brasenia/concept.md. Deliberately
+# credential-free — pub owns the Google Drive leg; lunaria only reads
+# http://pub.lan/.
 # ============================================================================
 lunaria_user: lunaria
 lunaria_home: /var/lib/lunaria
@@ -15,11 +16,32 @@ lunaria_home: /var/lib/lunaria
 # template defaults to UTC, which reads as a broken clock on the TV.
 lunaria_timezone: America/New_York
 
+# mediamtx now carries only the RTMP live-ingest path (#102); the display
+# stream is served by lunaria-hls-serve (#167).
 lunaria_mediamtx_version: v1.19.2
 lunaria_mediamtx_dir: /opt/mediamtx
 
-# Frame sources: the TV edition is preferred (exact 1280x720 screens); the
-# full brief is the fallback, sliced into 720px pages.
+# --- The office Roku: 4K, pinned to the Family Brief (#167) -------------------
+# The play-room Roku (720p) was retired 2026-10-28. Its replacement is a Roku
+# Streaming Stick Plus on a 4K display in the office.
+#
+# Pin the display to this one page: the viewport pointer is never read, and
+# the page is shot as a pane every lunaria_regen_interval seconds. Empty
+# follows the pointer instead (lunaria_pointer_url, below).
+lunaria_pin_url: http://pub.lan/viewport/panes/family-today/pane.html
+# Device pixels per CSS pixel. Pages keep the 1280x720 pane contract; 3 renders
+# them at 3840x2160 for a 4K display (1 = the old 720p stream).
+lunaria_scale: 3
+# HEVC frame rate and target video bitrate. The burned-in clock ticks once a
+# second, so 5 fps is plenty; 4K HEVC at 5 fps is ~1.4 cores (10 fps does not
+# fit). Roku plays H.264 only up to 1080p, hence HEVC.
+lunaria_fps: 5
+lunaria_bitrate_kbps: 6000
+# The Roku plays http://<LXC 118>:<port>/master.m3u8 (brasenia's VideoScene.xml).
+lunaria_hls_port: 8080
+
+# Frame sources when following the pointer: the TV edition is preferred (exact
+# 1280x720 screens); the full brief is the fallback, sliced into 720px pages.
 lunaria_tv_url: http://pub.lan/brief/tv.html
 lunaria_full_url: http://pub.lan/brief/
 

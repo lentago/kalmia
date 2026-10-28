@@ -20,6 +20,13 @@
     state: restarted
   become: true
 
+- name: Restart lunaria-hls-serve
+  ansible.builtin.systemd_service:
+    name: lunaria-hls-serve.service
+    daemon_reload: true
+    state: restarted
+  become: true
+
 - name: Restart lunaria-cast-watchdog timer
   ansible.builtin.systemd_service:
     name: lunaria-cast-watchdog.timer

@@ -3,9 +3,10 @@
 # lunaria — installs the wall-display compositor stack for lentago/brasenia
 # (renamed from lentago/lunaria on 2026-07-20; 'lunaria' is the legacy
 # runtime name, rename tracked in #63): distro ffmpeg + chromium (headless
-# shots), a pinned mediamtx (HLS transport), the shooter/rotator/encoder
-# scripts, and their systemd services. Runs credential-free: the only input
-# is http://pub.lan/. See docs/lunaria.md.
+# shots), the shooter/rotator/encoder scripts and the HLS server the office
+# Roku plays from (#167), a pinned mediamtx (RTMP live ingest, #102), and
+# their systemd services. Runs credential-free: the only input is
+# http://pub.lan/. See docs/lunaria.md.
 # ============================================================================
 - name: Install packages (ffmpeg, chromium, PIL, fonts)
   ansible.builtin.apt:
@@ -109,10 +110,12 @@
     - lunaria-pointer
     - lunaria-frames
     - lunaria-stream
+    - lunaria-hls-serve
   become: true
   notify:
     - Restart lunaria-frames
     - Restart lunaria-stream
+    - Restart lunaria-hls-serve
 
 - name: Render the lunaria environment file
   ansible.builtin.template:
@@ -125,6 +128,7 @@
   notify:
     - Restart lunaria-frames
     - Restart lunaria-stream
+    - Restart lunaria-hls-serve
 
 - name: Deploy the systemd units
   ansible.builtin.copy:
@@ -137,11 +141,13 @@
     - mediamtx.service
     - lunaria-frames.service
     - lunaria-stream.service
+    - lunaria-hls-serve.service
   become: true
   notify:
     - Restart mediamtx
     - Restart lunaria-frames
     - Restart lunaria-stream
+    - Restart lunaria-hls-serve
 
 - name: Enable and start the lunaria services
   ansible.builtin.systemd_service:
@@ -153,6 +159,7 @@
     - mediamtx.service
     - lunaria-frames.service
     - lunaria-stream.service
+    - lunaria-hls-serve.service
   become: true
 
 # ---------------------------------------------------------------------------

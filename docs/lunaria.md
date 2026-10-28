@@ -11,29 +11,29 @@
 > "Rename discipline" — legacy names are tracked debt, never permanent).
 > Concept snapshot: `http://pub.lan/brasenia/concept.md`.
 
-**lunaria** renders the Morning Brief's TV edition to a continuous H.264 HLS
-stream that the play-room Roku TV's sideloaded dev channel plays. It is the
+**lunaria** renders the Family Brief pane to a continuous 4K HEVC HLS stream
+that the office Roku's sideloaded dev channel plays (#167). It is the
 containerized productization of the 2026-07-20 Roku HLS validation (worked
-example: `~/roku-hls-test/NOTES.md` on the ThinkPad). Concept and roadmap
-(the pane-rubric viewport this grows into): `http://pub.lan/brasenia/concept.md`.
+example: `~/roku-hls-test/NOTES.md` on the ThinkPad); the 720p play-room Roku
+it first served was retired on 2026-10-28. Concept and roadmap (the
+pane-rubric viewport this grows into): `http://pub.lan/brasenia/concept.md`.
 
 ## Architecture
 
 ```
-pub (LXC 114)                     lunaria (LXC 118, 192.168.139.19)
-  publish-morning-brief             lunaria-frames.service
-  Drive → /srv/www/brief/             chromium --headless shot of
-    index.html  (browser)             http://pub.lan/brief/tv.html
-    tv.html     (wall display)  →     + each LUNARIA_EXTRA_URLS pane
-  praxis publish → /srv/www/          (praxis Obsidian graph, …)
-    praxis/graph/tv.html      →     → 720px pages → frame.png rotation
-                                    lunaria-stream.service
-                                      ffmpeg frame.png → RTSP :8554
-                                    mediamtx.service
-                                      RTSP → HLS :8888 (mpegts variant)
-                                            ↓
-                              Roku dev channel "HLS Pipeline Test"
-                              http://192.168.139.19:8888/board/index.m3u8?cookieCheck=1
+pub (LXC 114)                       lunaria (LXC 118, 192.168.139.19)
+  family-brief producer               lunaria-frames.service
+    viewport/panes/family-today/  →     chromium --headless, 3x scale, of
+      pane.html (1280x720 CSS)            LUNARIA_PIN_URL (the pinned pane)
+                                        → 3840x2160 page → frame.png
+                                      lunaria-stream.service
+                                        ffmpeg frame.png → HEVC 5 fps →
+                                        HLS (MPEG-TS) in /run/lunaria-hls
+                                      lunaria-hls-serve.service
+                                        /run/lunaria-hls → :8080
+                                              ↓
+                              office Roku dev channel "HLS Pipeline Test"
+                              http://192.168.139.19:8080/master.m3u8
 ```
 
 Division of labor: **pub owns the Google Drive leg** (rclone credential lives
@@ -49,6 +49,25 @@ extra pane is skipped without touching the brief pages, so a broken pane can
 never blank the display. First pane: the praxis Obsidian-graph
 (`http://pub.lan/praxis/graph/tv.html`, regenerated on every praxis wiki
 publish).
+
+**The 4K office stream** (#167). `lunaria_pin_url` pins the display to one
+page (the Family Brief pane): `lunaria-frames` never reads the viewport
+pointer and shoots that URL as a pane every `lunaria_regen_interval` seconds,
+with the same keep-the-old-pages rules as below. Pages keep the 1280×720 pane
+contract; `lunaria_scale: 3` has Chromium render them at 3840×2160 (device
+scale factor), and the clock overlay scales with them. The encoder writes
+HEVC (Roku plays H.264 only up to 1080p) with ffmpeg's own HLS muxer into
+`/run/lunaria-hls` (tmpfs, so ~2 MB of segments every 2 s never touches the
+disk), and `lunaria-hls-serve`, a small stdlib server, serves playlists and
+finished segments on `lunaria_hls_port`. Not mediamtx: its MPEG-TS HLS is
+H.264-only, and its fMP4 HLS declares `#EXT-X-VERSION:10`, which the Roku
+rejects (`HLS playlist unsupported version`). `omit_endlist` and
+epoch-numbered segments mean an encoder restart never leaves a finished
+playlist behind or runs the sequence backwards: the stream 404s for ~10 s
+and the app's retry handler rejoins. At 5 fps the encoder is ~1.4 cores and
+~620 MB, hence 4 cores / 4 GB; 10 fps did not fit 2 cores. An empty
+`lunaria_pin_url` restores pointer-following, and `lunaria_scale: 1` a
+1280×720 stream.
 
 **Following the viewport pointer** (#142). The viewport pointer is the file
 the brasenia compositor writes on pub, `http://pub.lan/viewport/current.json`,
@@ -82,14 +101,16 @@ polling.
      cd /opt/kalmia && ansible-playbook -i inventory/hosts.yml lunaria.yml'
    ```
 
-3. **Display**: the Roku dev channel needs its stream URL pointed at
-   `192.168.139.19` (VideoScene.xml in the app zip, then re-sideload). The
-   TCL 32S327 is a 720p panel — do not bother streaming above 1280×720.
+3. **Display**: the office Roku's dev channel plays
+   `http://192.168.139.19:8080/master.m3u8` (brasenia's `VideoScene.xml`;
+   sideload with brasenia's `scripts/deploy-roku.sh`). The Roku must have
+   Settings → Display type on 4K or Auto, or it plays the stream below 4K.
 
 ## Operational notes (hard-won 2026-07-20)
 
 - mediamtx ≥1.19 HLS answers with a cookie-check 302 unless the player URL
-  pre-bakes `?cookieCheck=1`. The Roku app URL must include it.
+  pre-bakes `?cookieCheck=1`. That applies to mediamtx paths (`live`) only;
+  the display stream on `lunaria-hls-serve` needs no query string.
 - The Roku Video node never retries a dead stream on its own; the sideloaded
   app carries a state-observer + 3 s Timer retry (rejoins ~1 s after the
   publisher returns). Publisher restarts on lunaria are therefore invisible
@@ -99,8 +120,8 @@ polling.
   required in the unprivileged LXC (no user namespaces); input is our own
   pub.lan pages.
 - Services are ordinary systemd units with `Restart=always` — no PID files,
-  no process groups. `systemctl status mediamtx lunaria-frames lunaria-stream`
-  is the whole health check; the on-screen clock overlay is the liveness
+  no process groups. `systemctl status lunaria-frames lunaria-stream
+  lunaria-hls-serve` is the whole health check; the on-screen clock overlay is the liveness
   indicator (clock advancing + stale dashboard = shooter problem, frozen
   clock = stream problem).
 - Everything here is stateless: `/var/lib/lunaria` holds only rendered PNGs.
@@ -108,6 +129,13 @@ polling.
   back up.
 
 ## RTMP live-ingest (`live` path — kalmia#102)
+
+> **Since #167** `lunaria-stream` no longer publishes to mediamtx `board`,
+> so `live`'s `fallback: /board` has nothing to fall back to, and the office
+> Roku plays the HEVC stream from `lunaria-hls-serve`, not mediamtx. The
+> notes below describe the path as built; what the live-ingest pane becomes
+> for an HEVC client is [brasenia#17](https://github.com/lentago/brasenia/issues/17)'s
+> question.
 
 mediamtx also accepts LAN RTMP publishers on a generic `live` path,
 remuxed through the same Roku-validated HLS leg (`hlsVariant: mpegts`) the
