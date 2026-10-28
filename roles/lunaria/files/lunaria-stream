@@ -30,6 +30,11 @@ done
 [ -s frame.png ] || { echo "frame.png missing - waiting for lunaria-frames" >&2; exit 1; }
 mkdir -p "$HLS_DIR"
 
+# ffmpeg fixes the output size from the first frame it reads, so scale every
+# frame to the configured size: a frame.png left over from another scale (a
+# restart before lunaria-frames re-shoots) must not lock the stream to it
+# (#169). Frames already at that size pass through untouched.
+w=$(( 1280 * SCALE )) h=$(( 720 * SCALE ))
 # The clock is 28px text in an 8px box, 20px/16px from the corner at 1x.
 fs=$(( 28 * SCALE )) bw=$(( 8 * SCALE )) mx=$(( 20 * SCALE )) my=$(( 16 * SCALE ))
 gop=$(( FPS * 2 ))
@@ -39,7 +44,7 @@ tick=$(awk -v f="$FPS" 'BEGIN { printf "%.3f", 1 / f }')
 exec ffmpeg -loglevel warning \
   -f image2pipe -framerate "$FPS" -i - \
   -f lavfi -i "anullsrc=channel_layout=stereo:sample_rate=48000" \
-  -vf "drawtext=fontfile=${FONT}:text='%{localtime\:%X}':fontsize=${fs}:fontcolor=white:box=1:boxcolor=black@0.6:boxborderw=${bw}:x=w-tw-${mx}:y=h-th-${my}" \
+  -vf "scale=${w}:${h},drawtext=fontfile=${FONT}:text='%{localtime\:%X}':fontsize=${fs}:fontcolor=white:box=1:boxcolor=black@0.6:boxborderw=${bw}:x=w-tw-${mx}:y=h-th-${my}" \
   -c:v libx265 -preset ultrafast -tune zerolatency \
   -profile:v main -pix_fmt yuv420p -tag:v hvc1 \
   -g "$gop" -keyint_min "$gop" \
