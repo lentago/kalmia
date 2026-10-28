@@ -32,7 +32,7 @@ pub (LXC 114)                       lunaria (LXC 118, 192.168.139.19)
                                       lunaria-hls-serve.service
                                         /run/lunaria-hls → :8080
                                               ↓
-                              office Roku dev channel "HLS Pipeline Test"
+                              office Roku dev channel "brasenia"
                               http://192.168.139.19:8080/master.m3u8
 ```
 
