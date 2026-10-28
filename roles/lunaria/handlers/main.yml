@@ -27,6 +27,13 @@
     state: restarted
   become: true
 
+- name: Restart lunaria-peek
+  ansible.builtin.systemd_service:
+    name: lunaria-peek.service
+    daemon_reload: true
+    state: restarted
+  become: true
+
 - name: Reload systemd
   ansible.builtin.systemd_service:
     daemon_reload: true

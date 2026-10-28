@@ -79,6 +79,22 @@ and the app's retry handler rejoins. At 5 fps the encoder is ~1.4 cores and
 `lunaria_prefer_rendition` always shoots `pane.html`, and `lunaria_scale: 1` a
 1280×720 stream.
 
+**The remote's peek** (lentago/brasenia#80). On the office Roku, Up/Down
+steps through the panes and shows the next one at once as an image over the
+live video, with a caption. Back, or 60 s without a press, returns to the
+live view. It only looks: the stream keeps showing what the compositor
+decided. `lunaria-peek` reads the compositor's line-up
+(`lunaria_lineup_url`, `viewport/lineup.json`: the live panes in rubric
+order, then the briefing slot). For each item it shoots
+`lunaria-shooter --pane <url>`, so a pane's desk edition is preferred as on
+the stream, at `lunaria_scale`. It keeps the first screen downscaled to
+1920×1080 (the Roku UI plane's limit) in `/run/lunaria-peek/<id>.png`,
+re-shot every `lunaria_peek_regen` seconds, and writes `index.json`, the
+items in line-up order with each image's path and time. `lunaria-hls-serve`
+serves that directory at `/peek/`, beside the stream. Each shot uses its own
+`TMPDIR`, so it never collides with `lunaria-frames`, and the service runs at
+`Nice=10`, so it never starves the encoder.
+
 **Following the viewport pointer** (#142). The viewport pointer is the file
 the brasenia compositor writes on pub, `http://pub.lan/viewport/current.json`,
 naming what the wall should show right now; this runtime is the Roku/HLS
@@ -131,7 +147,7 @@ polling.
   pub.lan pages.
 - Services are ordinary systemd units with `Restart=always` — no PID files,
   no process groups. `systemctl status lunaria-frames lunaria-stream
-  lunaria-hls-serve` is the whole health check; the on-screen clock overlay is the liveness
+  lunaria-hls-serve lunaria-peek` is the whole health check; the on-screen clock overlay is the liveness
   indicator (clock advancing + stale dashboard = shooter problem, frozen
   clock = stream problem).
 - Everything here is stateless: `/var/lib/lunaria` holds only rendered PNGs.

@@ -111,11 +111,13 @@
     - lunaria-frames
     - lunaria-stream
     - lunaria-hls-serve
+    - lunaria-peek
   become: true
   notify:
     - Restart lunaria-frames
     - Restart lunaria-stream
     - Restart lunaria-hls-serve
+    - Restart lunaria-peek
 
 - name: Render the lunaria environment file
   ansible.builtin.template:
@@ -129,6 +131,7 @@
     - Restart lunaria-frames
     - Restart lunaria-stream
     - Restart lunaria-hls-serve
+    - Restart lunaria-peek
 
 - name: Deploy the systemd units
   ansible.builtin.copy:
@@ -142,12 +145,14 @@
     - lunaria-frames.service
     - lunaria-stream.service
     - lunaria-hls-serve.service
+    - lunaria-peek.service
   become: true
   notify:
     - Restart mediamtx
     - Restart lunaria-frames
     - Restart lunaria-stream
     - Restart lunaria-hls-serve
+    - Restart lunaria-peek
 
 - name: Enable and start the lunaria services
   ansible.builtin.systemd_service:
@@ -160,6 +165,7 @@
     - lunaria-frames.service
     - lunaria-stream.service
     - lunaria-hls-serve.service
+    - lunaria-peek.service
   become: true
 
 # ---------------------------------------------------------------------------
