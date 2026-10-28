@@ -285,6 +285,74 @@
   when: pub_viewport_enabled
 
 # ---------------------------------------------------------------------------
+# Signal sink (kalmia#165) — pub-signals takes small JSON POSTs from pages
+# served here (a checkbox ticked or cleared) at /api/signals/<namespace>,
+# proxied by Caddy from the route in the Caddyfile below, and appends them to
+# signals/<namespace>.jsonl on the share for whatever acts on them. Bound to
+# localhost, so the Caddy route is the only way in. Runs as its own system user
+# in the share's gid-1000 group, the same write path the viewport programs use.
+# ---------------------------------------------------------------------------
+- name: Ensure the share's gid-1000 group exists for the signal sink
+  ansible.builtin.group:
+    name: "{{ pub_viewport_group }}"
+    gid: "{{ pub_viewport_group_gid }}"
+    system: true
+  become: true
+  when: pub_signals_enabled
+
+- name: Ensure the signal sink service user exists
+  ansible.builtin.user:
+    name: "{{ pub_signals_user }}"
+    system: true
+    create_home: false
+    shell: /usr/sbin/nologin
+    groups: "{{ pub_viewport_group }}"
+    append: true
+  become: true
+  when: pub_signals_enabled
+  notify: Restart pub-signals
+
+- name: Deploy the pub-signals script
+  ansible.builtin.copy:
+    src: pub-signals
+    dest: "{{ pub_signals_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+  when: pub_signals_enabled
+  notify: Restart pub-signals
+
+- name: Ensure the signals directory exists on the web share
+  ansible.builtin.file:
+    path: "{{ pub_signals_webroot }}/signals"
+    state: directory
+  become: true
+  when:
+    - pub_signals_enabled
+    - pub_signals_webroot in (ansible_facts.mounts | map(attribute='mount'))
+
+- name: Deploy the pub-signals systemd service
+  ansible.builtin.template:
+    src: pub-signals.service.j2
+    dest: /etc/systemd/system/pub-signals.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: pub_signals_enabled
+  notify: Restart pub-signals
+
+- name: Enable and start pub-signals
+  ansible.builtin.systemd_service:
+    name: pub-signals.service
+    daemon_reload: true
+    enabled: true
+    state: started
+  become: true
+  when: pub_signals_enabled
+
+# ---------------------------------------------------------------------------
 # Caddy config (kalmia#144) — the Caddyfile and the directory-listing template
 # that make http://pub.lan/ a browsable, sortable index of the web share. Only
 # the *config* is managed here: the caddy package comes from the upstream apt

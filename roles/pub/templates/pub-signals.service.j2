@@ -1,0 +1,19 @@
+[Unit]
+Description=pub-signals: append-only signal sink for checkbox actions on pages served from pub.lan
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor={{ pub_signals_webroot }}
+ConditionPathIsMountPoint={{ pub_signals_webroot }}
+
+[Service]
+Type=simple
+User={{ pub_signals_user }}
+Group={{ pub_viewport_group }}
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 {{ pub_signals_script_path }} --webroot {{ pub_signals_webroot }} --bind 127.0.0.1 --port {{ pub_signals_port }} {{ pub_signals_namespaces | map('regex_replace', '^', '--namespace ') | join(' ') }} {{ pub_signals_actions | map('regex_replace', '^', '--action ') | join(' ') }}
+NoNewPrivileges=yes
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -12,6 +12,14 @@
   become: true
   when: pub_viewport_enabled
 
+- name: Restart pub-signals
+  ansible.builtin.systemd_service:
+    name: pub-signals.service
+    daemon_reload: true
+    state: restarted
+  become: true
+  when: pub_signals_enabled
+
 # The packaged caddy.service reloads with `caddy reload --force`, so a changed
 # browse template is re-read even when the Caddyfile itself did not change.
 - name: Reload caddy

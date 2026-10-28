@@ -24,6 +24,20 @@
 		}
 	}
 
+	# The signal sink (kalmia#165): checkbox actions POSTed by pages served here
+	# go to pub-signals on localhost, which appends them to
+	# /srv/www/signals/<namespace>.jsonl. The port matches pub_signals_port in
+	# roles/pub/defaults/main.yml; change the two together. While the service is
+	# down this path answers 502, which the pages treat as "signals unavailable".
+	handle /api/signals* {
+		reverse_proxy 127.0.0.1:8620 {
+			transport http {
+				dial_timeout 2s
+				response_header_timeout 5s
+			}
+		}
+	}
+
 	file_server {
 		browse /etc/caddy/browse.html
 	}

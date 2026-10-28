@@ -88,3 +88,26 @@ pub_viewport_pipeline_interval: 15
 # http://pub.lan/family-brief/latest.json and keeps panes/family-today/ up
 # while the brief is dated today or yesterday.
 pub_viewport_family_brief_interval: 60
+
+# --- Signal sink (kalmia#165) -----------------------------------------------
+# pub-signals takes checkbox actions from pages served here:
+# POST http://pub.lan/api/signals/<namespace> {"id", "action", "label"} appends
+# one JSON line to /srv/www/signals/<namespace>.jsonl, and GET on the same path
+# returns the latest action per id. stdlib Python and credential-free, like the
+# viewport programs; it writes through the share's gid-1000 group (the viewport
+# group vars above), so a non-root user in that group is all it needs.
+pub_signals_enabled: true
+pub_signals_script_path: /usr/local/bin/pub-signals
+pub_signals_user: pub-signals
+pub_signals_webroot: /srv/www
+# Bound to 127.0.0.1. The Caddyfile's /api/signals route hard-codes this port
+# (roles/pub/files/caddy/Caddyfile is a static file), so change the two together.
+pub_signals_port: 8620
+# Allowlists: a POST to any other namespace, or with any other action, is
+# refused. pe-wiki is the first client, a private wiki's checklist that a
+# Claude Code session on the workstation polls from the share.
+pub_signals_namespaces:
+  - pe-wiki
+pub_signals_actions:
+  - dismiss
+  - undo
