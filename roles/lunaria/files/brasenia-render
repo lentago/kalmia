@@ -1,0 +1,654 @@
+#!/usr/bin/env python3
+"""brasenia-render: the one renderer behind the office Roku's stream and its
+peek (kalmia#194). It replaces lunaria-frames' rendering, lunaria-shooter and
+lunaria-peek.
+
+It keeps one headless Chromium running, driven over the DevTools protocol on
+a pipe (--remote-debugging-pipe, stdlib only), and a ready 4K image of every
+item the compositor's line-up lists (lentago/brasenia Contracts v1). A switch
+is then a file swap rather than a render, and the remote's peek shows the same
+image as the screen.
+
+What is on screen: the pane the pointer (current.json) names, or its sibling
+rendition (LUNARIA_PREFER_RENDITION, e.g. detail.html) when it offers one; the
+briefing slot when the pointer falls back to it (or there is no compositor);
+the status card; or, with LUNARIA_PIN_URL, that one page. Its pages go to
+frame.png in turn, each for LUNARIA_PAGE_DWELL seconds, and lunaria-stream
+encodes frame.png.
+
+When it renders: the item on screen first, then the household's default
+resting pane, then the rest of the line-up, one at a time. An item renders
+when it is new or its content revision (rev) changes; a link pane also every
+source.refresh_s; an item without a rev every LUNARIA_REGEN_INTERVAL while on
+screen and LUNARIA_PEEK_REGEN otherwise. A failed render keeps the previous
+image and is retried after RETRY_S: a stale page beats a dead screen.
+
+Which sites: pub.lan always. Any other site only while Chromium runs
+sandboxed (it needs user namespaces, which LXC 118 has with nesting) and the
+host, or a parent domain, is in LUNARIA_ALLOWED_SITES. If the sandboxed
+browser cannot start, an unsandboxed one renders pub.lan pages only.
+
+Pane-contract pages are laid out at 1280x720 CSS pixels and rendered at
+LUNARIA_SCALE, one page per 720 px band (up to 4). Link panes
+(lentago/brasenia ADR-0016) are laid out at source.viewport with
+prefers-color-scheme set to source.theme, and their first source.screens bands
+are each fitted onto a 16:9 page.
+
+`brasenia-render --once URL [--source JSON] --out DIR` renders one page to
+DIR and exits, for testing.
+"""
+import argparse, base64, io, json, os, select, shutil, signal, subprocess, sys
+import tempfile, time, urllib.error, urllib.request
+from datetime import datetime, timezone
+from urllib.parse import urlsplit
+from PIL import Image, ImageChops, ImageDraw, ImageFont
+
+E = os.environ.get
+HOME = E("LUNARIA_HOME", "/var/lib/lunaria")
+CACHE = os.path.join(HOME, "render")
+FRAME = os.path.join(HOME, "frame.png")
+PEEK_DIR = E("LUNARIA_PEEK_DIR", "/run/lunaria-peek")
+POINTER_URL = E("LUNARIA_POINTER_URL", "http://pub.lan/viewport/current.json")
+LINEUP_URL = E("LUNARIA_LINEUP_URL", "http://pub.lan/viewport/lineup.json")
+BRIEFING_URL = E("LUNARIA_BRIEFING_URL", "http://pub.lan/viewport/briefing/pane.html")
+PIN_URL = E("LUNARIA_PIN_URL", "")
+PREFER = E("LUNARIA_PREFER_RENDITION", "")
+ALLOWED_SITES = [h.lower() for h in E("LUNARIA_ALLOWED_SITES", "").split()]
+PUB_HOST = "pub.lan"
+
+
+def seconds(name, default):
+    value = E(name, str(default))
+    if not value.isdigit() or int(value) < 1:
+        sys.exit(f"brasenia-render: {name} must be a positive whole number of seconds, got {value!r}")
+    return int(value)
+
+
+POLL = seconds("LUNARIA_POINTER_POLL", 1)
+LINEUP_POLL = seconds("LUNARIA_PEEK_POLL", 10)
+DWELL = seconds("LUNARIA_PAGE_DWELL", 12)
+REGEN = seconds("LUNARIA_REGEN_INTERVAL", 60)
+PEEK_REGEN = seconds("LUNARIA_PEEK_REGEN", 300)
+SCALE = E("LUNARIA_SCALE", "1")
+if SCALE not in ("1", "2", "3", "4"):
+    sys.exit(f"brasenia-render: LUNARIA_SCALE must be 1-4, got {SCALE!r}")
+SCALE = int(SCALE)
+CSS_W, CSS_H = 1280, 720                       # the pane contract
+OUT_W, OUT_H = CSS_W * SCALE, CSS_H * SCALE    # one page, device pixels
+PEEK_SIZE = (1920, 1080)                       # the Roku UI plane's limit
+BG = (14, 22, 18)                              # the panes' background, around a fitted link page
+BG_TOLERANCE = 12                              # px difference below this counts as background
+RETRY_S = 30            # before rendering a failed item again
+BACKGROUND_GAP_S = 2    # between off-screen renders, so the encoder keeps its CPU
+STALE_S = 30            # an unreadable pointer is logged after this long
+BROWSER_MAX_AGE_S = 6 * 3600
+
+
+def log(msg):
+    print(msg, file=sys.stderr, flush=True)
+
+
+class RenderError(Exception):
+    pass
+
+
+class Refused(RenderError):
+    """A site this renderer will not show."""
+
+
+# ---------------------------------------------------------------- sites ----
+
+def sandbox_available():
+    """True when this user can create a user namespace, as Chromium's sandbox needs."""
+    try:
+        return subprocess.run(["unshare", "--user", "--map-root-user", "true"],
+                              capture_output=True, timeout=10).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def host_of(url):
+    try:
+        return (urlsplit(url).hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+def check_site(url, sandboxed):
+    host = host_of(url)
+    if host == PUB_HOST:
+        return
+    if not sandboxed:
+        raise Refused(f"{host or url}: Chromium is not sandboxed, so only {PUB_HOST} pages render")
+    if not any(host == s or host.endswith("." + s) for s in ALLOWED_SITES):
+        raise Refused(f"{host or url} is not in lunaria_allowed_sites (kalmia roles/lunaria)")
+
+
+def http_status(url, timeout=5):
+    req = urllib.request.Request(url, method="HEAD", headers={"Cache-Control": "no-cache"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status
+    except urllib.error.HTTPError as exc:
+        return exc.code
+    except Exception:
+        return None
+
+
+def rendition(url):
+    """A pub.lan pane's preferred sibling rendition, when it offers one."""
+    if PREFER and host_of(url) == PUB_HOST and url.endswith("/pane.html"):
+        alt = url[:-len("pane.html")] + PREFER
+        if http_status(alt) == 200:
+            return alt
+    return url
+
+
+# -------------------------------------------------------------- browser ----
+
+class Browser:
+    """One headless Chromium, driven over --remote-debugging-pipe: requests on
+    fd 3 and replies on fd 4, each a JSON message ending in a NUL byte."""
+
+    def __init__(self, sandboxed):
+        self.sandboxed = sandboxed
+        self.proc = None
+
+    def start(self):
+        self.profile = tempfile.mkdtemp(prefix="brasenia-render-")
+        r_in, w_in = os.pipe()
+        r_out, w_out = os.pipe()
+
+        def child():
+            # Copy first: if a pipe end already is fd 3 or 4, dup2(x, x) would
+            # leave it close-on-exec and Chromium would find it closed.
+            a, b = os.dup(r_in), os.dup(w_out)
+            os.dup2(a, 3)
+            os.dup2(b, 4)
+
+        self.proc = subprocess.Popen(
+            ["chromium", "--headless=new", *([] if self.sandboxed else ["--no-sandbox"]),
+             "--disable-gpu", "--no-first-run", "--no-default-browser-check",
+             "--hide-scrollbars", "--mute-audio", "--remote-debugging-pipe",
+             "--user-data-dir=" + self.profile, "about:blank"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            close_fds=False, preexec_fn=child)
+        os.close(r_in)
+        os.close(w_out)
+        self.wfd, self.rfd = w_in, r_out
+        self.buf, self.mid, self.born = b"", 0, time.monotonic()
+        target = self.call("Target.createTarget", {"url": "about:blank"}, session=False)["targetId"]
+        self.session = self.call("Target.attachToTarget", {"targetId": target, "flatten": True},
+                                 session=False)["sessionId"]
+        self.call("Page.enable")
+        self.call("Network.enable")
+        self.call("Network.setCacheDisabled", {"cacheDisabled": True})   # never a stale page
+
+    def stop(self):
+        if self.proc is None:
+            return
+        for fd in (self.wfd, self.rfd):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        self.proc.terminate()
+        try:
+            self.proc.wait(5)
+        except subprocess.TimeoutExpired:
+            self.proc.kill()
+            self.proc.wait(5)
+        self.proc = None
+        shutil.rmtree(self.profile, ignore_errors=True)
+
+    @property
+    def old(self):
+        return time.monotonic() - self.born > BROWSER_MAX_AGE_S
+
+    def call(self, method, params=None, session=True, timeout=20):
+        self.mid += 1
+        mid = self.mid
+        msg = {"id": mid, "method": method, "params": params or {}}
+        if session:
+            msg["sessionId"] = self.session
+        data = json.dumps(msg).encode() + b"\0"
+        try:
+            while data:
+                data = data[os.write(self.wfd, data):]
+        except OSError as exc:
+            raise RenderError(f"chromium is gone ({exc})")
+        deadline = time.monotonic() + timeout
+        while True:
+            while b"\0" in self.buf:
+                raw, self.buf = self.buf.split(b"\0", 1)
+                reply = json.loads(raw)
+                if reply.get("id") == mid:
+                    if "error" in reply:
+                        raise RenderError(f"{method}: {reply['error'].get('message')}")
+                    return reply.get("result", {})
+            left = deadline - time.monotonic()
+            if left <= 0:
+                raise RenderError(f"{method} timed out")
+            if select.select([self.rfd], [], [], left)[0]:
+                chunk = os.read(self.rfd, 1 << 20)
+                if not chunk:
+                    raise RenderError("chromium closed the pipe")
+                self.buf += chunk
+
+    def evaluate(self, expression, await_promise=False, timeout=20):
+        result = self.call("Runtime.evaluate", {"expression": expression, "returnByValue": True,
+                                                "awaitPromise": await_promise}, timeout=timeout)
+        return result.get("result", {}).get("value")
+
+    def load(self, url, css_w, css_h, scale, theme, settle, timeout):
+        self.call("Emulation.setDeviceMetricsOverride",
+                  {"width": css_w, "height": css_h, "deviceScaleFactor": scale, "mobile": False})
+        self.call("Emulation.setEmulatedMedia",
+                  {"features": [{"name": "prefers-color-scheme", "value": theme}]})
+        nav = self.call("Page.navigate", {"url": url}, timeout=timeout)
+        if nav.get("errorText"):
+            raise RenderError(f"{url}: {nav['errorText']}")
+        deadline = time.monotonic() + timeout
+        while self.evaluate("document.readyState") != "complete":
+            if time.monotonic() > deadline:
+                raise RenderError(f"{url}: did not finish loading in {timeout}s")
+            time.sleep(0.05)
+        self.evaluate("document.fonts ? document.fonts.ready.then(() => true) : true",
+                      await_promise=True, timeout=timeout)
+        status = self.evaluate("(performance.getEntriesByType('navigation')[0] || {}).responseStatus || 0")
+        if isinstance(status, int) and status >= 400:
+            raise RenderError(f"{url}: HTTP {status}")
+        time.sleep(settle)
+
+    def capture(self):
+        data = self.call("Page.captureScreenshot", {"format": "png"}, timeout=60)["data"]
+        return Image.open(io.BytesIO(base64.b64decode(data))).convert("RGB")
+
+    def contract_pages(self, url):
+        """A pane-contract page: 1280 px wide, one page per 720 px band (1-4)."""
+        self.load(url, CSS_W, CSS_H, SCALE, "dark", 0.15, 15)
+        height = self.evaluate("Math.max(document.documentElement.scrollHeight,"
+                               " document.body ? document.body.scrollHeight : 0)") or CSS_H
+        bands = max(1, min(4, -(-int(height) // CSS_H)))
+        if bands > 1:
+            self.call("Emulation.setDeviceMetricsOverride", {"width": CSS_W, "height": CSS_H * bands,
+                                                             "deviceScaleFactor": SCALE, "mobile": False})
+            time.sleep(0.15)
+        shot = self.capture()
+        # A page can be taller than its content (a desk edition zoomed to fit):
+        # keep only the bands down to the last that has anything on it.
+        bands = min(bands, max(1, -(-content_bottom(shot) // OUT_H)))
+        return [shot.crop((0, i * OUT_H, OUT_W, (i + 1) * OUT_H)) for i in range(bands)]
+
+    def link_pages(self, url, source):
+        """A link pane: laid out at source.viewport, its first source.screens
+        bands each fitted onto a page."""
+        width, height = source["viewport"]
+        screens = source["screens"]
+        dpr = min(OUT_W / width, OUT_H / height)
+        self.load(url, width, height * screens, dpr, source["theme"], 1.5, 25)
+        shot = self.capture()
+        band_w, band_h = round(width * dpr), round(height * dpr)
+        pages = []
+        for i in range(screens):
+            band = shot.crop((0, i * band_h, min(shot.width, band_w), min(shot.height, (i + 1) * band_h)))
+            page = Image.new("RGB", (OUT_W, OUT_H), BG)
+            page.paste(band, ((OUT_W - band.width) // 2, (OUT_H - band.height) // 2))
+            pages.append(page)
+        return pages
+
+
+def content_bottom(image):
+    """The lowest row that differs from the background (the top-left pixel)
+    by more than BG_TOLERANCE, so antialiasing and off-white noise don't count."""
+    bg = image.getpixel((5, 5))
+    diff = ImageChops.difference(image, Image.new("RGB", image.size, bg)).convert("L")
+    box = diff.point(lambda p: 255 if p > BG_TOLERANCE else 0).getbbox()
+    return box[3] if box else OUT_H
+
+
+FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+
+
+def notice_page(title, detail):
+    """A plain dark page saying why an item cannot be shown, so the screen
+    matches the compositor's decision instead of keeping an older pane."""
+    page = Image.new("RGB", (OUT_W, OUT_H), BG)
+    draw = ImageDraw.Draw(page)
+    try:
+        big, small = ImageFont.truetype(FONT, 44 * SCALE), ImageFont.truetype(FONT, 26 * SCALE)
+    except OSError:
+        big = small = ImageFont.load_default()
+    draw.text((60 * SCALE, 250 * SCALE), title, fill=(224, 168, 28), font=big)
+    draw.text((60 * SCALE, 330 * SCALE), detail, fill=(216, 228, 220), font=small)
+    return page
+
+
+# ---------------------------------------------------------------- items ----
+
+class Item:
+    """Something to render: a line-up item, or what the pointer names."""
+
+    def __init__(self, item_id, url, rev=None, source=None, title=None, cls=None, showing=False):
+        self.id, self.url, self.rev, self.source = item_id, url, rev, source
+        self.title, self.cls, self.showing = title or item_id, cls, showing
+
+    @property
+    def key(self):
+        """What the rendered images depend on."""
+        return json.dumps([self.url, self.rev, self.source], sort_keys=True)
+
+
+def safe_id(text):
+    return isinstance(text, str) and 0 < len(text) <= 64 and all(
+        c.isalnum() and c.isascii() and not c.isupper() or c in "-_" for c in text)
+
+
+def fetch_json(url):
+    """``(doc, None)``, ``(None, "404")`` or ``(None, reason)``."""
+    req = urllib.request.Request(url, headers={"Cache-Control": "no-cache"})
+    try:
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            return json.loads(resp.read()), None
+    except urllib.error.HTTPError as exc:
+        return None, "404" if exc.code == 404 else f"HTTP {exc.code}"
+    except Exception as exc:
+        return None, f"fetch failed: {exc}"
+
+
+def item_from(entry):
+    if not isinstance(entry, dict) or not safe_id(entry.get("id")) or not isinstance(entry.get("url"), str):
+        return None
+    source = entry.get("source") if isinstance(entry.get("source"), dict) else None
+    return Item(entry["id"], entry["url"], entry.get("rev"), source, entry.get("title"),
+                entry.get("class"), bool(entry.get("showing")))
+
+
+def target_from(pointer, why):
+    """What the pointer puts on screen; None when it can't be read."""
+    if why == "404":
+        return Item("_briefing", BRIEFING_URL, title="Briefing")   # no compositor yet
+    if why or not isinstance(pointer, dict) or pointer.get("schema") != 1:
+        return None
+    fallback = pointer.get("fallback")
+    if fallback == "briefing":
+        return Item("_briefing", BRIEFING_URL, pointer.get("rev"), title=pointer.get("title"))
+    if fallback == "status" and isinstance(pointer.get("url"), str):
+        return Item("_status", pointer["url"], title=pointer.get("title"))
+    if fallback is None and safe_id(pointer.get("pane")) and isinstance(pointer.get("url"), str):
+        source = pointer.get("source") if isinstance(pointer.get("source"), dict) else None
+        return Item(pointer["pane"], pointer["url"], pointer.get("rev"), source, pointer.get("title"))
+    return None
+
+
+# ------------------------------------------------------------- renderer ----
+
+def save_png(image, path, **kw):
+    tmp = path + ".tmp"
+    image.save(tmp, "PNG", **kw)
+    os.replace(tmp, path)
+
+
+class Renderer:
+    def __init__(self):
+        self.sandboxed = sandbox_available()
+        self.browser = None
+        self.done = {}       # id -> {"key", "at", "pages": [paths]}
+        self.failed = {}     # id -> (key, monotonic time)
+        self.refused = {}    # id -> key: shown as a notice until the item changes
+        self.lineup, self.decided_at = [], None
+        self.showing = None  # the Item on screen
+        self.shown = None    # (id, key) whose pages frame.png is cycling
+        self.page, self.next_flip = 0, 0.0
+        self.last_bg = 0.0
+        self.bad_since = None
+        self.bad_logged = False
+        os.makedirs(CACHE, exist_ok=True)
+        os.makedirs(PEEK_DIR, exist_ok=True)
+
+    # --- browser ---------------------------------------------------------
+    def ensure_browser(self):
+        if self.browser and self.browser.proc and self.browser.proc.poll() is None and not self.browser.old:
+            return
+        self.drop_browser()
+        for sandboxed in ([True, False] if self.sandboxed else [False]):
+            browser = Browser(sandboxed)
+            try:
+                browser.start()
+            except Exception as exc:
+                browser.stop()
+                log(f"chromium {'sandboxed' if sandboxed else 'unsandboxed'} failed to start: {exc}")
+                continue
+            if self.sandboxed and not sandboxed:
+                log("chromium runs without its sandbox: only pub.lan pages will render")
+            self.sandboxed = sandboxed
+            self.browser = browser
+            return
+        raise RenderError("chromium would not start")
+
+    def drop_browser(self):
+        if self.browser:
+            self.browser.stop()
+            self.browser = None
+
+    # --- rendering -------------------------------------------------------
+    def render(self, item):
+        started = time.monotonic()
+        try:
+            self.ensure_browser()                   # first: it may fall back to unsandboxed
+            check_site(item.url, self.sandboxed)
+            pages = (self.browser.link_pages(item.url, item.source) if item.source
+                     else self.browser.contract_pages(rendition(item.url)))
+        except Refused as exc:
+            # Rendered once as a notice and not retried until the item changes.
+            log(f"render {item.id} refused: {exc}")
+            self.store(item, [notice_page(f"{item.title}: this page isn't shown here", str(exc))])
+            self.refused[item.id] = item.key
+            return False
+        except Exception as exc:
+            self.failed[item.id] = (item.key, time.monotonic())
+            log(f"render {item.id} FAILED, keeping its last image: {exc}")
+            if not isinstance(exc, RenderError) or "timed out" in str(exc) or "chromium" in str(exc):
+                self.drop_browser()     # start a fresh one next time
+            return False
+        self.store(item, pages)
+        self.failed.pop(item.id, None)
+        self.refused.pop(item.id, None)
+        log(f"rendered {item.id}: {len(pages)} page(s) in {time.monotonic() - started:.1f}s")
+        return True
+
+    def store(self, item, pages):
+        final = os.path.join(CACHE, item.id)
+        work = tempfile.mkdtemp(prefix="." + item.id + "-", dir=CACHE)
+        paths = []
+        for i, page in enumerate(pages, 1):
+            path = os.path.join(work, f"page-{i:02d}.png")
+            page.save(path, "PNG")
+            paths.append(path)
+        old = final + ".old"
+        shutil.rmtree(old, ignore_errors=True)
+        if os.path.isdir(final):
+            os.replace(final, old)
+        os.replace(work, final)
+        shutil.rmtree(old, ignore_errors=True)
+        at = int(time.time())
+        self.done[item.id] = {"key": item.key, "at": at,
+                              "pages": [os.path.join(final, os.path.basename(p)) for p in paths]}
+        save_png(pages[0].resize(PEEK_SIZE, Image.LANCZOS), os.path.join(PEEK_DIR, item.id + ".png"))
+        self.write_index()
+
+    def due(self, item, on_screen):
+        if self.refused.get(item.id) == item.key:
+            return False
+        done = self.done.get(item.id)
+        failed = self.failed.get(item.id)
+        if failed and failed[0] == item.key and time.monotonic() - failed[1] < RETRY_S:
+            return False
+        if done is None or done["key"] != item.key:
+            return True
+        age = time.time() - done["at"]
+        if item.source:
+            return age >= item.source.get("refresh_s", 60)
+        if item.rev is None:
+            return age >= (REGEN if on_screen else PEEK_REGEN)
+        return False
+
+    # --- inputs ----------------------------------------------------------
+    def poll_pointer(self):
+        if PIN_URL:
+            self.showing = Item("_pin", PIN_URL)
+            return
+        pointer, why = fetch_json(POINTER_URL)
+        target = target_from(pointer, why)
+        if target is None:
+            now = time.monotonic()
+            self.bad_since = self.bad_since or now
+            if self.showing is None and not self.done:
+                self.showing = Item("_briefing", BRIEFING_URL, title="Briefing")
+            if not self.bad_logged and now - self.bad_since >= STALE_S:
+                log(f"pointer unreadable for {STALE_S}s ({why or 'not a schema 1 pointer'}), keeping the current pages")
+                self.bad_logged = True
+            return
+        if self.bad_logged:
+            log("pointer readable again")
+        self.bad_since, self.bad_logged = None, False
+        self.showing = target
+
+    def poll_lineup(self):
+        doc, why = fetch_json(LINEUP_URL)
+        if why or not isinstance(doc, dict) or not isinstance(doc.get("items"), list):
+            return
+        items = [i for i in (item_from(e) for e in doc["items"]) if i is not None]
+        self.lineup, self.decided_at = items, doc.get("decided_at")
+        self.defaults = {e.get("id") for e in doc["items"] if isinstance(e, dict) and e.get("default")}
+        listed = {i.id for i in items}
+        for name in os.listdir(PEEK_DIR):
+            if name.endswith(".png") and name[:-4] not in listed:
+                try:
+                    os.unlink(os.path.join(PEEK_DIR, name))
+                except OSError:
+                    pass
+        self.write_index()
+
+    def write_index(self):
+        index = {"schema": 1, "decided_at": self.decided_at, "items": [
+            {"id": i.id, "title": i.title, "class": i.cls, "showing": i.showing,
+             "image": "/peek/%s.png?v=%d" % (i.id, self.done[i.id]["at"]),
+             "as_of": datetime.fromtimestamp(self.done[i.id]["at"], timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+            for i in self.lineup if i.id in self.done]}
+        text = json.dumps(index, indent=2, ensure_ascii=False) + "\n"
+        path = os.path.join(PEEK_DIR, "index.json")
+        try:
+            with open(path, encoding="utf-8") as f:
+                if f.read() == text:
+                    return
+        except OSError:
+            pass
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, path)
+
+    # --- the screen ------------------------------------------------------
+    def frames(self):
+        item = self.showing
+        done = self.done.get(item.id) if item else None
+        if not done:
+            return                                    # keep whatever is up until it renders
+        now = time.monotonic()
+        if self.shown != (item.id, done["at"]):
+            self.shown, self.page, self.next_flip = (item.id, done["at"]), 0, 0.0
+            log(f"showing {item.id}")
+        if now >= self.next_flip:
+            pages = done["pages"]
+            path = pages[self.page % len(pages)]
+            tmp = FRAME + ".tmp"
+            try:
+                shutil.copyfile(path, tmp)
+                os.replace(tmp, FRAME)
+            except OSError as exc:
+                log(f"could not install {path}: {exc}")
+            self.page += 1
+            self.next_flip = now + DWELL
+
+    def step(self):
+        """Render at most one item: the one on screen when it is due, else the
+        next due line-up item (the default first), spaced BACKGROUND_GAP_S."""
+        if self.showing and self.due(self.showing, on_screen=True):
+            self.render(self.showing)
+            return
+        if time.monotonic() - self.last_bg < BACKGROUND_GAP_S:
+            return
+        defaults = getattr(self, "defaults", set())
+        for item in sorted(self.lineup, key=lambda i: 0 if i.id in defaults else 1):
+            if self.showing and item.id == self.showing.id:
+                continue
+            if self.due(item, on_screen=False):
+                self.render(item)
+                self.last_bg = time.monotonic()
+                return
+
+    def run(self):
+        log(f"brasenia-render: chromium {'sandboxed' if self.sandboxed else 'unsandboxed (pub.lan only)'},"
+            f" allowed sites: {' '.join(ALLOWED_SITES) or 'none'}")
+        next_pointer = next_lineup = 0.0
+        while True:
+            now = time.monotonic()
+            if now >= next_pointer:
+                next_pointer = now + POLL
+                self.poll_pointer()
+            if now >= next_lineup:
+                next_lineup = now + LINEUP_POLL
+                self.poll_lineup()
+            self.step()
+            self.frames()
+            time.sleep(0.25)
+
+
+def once(url, source, out):
+    """Render one page to OUT (page-NN.png) and exit: for testing."""
+    r = Renderer()
+    item = Item("_once", url, source=json.loads(source) if source else None)
+    if item.source:
+        item.source = dict({"theme": "dark", "screens": 1, "viewport": [1280, 720], "refresh_s": 60},
+                           **item.source)
+    try:
+        r.ensure_browser()
+        check_site(url, r.sandboxed)
+        started = time.monotonic()
+        pages = (r.browser.link_pages(url, item.source) if item.source
+                 else r.browser.contract_pages(rendition(url)))
+        os.makedirs(out, exist_ok=True)
+        for i, page in enumerate(pages, 1):
+            page.save(os.path.join(out, f"page-{i:02d}.png"))
+        print(f"{len(pages)} page(s) in {time.monotonic() - started:.1f}s "
+              f"({'sandboxed' if r.sandboxed else 'unsandboxed'})")
+        return 0
+    except Exception as exc:
+        print(f"FAILED: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        r.drop_browser()
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="brasenia-render")
+    parser.add_argument("--once", metavar="URL")
+    parser.add_argument("--source", metavar="JSON", help="with --once: render URL as a link pane")
+    parser.add_argument("--out", default=".", help="with --once: where to write the pages")
+    args = parser.parse_args()
+    if args.once:
+        return once(args.once, args.source, args.out)
+    renderer = Renderer()
+
+    def stop(*_):
+        renderer.drop_browser()
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    renderer.run()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

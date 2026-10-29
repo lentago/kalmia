@@ -10,7 +10,7 @@
 # ADR-0015). omit_endlist so an encoder restart never leaves a finished
 # playlist behind, and epoch-numbered segments so the sequence never runs
 # backwards across restarts. The feeder re-cats frame.png per frame, so atomic
-# replacements from lunaria-frames appear within one frame. The wall-clock
+# replacements from brasenia-render appear within one frame. The wall-clock
 # overlay doubles as the display's liveness indicator; its size and offsets
 # scale with the pages so it stays in the pane contract's clear corner.
 set -euo pipefail
@@ -29,12 +29,12 @@ for v in SCALE FPS KBPS; do
     exit 1
   fi
 done
-[ -s frame.png ] || { echo "frame.png missing - waiting for lunaria-frames" >&2; exit 1; }
+[ -s frame.png ] || { echo "frame.png missing - waiting for brasenia-render" >&2; exit 1; }
 mkdir -p "$HLS_DIR"
 
 # ffmpeg fixes the output size from the first frame it reads, so scale every
 # frame to the configured size: a frame.png left over from another scale (a
-# restart before lunaria-frames re-shoots) must not lock the stream to it
+# restart before brasenia-render re-renders) must not lock the stream to it
 # (#169). Frames already at that size pass through untouched.
 w=$(( 1280 * SCALE )) h=$(( 720 * SCALE ))
 # The clock is 28px text in an 8px box, 20px/16px from the corner at 1x.

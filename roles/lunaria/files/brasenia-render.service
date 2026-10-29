@@ -1,0 +1,20 @@
+[Unit]
+Description=brasenia renderer: the viewport's panes rendered ahead (frame.png for the stream, /run/lunaria-peek for the remote's peek)
+After=network-online.target
+Wants=network-online.target lunaria-hls-serve.service
+
+[Service]
+User=lunaria
+WorkingDirectory=/var/lib/lunaria
+EnvironmentFile=/etc/default/lunaria
+# tmpfs; kept across restarts so the remote has peek images while it starts.
+RuntimeDirectory=lunaria-peek
+RuntimeDirectoryPreserve=restart
+ExecStart=/usr/local/bin/brasenia-render
+# Below the encoder: a render must never starve the live stream.
+Nice=5
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

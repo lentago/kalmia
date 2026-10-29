@@ -107,18 +107,14 @@
     group: root
     mode: "0755"
   loop:
-    - lunaria-shooter
-    - lunaria-pointer
-    - lunaria-frames
+    - brasenia-render
     - lunaria-stream
     - lunaria-hls-serve
-    - lunaria-peek
   become: true
   notify:
-    - Restart lunaria-frames
+    - Restart brasenia-render
     - Restart lunaria-stream
     - Restart lunaria-hls-serve
-    - Restart lunaria-peek
 
 - name: Render the lunaria environment file
   ansible.builtin.template:
@@ -129,10 +125,53 @@
     mode: "0644"
   become: true
   notify:
-    - Restart lunaria-frames
+    - Restart brasenia-render
     - Restart lunaria-stream
     - Restart lunaria-hls-serve
-    - Restart lunaria-peek
+
+# ---------------------------------------------------------------------------
+# Retired renderers (kalmia#194, 2026-10-29). brasenia-render replaced
+# lunaria-frames' shooting, lunaria-shooter and lunaria-peek. They are
+# stopped and removed BEFORE brasenia-render starts: lunaria-peek's
+# RuntimeDirectory is the same /run/lunaria-peek, and systemd deletes it
+# when that unit stops. Idempotent; a host built after this has nothing to
+# remove.
+# ---------------------------------------------------------------------------
+- name: Check for the retired renderers
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ item }}"
+  loop:
+    - lunaria-frames.service
+    - lunaria-peek.service
+  register: lunaria_retired_units
+
+- name: Stop and disable the retired renderers
+  ansible.builtin.systemd_service:
+    name: "{{ item.item }}"
+    state: stopped
+    enabled: false
+  loop: "{{ lunaria_retired_units.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  become: true
+  when: item.stat.exists
+
+- name: Remove the retired renderers' units, scripts and pages
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/lunaria-frames.service
+    - /etc/systemd/system/lunaria-peek.service
+    - /usr/local/bin/lunaria-frames
+    - /usr/local/bin/lunaria-shooter
+    - /usr/local/bin/lunaria-pointer
+    - /usr/local/bin/lunaria-peek
+    - "{{ lunaria_home }}/pages"
+    - "{{ lunaria_home }}/pages.next"
+    - "{{ lunaria_home }}/shoot.log"
+  become: true
+  notify: Reload systemd
 
 - name: Deploy the systemd units
   ansible.builtin.copy:
@@ -143,17 +182,15 @@
     mode: "0644"
   loop:
     - mediamtx.service
-    - lunaria-frames.service
+    - brasenia-render.service
     - lunaria-stream.service
     - lunaria-hls-serve.service
-    - lunaria-peek.service
   become: true
   notify:
     - Restart mediamtx
-    - Restart lunaria-frames
+    - Restart brasenia-render
     - Restart lunaria-stream
     - Restart lunaria-hls-serve
-    - Restart lunaria-peek
 
 - name: Enable and start the lunaria services
   ansible.builtin.systemd_service:
@@ -163,10 +200,9 @@
     state: started
   loop:
     - mediamtx.service
-    - lunaria-frames.service
+    - brasenia-render.service
     - lunaria-stream.service
     - lunaria-hls-serve.service
-    - lunaria-peek.service
   become: true
 
 # ---------------------------------------------------------------------------

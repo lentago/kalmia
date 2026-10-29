@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Serve lunaria-stream's HLS output (/run/lunaria-hls) and lunaria-peek's
-images (/run/lunaria-peek) to the Roku.
+"""Serve lunaria-stream's HLS output (/run/lunaria-hls) and brasenia-render's
+peek images (/run/lunaria-peek) to the Roku.
 
 Two flat directories, GET/HEAD only:
 
