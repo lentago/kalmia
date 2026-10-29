@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Serve lunaria-stream's HLS output (/run/lunaria-hls) and brasenia-render's
-peek images (/run/lunaria-peek) to the Roku.
+"""Serve brasenia-stream's HLS output (/run/brasenia-hls) and brasenia-render's
+peek images (/run/brasenia-peek) to the Roku.
 
 Two flat directories, GET/HEAD only:
 
 - /<name>: *.m3u8 playlists (sent no-cache, since a live playlist changes
   every segment) and *.ts segments. The stream URL is
-  http://<host>:LUNARIA_HLS_PORT/master.m3u8.
+  http://<host>:BRASENIA_HLS_PORT/master.m3u8.
 - /peek/<name>: the remote's peek, index.json (no-cache) and *.png images
   (lentago/brasenia#80).
 
@@ -18,12 +18,12 @@ credential-free like the rest of LXC 118.
 import http.server, os
 
 DIRS = {
-    "": (os.environ.get("LUNARIA_HLS_DIR", "/run/lunaria-hls"),
+    "": (os.environ.get("BRASENIA_HLS_DIR", "/run/brasenia-hls"),
          {".m3u8": "application/vnd.apple.mpegurl", ".ts": "video/mp2t"}),
-    "peek": (os.environ.get("LUNARIA_PEEK_DIR", "/run/lunaria-peek"),
+    "peek": (os.environ.get("BRASENIA_PEEK_DIR", "/run/brasenia-peek"),
              {".json": "application/json", ".png": "image/png"}),
 }
-PORT = int(os.environ.get("LUNARIA_HLS_PORT", "8080"))
+PORT = int(os.environ.get("BRASENIA_HLS_PORT", "8080"))
 NO_CACHE = (".m3u8", ".json")
 
 

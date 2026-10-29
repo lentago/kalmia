@@ -1,0 +1,14 @@
+[Unit]
+Description=brasenia HLS server (/run/brasenia-hls -> the office Roku)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=brasenia
+EnvironmentFile=/etc/default/brasenia
+ExecStart=/usr/local/bin/brasenia-hls-serve
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

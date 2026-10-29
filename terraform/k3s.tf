@@ -7,7 +7,7 @@
 # Placement: k3s-1 on pve5, k3s-2 on pve4 — deliberately split across two PVE
 # hosts so losing a single node can't take the whole pair down at once.
 #
-# VMIDs 119 and 122 — the next two free IDs ascending (118 `lunaria` is the
+# VMIDs 119 and 122 — the next two free IDs ascending (118 `brasenia` is the
 # current top LXC; 120/121 are the `*-test` testbed VMs, 116/117 are the
 # claytonia-owned bullpen pool). See README.md § Guest inventory.
 #
@@ -116,7 +116,7 @@ resource "proxmox_virtual_environment_container" "k3s" {
     # token cannot recreate these; guarded.
     prevent_destroy = true
     # template_file_id is create-only and cannot be reconciled later — same
-    # guard the other created/imported containers carry (see lunaria, 118).
+    # guard the other created/imported containers carry (see brasenia, 118).
     ignore_changes = [operating_system]
   }
 }

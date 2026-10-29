@@ -1,0 +1,18 @@
+[Unit]
+Description=brasenia encoder (frame.png -> HEVC HLS in /run/brasenia-hls)
+After=network-online.target brasenia-render.service
+Wants=network-online.target brasenia-render.service brasenia-hls-serve.service
+
+[Service]
+User=brasenia
+WorkingDirectory=/var/lib/brasenia
+EnvironmentFile=/etc/default/brasenia
+# tmpfs: ~2 MB of segments every 2 s never touches the disk. Removed on each
+# restart, so a stale playlist is never served across one.
+RuntimeDirectory=brasenia-hls
+ExecStart=/usr/local/bin/brasenia-stream
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

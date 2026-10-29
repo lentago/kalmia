@@ -1,84 +1,83 @@
 ---
 # ============================================================================
-# lunaria — wall-display compositor for the LXC 118 (pve4), serving the
-# product now named lentago/brasenia (renamed from lentago/lunaria on
-# 2026-07-20; 'lunaria' is the legacy runtime name, rename tracked in #63).
+# brasenia — the wall display's renderer and streamer on LXC 118 (pve4), for
+# lentago/brasenia. (Named lunaria until the runtime rename, #63, 2026-10-29.)
 # Renders a pub.lan page (the Family Brief pane) into a continuous 4K HEVC
 # HLS stream the office Roku dev channel plays (#167). Concept:
-# docs/lunaria.md and http://pub.lan/brasenia/concept.md. Deliberately
-# credential-free — pub owns the Google Drive leg; lunaria only reads
+# docs/brasenia.md and http://pub.lan/brasenia/concept.md. Deliberately
+# credential-free — pub owns the Google Drive leg; brasenia only reads
 # http://pub.lan/.
 # ============================================================================
-lunaria_user: lunaria
-lunaria_home: /var/lib/lunaria
+brasenia_user: brasenia
+brasenia_home: /var/lib/brasenia
 
 # The clock overlay burned into the stream uses the system TZ; the debian
 # template defaults to UTC, which reads as a broken clock on the TV.
-lunaria_timezone: America/New_York
+brasenia_timezone: America/New_York
 
 # mediamtx now carries only the RTMP live-ingest path (#102); the display
-# stream is served by lunaria-hls-serve (#167).
-lunaria_mediamtx_version: v1.19.2
-lunaria_mediamtx_dir: /opt/mediamtx
+# stream is served by brasenia-hls-serve (#167).
+brasenia_mediamtx_version: v1.19.2
+brasenia_mediamtx_dir: /opt/mediamtx
 
 # --- The office Roku: 4K, the viewport's screen (#167) -----------------------
 # The play-room Roku (720p) was retired 2026-10-28. Its replacement is a Roku
 # Streaming Stick Plus on a 4K display in the office, and with the Chromecast
 # offline it is the viewport's only screen: it follows the compositor pointer
-# (lunaria_pointer_url, below; lentago/brasenia#59).
+# (brasenia_pointer_url, below; lentago/brasenia#59).
 #
 # Set to pin the display to one page instead: the pointer is never read, and
-# the page is rendered as a pane every lunaria_regen_interval seconds. Empty
+# the page is rendered as a pane every brasenia_regen_interval seconds. Empty
 # follows the pointer.
-lunaria_pin_url: ""
+brasenia_pin_url: ""
 # When the pointer names a pane's pane.html and the pane also offers this
 # sibling rendition, render the rendition. detail.html is the Family Brief's
 # desk edition (lentago/brasenia#56): a 1920x1080 layout with every decision
 # and the to-do list, which zooms to fit the 1280x720 viewport and lands on
 # 3840x2160 at an effective 2x. Panes without one show pane.html. Empty
 # always renders pane.html.
-lunaria_prefer_rendition: detail.html
+brasenia_prefer_rendition: detail.html
 # Device pixels per CSS pixel. Pages keep the 1280x720 pane contract; 3 renders
 # them at 3840x2160 for a 4K display (1 = the old 720p stream).
-lunaria_scale: 3
+brasenia_scale: 3
 # HEVC frame rate and target video bitrate. The burned-in clock ticks once a
 # second, so 5 fps is plenty; 4K HEVC at 5 fps is ~1.4 cores (10 fps does not
 # fit). Roku plays H.264 only up to 1080p, hence HEVC.
-lunaria_fps: 5
-lunaria_bitrate_kbps: 6000
+brasenia_fps: 5
+brasenia_bitrate_kbps: 6000
 # The Roku plays http://<LXC 118>:<port>/master.m3u8 (brasenia's VideoScene.xml).
-lunaria_hls_port: 8080
+brasenia_hls_port: 8080
 
 # The line-up (lentago/brasenia Contracts v1) and the Roku remote's peek
 # (lentago/brasenia#80): brasenia-render (kalmia#194) re-reads the line-up
-# every lunaria_peek_poll seconds and keeps every item rendered ahead, so a
+# every brasenia_peek_poll seconds and keeps every item rendered ahead, so a
 # switch is a file swap; an item without a content revision is rendered again
-# every lunaria_peek_regen seconds while off screen. Each item's first page,
-# at 1920x1080, is the peek image lunaria-hls-serve serves at /peek/: Up/Down
+# every brasenia_peek_regen seconds while off screen. Each item's first page,
+# at 1920x1080, is the peek image brasenia-hls-serve serves at /peek/: Up/Down
 # shows it over the live video and changes nothing the compositor decided.
-lunaria_lineup_url: http://pub.lan/viewport/lineup.json
-lunaria_peek_poll: 10
-lunaria_peek_regen: 300
+brasenia_lineup_url: http://pub.lan/viewport/lineup.json
+brasenia_peek_poll: 10
+brasenia_peek_regen: 300
 
 # The briefing slot (pointer fallback "briefing", or no compositor): the
 # Family Brief (lentago/brasenia#76). Rendered like a pane, so its detail.html
-# desk edition is preferred (lunaria_prefer_rendition).
-lunaria_briefing_url: http://pub.lan/viewport/briefing/pane.html
+# desk edition is preferred (brasenia_prefer_rendition).
+brasenia_briefing_url: http://pub.lan/viewport/briefing/pane.html
 
 # Seconds each screen stays up before rotating to the next.
-lunaria_page_dwell: 12
+brasenia_page_dwell: 12
 # Seconds between re-renders of the page on screen when it carries no content
 # revision (the status card, or a compositor older than lentago/brasenia#101);
 # a page with a revision is rendered again as soon as it changes.
-lunaria_regen_interval: 60
+brasenia_regen_interval: 60
 
 # The brasenia viewport pointer (compositor decision on pub, Contracts v1) and
 # how often it is polled, in seconds. The screen follows the pointer: the pane,
 # the status card, or, on fallback "briefing" or a 404 (no compositor), the
 # briefing slot. LXC 118 has no NAS mount; it reads the pointer through pub
 # over HTTP.
-lunaria_pointer_url: http://pub.lan/viewport/current.json
-lunaria_pointer_poll: 1
+brasenia_pointer_url: http://pub.lan/viewport/current.json
+brasenia_pointer_poll: 1
 
 # Sites other than pub.lan that Chromium may render (kalmia#194): host names,
 # each also allowing its subdomains. Only for brasenia link panes, a pane that
@@ -86,7 +85,7 @@ lunaria_pointer_poll: 1
 # site is refused unless Chromium runs sandboxed, which on this unprivileged
 # LXC needs `nesting` (terraform/containers.tf). github.com: a pull request's
 # page, the case link panes were made for (brasenia#97).
-lunaria_allowed_sites:
+brasenia_allowed_sites:
   - github.com
 
 # --- RTMP live-ingest (kalmia#102) -------------------------------------------
@@ -94,14 +93,14 @@ lunaria_allowed_sites:
 # custom-RTMP live streaming; H.264/AAC remux only, no transcode). The path
 # name is protocol-shaped, not producer-shaped — adding a second producer
 # (OBS, Larix, ...) must require no mediamtx.yml changes.
-lunaria_rtmp_publish_user: live
+brasenia_rtmp_publish_user: live
 
 # Publish credential for the `live` path, sourced from the environment —
 # never committed, same pattern as roles/repos' GH_TOKEN. Locally, source it
 # from a host-local env file before running the play (e.g.
-# ~/.config/kalmia/lunaria-rtmp.env, alongside the existing
-# ~/.config/kalmia/proxmox.env precedent); see docs/lunaria.md. Empty by
+# ~/.config/kalmia/brasenia-rtmp.env, alongside the existing
+# ~/.config/kalmia/proxmox.env precedent); see docs/brasenia.md. Empty by
 # default: with no credential, mediamtx.yml.j2 omits the live-publisher auth
 # entry entirely, so RTMP publish to `live` fails closed (401) rather than
 # falling open.
-lunaria_rtmp_publish_pass: "{{ lookup('env', 'LUNARIA_RTMP_PUBLISH_PASS') | default('', true) }}"
+brasenia_rtmp_publish_pass: "{{ lookup('env', 'BRASENIA_RTMP_PUBLISH_PASS') | default('', true) }}"
