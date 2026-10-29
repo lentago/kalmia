@@ -247,13 +247,23 @@ is why they run here and not on LXC 118 (no NAS mount, by design).
   fleet_producer`, WorkingDirectory `/srv/brasenia/producers/fleet`). It
   carries `ConditionPathIsMountPoint=` for both mounts. It opens heartbeats,
   claim records and run `.meta` files, never a prompt or a log.
-- `brasenia-links.service` (brasenia#97, brasenia ADR-0018) reads the
-  household's standing slots (`link.<pane-id>` settings, added in
-  `viewport/configure.html`) from `viewport/rubric.json` every
-  `pub_viewport_links_interval` seconds (30). It keeps one manifest-only link
-  pane per slot under `viewport/panes/` (`python3 -m links_producer`,
-  WorkingDirectory `/srv/brasenia/producers/links`). It needs no credential
-  and no mount beyond the share.
+- `brasenia-links.service` (brasenia#97, brasenia ADR-0018) keeps the
+  household's standing slots on the bus. A standing slot is a web page the
+  household keeps on the wall as a resting pane, saved in
+  `viewport/configure.html` as a `link.<pane-id>` rubric setting.
+  - **What it does:** every `pub_viewport_links_interval` seconds (30) it reads
+    the validated slots from `viewport/rubric.json`. It keeps one
+    manifest-only link pane per slot under `viewport/panes/`: a pane that
+    names a web page instead of shipping `pane.html` (brasenia ADR-0016).
+  - **How it runs:** `python3 -m links_producer`, WorkingDirectory
+    `/srv/brasenia/producers/links`. It needs no credential and no mount
+    beyond the share.
+  - **Before brasenia#104 is in pub's checkout:** the module is missing, so
+    systemd restarts the unit every 10 s until `brasenia-update` (or this
+    play) brings it in.
+  - **On screen:** its panes show only once the compositor runs with
+    `--link-panes` and LXC 118's renderer can show web pages (#205). Until
+    then the rubric board lists them as `off`.
 
 **The job-queue mount (manual, once).** Bind mounts are root@pam-only (the
 terraform API token gets HTTP 403), so `mp1` is attached on pve4 by hand.

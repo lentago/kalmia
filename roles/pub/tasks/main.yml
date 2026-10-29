@@ -283,6 +283,16 @@
   become: true
   when: pub_viewport_enabled
 
+- name: Check the links producer's interval against its panes' lifetime
+  ansible.builtin.assert:
+    that:
+      - pub_viewport_links_interval | int >= 1
+      - pub_viewport_links_interval | int <= 300
+    fail_msg: >-
+      pub_viewport_links_interval must be 1-300 seconds: the links producer's
+      panes expire 10 minutes after each renewal (brasenia#97).
+  when: pub_viewport_enabled
+
 - name: Deploy the brasenia viewport systemd services
   ansible.builtin.template:
     src: "{{ item }}.service.j2"
