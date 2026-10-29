@@ -36,15 +36,6 @@
     shell: /usr/sbin/nologin
   become: true
 
-- name: Ensure the pages directory exists
-  ansible.builtin.file:
-    path: "{{ lunaria_home }}/pages"
-    state: directory
-    owner: "{{ lunaria_user }}"
-    group: "{{ lunaria_user }}"
-    mode: "0755"
-  become: true
-
 # mediamtx writes auto-generated certs into its working directory, so the
 # install dir is owned by the service user. The version-stamp marker makes
 # upgrades idempotent: bump lunaria_mediamtx_version and the unarchive re-runs.

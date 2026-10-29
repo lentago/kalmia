@@ -53,6 +53,9 @@ lives only there). **lunaria is credential-free**: its inputs are
 - **Order:** the item on screen first, then the household's default resting
   pane, then the rest, one at a time and 2 s apart, at `Nice=5` so the encoder
   keeps its CPU.
+- **Off the main loop:** rendering runs on a worker thread. A slow or stuck
+  render (calls time out after 15–30 s) never holds up reading the pointer,
+  switching to an item that is already rendered, or turning pages.
 - **When an item renders again:**
   - when it is new, or when its content revision (`rev`, lentago/brasenia
     ADR-0016) changes
@@ -61,8 +64,12 @@ lives only there). **lunaria is credential-free**: its inputs are
     `lunaria_regen_interval` seconds while on screen and `lunaria_peek_regen`
     otherwise
 - **Failures:** a failed render keeps the previous image and is retried after
-  30 s. A stuck or crashed Chromium is replaced, and the browser is restarted
-  every 6 h anyway.
+  30 s. A render that times out, or a crashed Chromium, gets a fresh browser
+  for the next render, and the browser is restarted every 6 h anyway.
+- **Bad input:** the pointer and line-up are validated. Link pane settings are
+  clamped to the contract's ranges (1–4 screens, a refresh of 10 s to a day),
+  so a malformed line-up can't stop the loop or make it spin. Items that
+  leave the line-up are forgotten, and their images deleted.
 
 **What is on screen** (#142, lentago/brasenia#59).
 - **The pointer:** the renderer polls `lunaria_pointer_url` (the compositor's
@@ -86,10 +93,18 @@ content, up to 4. Link panes (lentago/brasenia ADR-0016) are laid out at their
 first `source.screens` bands are each fitted onto a page.
 
 **Which sites.** pub.lan always. Any other site renders only while Chromium is
-sandboxed and the host, or a parent domain, is in `lunaria_allowed_sites`. A
-refused link pane is shown once as a notice page naming the site, rather than
-leaving an older pane up, and is not retried until it changes. The sandbox and
-the gate are described under Operational notes.
+sandboxed and the host, or a parent domain, is in `lunaria_allowed_sites`.
+- **Every document, not just the one asked for:** each navigation request is
+  intercepted (DevTools `Fetch`) and blocked when its host isn't allowed. That
+  covers each hop of a redirect, frames, and a page that navigates itself.
+  The final URL is checked again before the capture. For example,
+  `github.com/<org>.png`, which redirects to `avatars.githubusercontent.com`,
+  is refused.
+- **Refusals:** a refused link pane is shown once as a notice page naming the
+  site, rather than leaving an older pane up, and is not retried until it
+  changes.
+
+The sandbox and the gate are described under Operational notes.
 
 **The remote's peek** (lentago/brasenia#80). On the office Roku, Up/Down steps
 through the panes and shows the next one at once as an image over the live
@@ -154,7 +169,8 @@ a small stdlib server, serves playlists and finished segments on
   when namespaces work.
   - pub.lan pages always render. If the sandboxed Chromium cannot start, an
     unsandboxed one renders pub.lan pages only, so a sandbox problem cannot
-    blank the screen. The journal says so at start.
+    blank the screen. The journal says so, and the sandbox is tried again
+    every 10 minutes.
   - Any other site renders only when Chromium is sandboxed and the host, or a
     parent domain, is in `lunaria_allowed_sites` (github.com by default). Those
     sites are brasenia's link panes (brasenia ADR-0016). A refused one is shown
