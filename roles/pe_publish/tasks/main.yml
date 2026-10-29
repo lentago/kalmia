@@ -3,7 +3,8 @@
 # pe_publish — installs the publish toolchain (python3 + venv for the MkDocs
 # build, git, rsync) and the GitHub Actions runner agent, registers it to
 # cpitzi/professional-endeavors and runs it as a systemd service under an
-# unprivileged user in the share's gid-1000 group. Registration needs a
+# unprivileged user in the share's gid-1000 group, behind a job-started hook
+# that stops every job but publish.yml on main (#195). Registration needs a
 # one-hour token in PE_PUBLISH_RUNNER_TOKEN on the first run only; see
 # docs/pe-publish.md.
 # ============================================================================
@@ -113,6 +114,26 @@
     creates: "{{ pe_publish_runner_dir }}/.runner"
   no_log: true
   become: true
+
+# Before the service first starts, so the runner never takes a job unguarded.
+- name: Install the job guard hook
+  ansible.builtin.template:
+    src: pe-publish-job-guard.sh.j2
+    dest: "{{ pe_publish_job_guard }}"
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+# The agent reads .env (written by config.sh) when it starts, so a change
+# restarts it, and with it any job running at the time.
+- name: Point the runner's job-started hook at the guard
+  ansible.builtin.lineinfile:
+    path: "{{ pe_publish_runner_dir }}/.env"
+    regexp: "^ACTIONS_RUNNER_HOOK_JOB_STARTED="
+    line: "ACTIONS_RUNNER_HOOK_JOB_STARTED={{ pe_publish_job_guard }}"
+  become: true
+  notify: Restart the runner service
 
 - name: Install the runner systemd service
   ansible.builtin.command:

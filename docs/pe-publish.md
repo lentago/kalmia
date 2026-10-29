@@ -13,10 +13,59 @@ wall panes, so merges reach pub.lan without anyone opening a session.
 | Provisioned by | `pe-publish.yml` + the `pe_publish` role |
 | Runner | `/opt/actions-runner`, user `runner` (in `webdrop`, gid 1000), systemd service from `svc.sh` |
 | Labels | `self-hosted`, `Linux`, `X64`, `pe-publish` |
+| Job guard | `/usr/local/bin/pe-publish-job-guard.sh`, the job-started hook: only `publish.yml` on `main` runs (see below) |
 
 It is deliberately not LXC 115 `gha-runner`. That runner holds this repo's
 `PROXMOX_VE_API_TOKEN` and runs the kalmia and claytonia applies, so a personal
 repo's workflows with write access to pub's web root don't run there.
+
+## Job guard
+
+The runner takes any job in the repo labelled `pe-publish`, and a branch can
+edit any workflow. It can point a `pull_request` job at
+`runs-on: [self-hosted, pe-publish]`, or drop `publish.yml`'s
+`if: github.ref == 'refs/heads/main'` and dispatch it from itself. Bullpen
+agents push branches to that repo, so the runner enforces main-only itself
+(#195). The workflow's own guard is editable by the branch.
+
+`ACTIONS_RUNNER_HOOK_JOB_STARTED` in `/opt/actions-runner/.env` points at the
+root-owned `/usr/local/bin/pe-publish-job-guard.sh`. It lets a job through
+only when all three are exact matches:
+
+| Variable | Must be |
+|---|---|
+| `GITHUB_REPOSITORY` | `cpitzi/professional-endeavors` |
+| `GITHUB_REF` | `refs/heads/main` |
+| `GITHUB_WORKFLOW_REF` | `cpitzi/professional-endeavors/.github/workflows/publish.yml@refs/heads/main` |
+
+The values come from the job's `github` context, which the server builds. The
+runner starts the hook with an empty environment plus that context, so a
+workflow's `env:` can't spoof them.
+
+A refusal has to stop the job, not just fail it. The hook is the first entry
+in the job's step queue. A non-zero exit only marks the job failed, and the
+runner still runs every later step whose condition holds, so a branch could
+add `if: always()`. So on refusal the hook:
+
+1. writes an `::error` annotation and a `pe-publish-job-guard` journal line,
+2. sends SIGTERM to its `Runner.Worker`. The worker shuts down, skips every
+   remaining step (post steps included) without evaluating its condition, and
+   fails the job,
+3. sends SIGKILL to the worker if it hasn't been cancelled within 30 s.
+
+In the run, a refused job fails on the **Set up runner** step with
+`Refused <workflow_ref> (ref <ref>)`, and every later step is skipped. The
+runner service stays up for the next job.
+
+**Residual gap:** a job cancelled after *Set up job* finishes but before the
+hook's first line runs (a window of milliseconds) still runs its
+`if: always()` steps. A cancellation during *Set up job* itself ends the job
+with no steps run. Closing that window means the runner can't write the share
+until something outside the job approves it. That is a pull-based publish, not
+a hook.
+
+To check: `journalctl -t pe-publish-job-guard` on the container lists the
+refusals, and `grep HOOK /opt/actions-runner/.env` shows the wiring.
 
 ## Mounts
 

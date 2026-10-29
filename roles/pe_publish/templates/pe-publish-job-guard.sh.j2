@@ -1,0 +1,57 @@
+#!/bin/bash
+# {{ ansible_managed }} (pe_publish role, #195)
+# ============================================================================
+# pe-publish-job-guard — the runner's job-started hook
+# (ACTIONS_RUNNER_HOOK_JOB_STARTED in {{ pe_publish_runner_dir }}/.env).
+# The runner takes any job labelled pe-publish in {{ pe_publish_repo }}, and
+# a branch can edit any workflow to target it, or drop publish.yml's
+# main-only `if:`. So a job runs here only if it is exactly
+#
+#   {{ pe_publish_repo }}/{{ pe_publish_allowed_workflow }}@{{ pe_publish_allowed_ref }}
+#
+# The GITHUB_* values come from the job's github context, which the server
+# builds; a workflow's env: never reaches this hook.
+#
+# Refusing has to stop the job, not just fail it. A failed hook only marks
+# the job failed, and the runner still runs every later step whose condition
+# holds, so a branch could add `if: always()`. A SIGTERM makes the worker
+# shut down instead: it skips every remaining step without evaluating its
+# condition and fails the job. See docs/pe-publish.md § Job guard.
+# ============================================================================
+# The worker cancels this step (SIGINT, then SIGTERM) as it shuts down; ignore
+# both so a refusal always gets as far as stopping the worker.
+trap '' INT TERM
+set -uo pipefail
+
+allowed='{{ pe_publish_repo }}/{{ pe_publish_allowed_workflow }}@{{ pe_publish_allowed_ref }}'
+
+if [[ ${GITHUB_REPOSITORY:-} == '{{ pe_publish_repo }}' &&
+      ${GITHUB_REF:-} == '{{ pe_publish_allowed_ref }}' &&
+      ${GITHUB_WORKFLOW_REF:-} == "$allowed" ]]; then
+    echo "pe-publish-job-guard: allowed $allowed"
+    exit 0
+fi
+
+# Branch and file names reach the log and an annotation; keep them printable.
+got="${GITHUB_WORKFLOW_REF:-unset} (ref ${GITHUB_REF:-unset})"
+got=${got//[^[:print:]]/?}
+logger -t pe-publish-job-guard "refused: $got" || true
+echo "::error title=pe-publish runner guard::Refused $got. This runner runs only $allowed."
+
+# The hook runs as a child of the Runner.Worker that is running this job.
+worker=$PPID
+while [[ $worker -gt 1 && $(cat "/proc/$worker/comm" 2>/dev/null) != Runner.Worker ]]; do
+    worker=$(awk '/^PPid:/ { print $2 }' "/proc/$worker/status" 2>/dev/null || true)
+    worker=${worker:-1}
+done
+if [[ $worker -le 1 ]]; then
+    logger -t pe-publish-job-guard "no Runner.Worker above $$; job failed, not stopped" || true
+    exit 1
+fi
+
+kill -TERM "$worker"
+# A worker that is shutting down kills this step within about 10s. Still
+# here after 30s means it isn't, so stop it outright.
+sleep 30
+kill -KILL "$worker" 2>/dev/null || true
+exit 1
