@@ -240,31 +240,41 @@ resource "proxmox_virtual_environment_container" "grafana_stack" {
 # Changing this input rebuilds LXC 118 (destroy, then create from the
 # template) through the container's replace_triggered_by. Terraform fires that
 # trigger only when this resource is updated or replaced, never when it is
-# first created, so it lands here alone and the rename bumps it (#63).
+# first created, so it landed alone (#212) and the rename changed it (#63).
+# If an apply records a new input but fails before the destroy, change the
+# input again: CI applies take no -replace (docs/brasenia.md, Build / rebuild).
 resource "terraform_data" "brasenia_rebuild" {
-  input = "kalmia#63: baseline"
+  input = "kalmia#63: rebuilt as brasenia"
 }
 
-# LXC 118 — lunaria, the wall-display compositor/streamer (concept:
-# http://pub.lan/lunaria/LUNARIA.md). Renders the Family Brief pane from
-# pub.lan (headless chromium, 3x scale) into a 4K HEVC HLS stream (:8080)
-# that the office Roku's sideloaded dev channel plays. Deliberately
-# credential-free: pub owns the Drive leg; lunaria only reads pub.lan. No bind
-# mounts and no keyctl, so the API-token CI apply can create this container
-# from scratch. 4 cores / 4 GB because the 4K HEVC encoder alone is ~1.4 cores
-# and ~620 MB, beside chromium's 3x shots (#167).
-resource "proxmox_virtual_environment_container" "lunaria" {
+# LXC 118 — brasenia, the wall display's renderer and streamer (concept:
+# http://pub.lan/brasenia/concept.md; runbook: docs/brasenia.md). Renders the
+# viewport's panes (a sandboxed chromium, 3x scale) into a 4K HEVC HLS stream
+# (:8080) that the office Roku's sideloaded dev channel plays. Credential-free:
+# pub owns the Drive leg. No bind mounts and no keyctl, so the API-token CI
+# apply can create this container from scratch. 4 cores / 4 GB because the 4K
+# HEVC encoder alone is ~1.4 cores and ~620 MB, beside the renderer (#167, #194).
+# Named lunaria until its runtime rename (#63) rebuilt it: `moved` carries the
+# state across, and the trigger above turns the rename into one
+# destroy-then-create of VMID 118, never two resources racing for the ID.
+moved {
+  from = proxmox_virtual_environment_container.lunaria
+  to   = proxmox_virtual_environment_container.brasenia
+}
+
+resource "proxmox_virtual_environment_container" "brasenia" {
   node_name     = "pve4"
   vm_id         = 118
-  description   = "lunaria — wall-display compositor (192.168.139.19). Renders the Family Brief pane to 4K HEVC HLS :8080 for the office Roku dev channel. Provisioned by lunaria.yml.\n"
+  description   = "brasenia — the wall display's renderer and streamer (192.168.139.19). Renders the viewport's panes to 4K HEVC HLS :8080 for the office Roku dev channel. Provisioned by brasenia.yml (docs/brasenia.md).\n"
   unprivileged  = true
   started       = true
   start_on_boot = true
 
   # nesting gives the container user namespaces, which Chromium's sandbox
-  # needs before the renderer may show a site other than pub.lan (#194). Set
-  # live as root@pam before this merged (README "Rails": on update the
-  # provider sends every flag, which PVE refuses from the token).
+  # needs before the renderer may show a site other than pub.lan (#194). The
+  # token can create it: on create the provider sends nesting=1 alone, which
+  # PVE allows with VM.Allocate. Changing features later is a root@pam step
+  # (README "Rails": on update the provider sends every flag).
   features {
     nesting = true
   }
@@ -284,12 +294,13 @@ resource "proxmox_virtual_environment_container" "lunaria" {
   }
 
   network_interface {
-    name   = "eth0"
-    bridge = "vmbr0"
+    name        = "eth0"
+    bridge      = "vmbr0"
+    mac_address = "BC:24:11:8D:F9:C8" # the same device to the Firewalla across rebuilds
   }
 
   initialization {
-    hostname = "lunaria"
+    hostname = "brasenia"
 
     dns {
       domain  = "local"

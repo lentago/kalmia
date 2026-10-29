@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """brasenia-render: the one renderer behind the office Roku's stream and its
-peek (kalmia#194). It replaces lunaria-frames' rendering, lunaria-shooter and
+peek (kalmia#194). It replaced lunaria-frames' rendering, lunaria-shooter and
 lunaria-peek.
 
 It keeps one headless Chromium running, driven over the DevTools protocol on
@@ -11,23 +11,23 @@ image as the screen. Rendering runs on a worker thread, so a slow or stuck
 render never holds up the pointer, a switch, or the page rotation.
 
 What is on screen: the pane the pointer (current.json) names, or its sibling
-rendition (LUNARIA_PREFER_RENDITION, e.g. detail.html) when it offers one; the
+rendition (BRASENIA_PREFER_RENDITION, e.g. detail.html) when it offers one; the
 briefing slot when the pointer falls back to it (or there is no compositor);
-the status card; or, with LUNARIA_PIN_URL, that one page. Its pages go to
-frame.png in turn, each for LUNARIA_PAGE_DWELL seconds, and lunaria-stream
+the status card; or, with BRASENIA_PIN_URL, that one page. Its pages go to
+frame.png in turn, each for BRASENIA_PAGE_DWELL seconds, and brasenia-stream
 encodes frame.png.
 
 When it renders: the item on screen first, then the household's default
 resting pane, then the rest of the line-up, one at a time. An item renders
 when it is new or its content revision (rev) changes; a link pane also every
-source.refresh_s; an item without a rev every LUNARIA_REGEN_INTERVAL while on
-screen and LUNARIA_PEEK_REGEN otherwise. A failed render keeps the previous
+source.refresh_s; an item without a rev every BRASENIA_REGEN_INTERVAL while on
+screen and BRASENIA_PEEK_REGEN otherwise. A failed render keeps the previous
 image and is retried after RETRY_S: a stale page beats a dead screen.
 
-Which sites (docs/lunaria.md has the reasoning, threat model and limits): a
+Which sites (docs/brasenia.md has the reasoning, threat model and limits): a
 pane without a link source renders only from pub.lan. Documents must be
 pub.lan or, while Chromium runs sandboxed (it needs user namespaces, which
-LXC 118 has with nesting), a host in LUNARIA_ALLOWED_SITES or a subdomain of
+LXC 118 has with nesting), a host in BRASENIA_ALLOWED_SITES or a subdomain of
 one. Every document request is checked (Fetch), every redirect hop included,
 and the final URL again before the capture. A link pane renders in its own
 disposable browser context, where no document but pub.lan, and no
@@ -39,7 +39,7 @@ SANDBOX_RETRY_S. A refused page is shown as a notice naming the site, and is
 tried again once the sandbox is back.
 
 Pane-contract pages are laid out at 1280x720 CSS pixels and rendered at
-LUNARIA_SCALE, one page per 720 px band with content (up to 4). Link panes
+BRASENIA_SCALE, one page per 720 px band with content (up to 4). Link panes
 (lentago/brasenia ADR-0016) are laid out at source.viewport with
 prefers-color-scheme set to source.theme, and their first source.screens bands
 are each fitted onto a 16:9 page. Their settings are clamped to the contract's
@@ -55,16 +55,16 @@ from urllib.parse import urlsplit
 from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 E = os.environ.get
-HOME = E("LUNARIA_HOME", "/var/lib/lunaria")
+HOME = E("BRASENIA_HOME", "/var/lib/brasenia")
 CACHE = os.path.join(HOME, "render")
 FRAME = os.path.join(HOME, "frame.png")
-PEEK_DIR = E("LUNARIA_PEEK_DIR", "/run/lunaria-peek")
-POINTER_URL = E("LUNARIA_POINTER_URL", "http://pub.lan/viewport/current.json")
-LINEUP_URL = E("LUNARIA_LINEUP_URL", "http://pub.lan/viewport/lineup.json")
-BRIEFING_URL = E("LUNARIA_BRIEFING_URL", "http://pub.lan/viewport/briefing/pane.html")
-PIN_URL = E("LUNARIA_PIN_URL", "")
-PREFER = E("LUNARIA_PREFER_RENDITION", "")
-ALLOWED_SITES = [h.lower() for h in E("LUNARIA_ALLOWED_SITES", "").split()]
+PEEK_DIR = E("BRASENIA_PEEK_DIR", "/run/brasenia-peek")
+POINTER_URL = E("BRASENIA_POINTER_URL", "http://pub.lan/viewport/current.json")
+LINEUP_URL = E("BRASENIA_LINEUP_URL", "http://pub.lan/viewport/lineup.json")
+BRIEFING_URL = E("BRASENIA_BRIEFING_URL", "http://pub.lan/viewport/briefing/pane.html")
+PIN_URL = E("BRASENIA_PIN_URL", "")
+PREFER = E("BRASENIA_PREFER_RENDITION", "")
+ALLOWED_SITES = [h.lower() for h in E("BRASENIA_ALLOWED_SITES", "").split()]
 PUB_HOST = "pub.lan"
 
 
@@ -75,14 +75,14 @@ def seconds(name, default):
     return int(value)
 
 
-POLL = seconds("LUNARIA_POINTER_POLL", 1)
-LINEUP_POLL = seconds("LUNARIA_PEEK_POLL", 10)
-DWELL = seconds("LUNARIA_PAGE_DWELL", 12)
-REGEN = seconds("LUNARIA_REGEN_INTERVAL", 60)
-PEEK_REGEN = seconds("LUNARIA_PEEK_REGEN", 300)
-SCALE = E("LUNARIA_SCALE", "1")
+POLL = seconds("BRASENIA_POINTER_POLL", 1)
+LINEUP_POLL = seconds("BRASENIA_PEEK_POLL", 10)
+DWELL = seconds("BRASENIA_PAGE_DWELL", 12)
+REGEN = seconds("BRASENIA_REGEN_INTERVAL", 60)
+PEEK_REGEN = seconds("BRASENIA_PEEK_REGEN", 300)
+SCALE = E("BRASENIA_SCALE", "1")
 if SCALE not in ("1", "2", "3", "4"):
-    sys.exit(f"brasenia-render: LUNARIA_SCALE must be 1-4, got {SCALE!r}")
+    sys.exit(f"brasenia-render: BRASENIA_SCALE must be 1-4, got {SCALE!r}")
 SCALE = int(SCALE)
 CSS_W, CSS_H = 1280, 720                       # the pane contract
 OUT_W, OUT_H = CSS_W * SCALE, CSS_H * SCALE    # one page, device pixels
@@ -147,7 +147,7 @@ def check_site(url, sandboxed):
     host = host_of(url) or url
     if not sandboxed:
         raise Refused(f"{host}: Chromium is not sandboxed, so only {PUB_HOST} pages render")
-    raise Refused(f"{host} is not in lunaria_allowed_sites (kalmia roles/lunaria)")
+    raise Refused(f"{host} is not in brasenia_allowed_sites (kalmia roles/brasenia)")
 
 
 def http_status(url, timeout=5):

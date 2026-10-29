@@ -76,7 +76,7 @@ pub_viewport_url_base: http://pub.lan
 pub_viewport_compositor_interval: 1
 # Show link panes, panes that name a web page (lentago/brasenia ADR-0016). On
 # since LXC 118's renderer (brasenia-render, kalmia#194) runs Chromium
-# sandboxed and renders only pub.lan and lunaria_allowed_sites; off, the
+# sandboxed and renders only pub.lan and brasenia_allowed_sites; off, the
 # compositor lists them on the board as `off` and never points at one.
 pub_viewport_link_panes: true
 pub_viewport_focus_interval: 30

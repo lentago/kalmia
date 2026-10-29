@@ -1,0 +1,20 @@
+---
+# ============================================================================
+# Provision the brasenia LXC (118, pve4) — the wall display's renderer and
+# streamer for lentago/brasenia. (It ran under the product's first name,
+# lunaria, until the runtime rename, #63.) Self-provisioning, same as pub.yml:
+# run this ON the container.
+#
+#   ansible-playbook -i inventory/hosts.yml brasenia.yml
+#
+# The guest itself is created by terraform/containers.tf (CI apply-on-merge).
+# Concept doc: docs/brasenia.md and http://pub.lan/brasenia/concept.md.
+# ============================================================================
+- name: Provision the brasenia wall display
+  hosts: all
+  gather_facts: true
+  become: false
+
+  roles:
+    - role: brasenia
+      tags: [brasenia, wall_display]

@@ -44,7 +44,7 @@ graph TB
     end
 
     FORGE["forge/ — substrate.sh\nbuilds versioned LXC templates"]
-    ANSIBLE["Ansible — separate plane\nsite.yml / pub.yml / lunaria.yml / pe-publish.yml\nidempotent roles provision inside each guest"]
+    ANSIBLE["Ansible — separate plane\nsite.yml / pub.yml / brasenia.yml / pe-publish.yml\nidempotent roles provision inside each guest"]
 
     PR --> VALIDATE
     VALIDATE -->|"same-repo PRs only — fork PRs\nnever reach the LAN runner"| PLAN
@@ -280,13 +280,13 @@ Morning Brief publisher (rclone + systemd timer) running inside the `pub` LXC
 (114). It's a standalone playbook, not a `site.yml` profile — see
 [`docs/pub.md`](docs/pub.md) for how to run it and seed its secret.
 
-The second: `lunaria.yml` + the `lunaria` role codify the wall-display
-compositor (LXC 118) for **brasenia** (renamed from `lunaria` on 2026-07-20;
-the legacy `lunaria` runtime names remain, rename tracked in
-[#63](https://github.com/lentago/kalmia/issues/63) — see
-[`docs/lunaria.md`](docs/lunaria.md)) — chromium-rendered Morning Brief →
-ffmpeg → mediamtx HLS for the play-room Roku. Credential-free by design; the
-guest itself is defined in `terraform/containers.tf`.
+The second: `brasenia.yml` + the `brasenia` role codify the wall display's
+runtime (LXC 118) for **brasenia** (named `lunaria` until its runtime rename,
+[#63](https://github.com/lentago/kalmia/issues/63); see
+[`docs/brasenia.md`](docs/brasenia.md)): the viewport's panes, rendered ahead by
+a sandboxed Chromium → ffmpeg 4K HEVC (H.265 video) → HLS (HTTP Live
+Streaming, short segments over plain HTTP) for the office Roku. Credential-free
+by design; the guest itself is defined in `terraform/containers.tf`.
 
 The third targets the hypervisors themselves: `pve-host.yml` + the `pve_host`
 role set lvmthin autoextend and a nightly LXC fstrim on every Proxmox node,

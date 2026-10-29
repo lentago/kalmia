@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Encode the current frame.png into a live HLS stream for the office Roku:
-# LUNARIA_FPS fps HEVC + silent AAC, written by ffmpeg's own HLS muxer as
-# MPEG-TS segments in /run/lunaria-hls (tmpfs; lunaria-hls-serve serves it).
+# BRASENIA_FPS fps HEVC + silent AAC, written by ffmpeg's own HLS muxer as
+# MPEG-TS segments in /run/brasenia-hls (tmpfs; brasenia-hls-serve serves it).
 # HEVC because Roku plays H.264 only up to 1080p. ffmpeg's muxer rather than
 # mediamtx because mediamtx's MPEG-TS HLS is H.264-only and its fMP4 HLS
 # declares a playlist version (10) the Roku rejects (kalmia#167). One GOP per
@@ -15,17 +15,17 @@
 # scale with the pages so it stays in the pane contract's clear corner.
 set -euo pipefail
 
-HOME_DIR="${LUNARIA_HOME:-/var/lib/lunaria}"
-HLS_DIR="${LUNARIA_HLS_DIR:-/run/lunaria-hls}"
-SCALE="${LUNARIA_SCALE:-1}"
-FPS="${LUNARIA_FPS:-5}"
-KBPS="${LUNARIA_BITRATE_KBPS:-6000}"
+HOME_DIR="${BRASENIA_HOME:-/var/lib/brasenia}"
+HLS_DIR="${BRASENIA_HLS_DIR:-/run/brasenia-hls}"
+SCALE="${BRASENIA_SCALE:-1}"
+FPS="${BRASENIA_FPS:-5}"
+KBPS="${BRASENIA_BITRATE_KBPS:-6000}"
 FONT=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
 cd "$HOME_DIR"
 
 for v in SCALE FPS KBPS; do
   if ! [[ "${!v}" =~ ^[1-9][0-9]{0,5}$ ]]; then
-    echo "lunaria-stream: $v must be a positive integer, got '${!v}'" >&2
+    echo "brasenia-stream: $v must be a positive integer, got '${!v}'" >&2
     exit 1
   fi
 done
