@@ -22,97 +22,100 @@ pane-rubric viewport this grows into): `http://pub.lan/brasenia/concept.md`.
 
 ```
 pub (LXC 114)                       lunaria (LXC 118, 192.168.139.19)
-  family-brief producer               lunaria-frames.service
-    compositor → viewport/        →     chromium --headless, 3x scale, of
-      current.json (the pointer)          the pointer's pane (its detail.html
-                                          desk edition when it has one)
-                                        → 3840x2160 page → frame.png
+  brasenia compositor →               brasenia-render.service
+    viewport/current.json (pointer)     one warm Chromium (sandboxed), every
+    viewport/lineup.json  (line-up)     line-up item rendered ahead at 3x
+                                        → the pointer's pages → frame.png
+                                        → each item's first page, 1080p →
+                                          /run/lunaria-peek (the remote's peek)
                                       lunaria-stream.service
                                         ffmpeg frame.png → HEVC 5 fps →
                                         HLS (MPEG-TS) in /run/lunaria-hls
                                       lunaria-hls-serve.service
-                                        /run/lunaria-hls → :8080
+                                        /run/lunaria-hls → :8080, /peek/
                                               ↓
                               office Roku dev channel "brasenia"
                               http://192.168.139.19:8080/master.m3u8
 ```
 
-Division of labor: **pub owns the Google Drive leg** (rclone credential lives
-only there); **lunaria is credential-free** — its only input is
-`http://pub.lan/`. The briefing rotation (the pointer's `briefing` fallback,
-or no compositor at all) shows the Family Brief from brasenia's briefing slot
-(lentago/brasenia#76): `lunaria_tv_url` is its `detail.html` desk edition,
-shot as a TV edition, and `lunaria_full_url` its `pane.html`, sliced if the
-TV edition is unreachable. Until 2026-10-28 these were the morning brief at
-`/brief/`, which stopped publishing on 2026-08-31.
+Division of labor: **pub owns the Google Drive leg** (the rclone credential
+lives only there). **lunaria is credential-free**: its inputs are
+`http://pub.lan/` and, for link panes, the sites in `lunaria_allowed_sites`.
 
-**Extra panes** (`lunaria_extra_urls`, 2026-08-10): further TV-contract pages
-appended to the briefing rotation, a Phase-1.5 precursor of the brasenia pane
-bus. Each is shot like a TV edition; an unreachable or failing extra pane is
-skipped without touching the brief pages, so a broken pane can never blank the
-display. Empty since 2026-10-28: the one entry, the praxis Obsidian graph
-(`http://pub.lan/praxis/graph/tv.html`), was dropped. Its export had been
-retired on 2026-08-18, and anything that should share the screen now claims a
-pane on the bus.
+**The renderer** (`brasenia-render`, kalmia#194, 2026-10-29) replaced
+`lunaria-frames`' shooting, `lunaria-shooter` and `lunaria-peek`.
+- **How it renders:** it keeps one headless Chromium running, driven over the
+  DevTools protocol on a pipe (`--remote-debugging-pipe`, stdlib Python). A
+  pane renders in about 1–2 s, against about 3 s for the old cold launch per
+  shot.
+- **What it keeps ready:** a 4K image of every item in the compositor's
+  line-up (`lunaria_lineup_url`), so a switch is a file swap.
+- **Order:** the item on screen first, then the household's default resting
+  pane, then the rest, one at a time and 2 s apart, at `Nice=5` so the encoder
+  keeps its CPU.
+- **When an item renders again:**
+  - when it is new, or when its content revision (`rev`, lentago/brasenia
+    ADR-0016) changes
+  - a link pane also every `source.refresh_s`
+  - an item without a `rev` (the status card, or an older compositor) every
+    `lunaria_regen_interval` seconds while on screen and `lunaria_peek_regen`
+    otherwise
+- **Failures:** a failed render keeps the previous image and is retried after
+  30 s. A stuck or crashed Chromium is replaced, and the browser is restarted
+  every 6 h anyway.
 
-**The 4K office stream** (#167). The office Roku is the viewport's screen:
-`lunaria-frames` follows the pointer as described below
-(lentago/brasenia#59). When the pointer names a pane that also offers the
-`lunaria_prefer_rendition` file beside its `pane.html` (the Family Brief's
-`family-today/detail.html`, a 1920×1080 desk edition that zooms to fit the
-1280×720 viewport; lentago/brasenia#56), the shooter shoots that instead.
-`lunaria_pin_url` can pin the display to one page instead, never reading the
-pointer and re-shooting every `lunaria_regen_interval` seconds, with the
-same keep-the-old-pages rules. Pages keep the 1280×720 pane
-contract; `lunaria_scale: 3` has Chromium render them at 3840×2160 (device
-scale factor), and the clock overlay scales with them. The encoder writes
-HEVC (Roku plays H.264 only up to 1080p) with ffmpeg's own HLS muxer into
-`/run/lunaria-hls` (tmpfs, so ~2 MB of segments every 2 s never touches the
-disk), and `lunaria-hls-serve`, a small stdlib server, serves playlists and
-finished segments on `lunaria_hls_port`. Not mediamtx: its MPEG-TS HLS is
-H.264-only, and its fMP4 HLS declares `#EXT-X-VERSION:10`, which the Roku
-rejects (`HLS playlist unsupported version`). `omit_endlist` and
-epoch-numbered segments mean an encoder restart never leaves a finished
-playlist behind or runs the sequence backwards: the stream 404s for ~10 s
-and the app's retry handler rejoins. At 5 fps the encoder is ~1.4 cores and
-~620 MB, hence 4 cores / 4 GB; 10 fps did not fit 2 cores. An empty
-`lunaria_prefer_rendition` always shoots `pane.html`, and `lunaria_scale: 1` a
-1280×720 stream.
+**What is on screen** (#142, lentago/brasenia#59).
+- **The pointer:** the renderer polls `lunaria_pointer_url` (the compositor's
+  `viewport/current.json` on pub) every `lunaria_pointer_poll` seconds (1).
+- **A pane:** when the pointer names a pane (`fallback` null), the screen shows
+  that pane's pages. A pub.lan pane that also offers `lunaria_prefer_rendition`
+  beside its `pane.html` (the Family Brief's `detail.html` desk edition,
+  lentago/brasenia#56) is shown as that rendition.
+- **The fallbacks:** on `fallback: "status"` it shows the status card. On
+  `fallback: "briefing"`, or a 404 (no compositor), it shows the briefing slot
+  (`lunaria_briefing_url`, the Family Brief, lentago/brasenia#76).
+- **Pages:** each page stays up `lunaria_page_dwell` seconds before the next.
+  When the pointer is unreadable, the current pages keep going, and the journal
+  gets one line after 30 s and one when it is readable again.
+- **A pin:** `lunaria_pin_url` pins the screen to one page instead.
 
-**The remote's peek** (lentago/brasenia#80). On the office Roku, Up/Down
-steps through the panes and shows the next one at once as an image over the
-live video, with a caption. Back, or 60 s without a press, returns to the
-live view. It only looks: the stream keeps showing what the compositor
-decided. `lunaria-peek` reads the compositor's line-up
-(`lunaria_lineup_url`, `viewport/lineup.json`: the live panes in rubric
-order, then the briefing slot). For each item it shoots
-`lunaria-shooter --pane <url>`, so a pane's desk edition is preferred as on
-the stream, at `lunaria_scale`. It keeps the first screen downscaled to
-1920×1080 (the Roku UI plane's limit) in `/run/lunaria-peek/<id>.png`,
-re-shot every `lunaria_peek_regen` seconds, and writes `index.json`, the
-items in line-up order with each image's path and time. `lunaria-hls-serve`
-serves that directory at `/peek/`, beside the stream. Each shot uses its own
-`TMPDIR`, so it never collides with `lunaria-frames`, and the service runs at
-`Nice=10`, so it never starves the encoder.
+**Pages.** Pane-contract pages are laid out at 1280×720 CSS pixels and
+rendered at `lunaria_scale` (3: 3840×2160), one page per 720 px band with
+content, up to 4. Link panes (lentago/brasenia ADR-0016) are laid out at their
+`source.viewport`, with `prefers-color-scheme` set to `source.theme`. Their
+first `source.screens` bands are each fitted onto a page.
 
-**Following the viewport pointer** (#142). The viewport pointer is the file
-the brasenia compositor writes on pub, `http://pub.lan/viewport/current.json`,
-naming what the wall should show right now; this runtime is the Roku/HLS
-adapter, the leg that turns that page into the video stream the Roku plays
-(brasenia#26). `lunaria-frames` polls `lunaria_pointer_url` every
-`lunaria_pointer_poll` seconds (1) over HTTP. When the pointer names a pane
-(`fallback` null) or the status card (`fallback: "status"`), the TV shows that
-URL alone, shot as a TV-contract page. When the pointer says
-`fallback: "briefing"`, or is absent (404 — no compositor), the TV shows the
-brief plus the extra panes as above. The rotation is re-shot when `url` or
-`decided_at` changes and every `lunaria_regen_interval` seconds (60), so a pane
-that updates in place is re-rendered. When the pointer is unreadable (pub
-down, a non-404 error, bad JSON, a schema other than 1), the existing pages
-keep rotating and the journal gets one line after 30 s, plus one when it is
-readable again; a failed shoot also keeps the existing pages and is retried
-after 30 s. Capture runs in the background (into `pages.next`, swapped in
-when complete), so a stalled Chromium never stops the rotation or the
-polling.
+**Which sites.** pub.lan always. Any other site renders only while Chromium is
+sandboxed and the host, or a parent domain, is in `lunaria_allowed_sites`. A
+refused link pane is shown once as a notice page naming the site, rather than
+leaving an older pane up, and is not retried until it changes. The sandbox and
+the gate are described under Operational notes.
+
+**The remote's peek** (lentago/brasenia#80). On the office Roku, Up/Down steps
+through the panes and shows the next one at once as an image over the live
+video. It only looks: the stream keeps showing what the compositor decided.
+The renderer writes each item's first page at 1920×1080 (the Roku UI plane's
+limit) to `/run/lunaria-peek/<id>.png`, plus `index.json`: the items in line-up
+order, each with its image's path and time. `lunaria-hls-serve` serves that
+directory at `/peek/`. These are the same renders as the stream's.
+
+**The 4K stream** (#167). The encoder writes HEVC (Roku plays H.264 only up to
+1080p) with ffmpeg's own HLS muxer into `/run/lunaria-hls`. That is tmpfs, so
+about 2 MB of segments every 2 s never touches the disk. `lunaria-hls-serve`,
+a small stdlib server, serves playlists and finished segments on
+`lunaria_hls_port`.
+- **Why not mediamtx:** its MPEG-TS HLS is H.264-only, and its fMP4 HLS
+  declares `#EXT-X-VERSION:10`, which the Roku rejects (`HLS playlist
+  unsupported version`).
+- **The playlist** is 3 segments of 2 s (kalmia#193), so the Roku joins 4–6 s
+  behind live. The app rejoins when it drifts further (lentago/brasenia
+  ADR-0015).
+- **Restarts:** `omit_endlist` and epoch-numbered segments mean an encoder
+  restart never leaves a finished playlist behind or runs the sequence
+  backwards. The stream 404s for about 10 s, and the app's retry handler
+  rejoins.
+- **Size:** at 5 fps the encoder takes about 1.4 cores and 620 MB, hence
+  4 cores / 4 GB; 10 fps did not fit 2 cores.
 
 ## Build / rebuild
 
@@ -141,26 +144,29 @@ polling.
   app carries a state-observer + 3 s Timer retry (rejoins ~1 s after the
   publisher returns). Publisher restarts on lunaria are therefore invisible
   beyond a brief freeze.
-- The shooter uses a throwaway chromium profile per shot — a persistent
-  profile's HTTP cache once served a stale tv.html.
+- The renderer's one Chromium has its HTTP cache disabled
+  (`Network.setCacheDisabled`): a persistent profile's cache once served a
+  stale tv.html, which is why the old shooter used a throwaway profile per shot.
 - **Chromium's sandbox and the sites it renders (kalmia#194).** The sandbox
   needs user namespaces, which the unprivileged LXC has only with `nesting`
-  (`terraform/containers.tf`, set 2026-10-29). The shooter checks with
-  `unshare --user` on each run and drops `--no-sandbox` when namespaces work.
-  - pub.lan pages always render; if a sandboxed shot of one fails, it is
-    retried once without the sandbox, so the screen cannot go blank over a
-    sandbox problem.
+  (`terraform/containers.tf`, set 2026-10-29). The renderer checks with
+  `unshare --user` when it starts and runs Chromium without `--no-sandbox`
+  when namespaces work.
+  - pub.lan pages always render. If the sandboxed Chromium cannot start, an
+    unsandboxed one renders pub.lan pages only, so a sandbox problem cannot
+    blank the screen. The journal says so at start.
   - Any other site renders only when Chromium is sandboxed and the host, or a
-    parent domain, is in `lunaria_allowed_sites` (empty by default). Anything
-    else is refused and the existing pages stay up. Those sites are brasenia's
-    link panes (brasenia ADR-0016).
+    parent domain, is in `lunaria_allowed_sites` (github.com by default). Those
+    sites are brasenia's link panes (brasenia ADR-0016). A refused one is shown
+    as a notice page.
   - To check the sandbox: `pct exec 118 -- su -s /bin/sh lunaria -c 'unshare
     --user --map-root-user true' && echo sandbox-ok`.
 - Services are ordinary systemd units with `Restart=always` — no PID files,
-  no process groups. `systemctl status lunaria-frames lunaria-stream
-  lunaria-hls-serve lunaria-peek` is the whole health check; the on-screen clock overlay is the liveness
-  indicator (clock advancing + stale dashboard = shooter problem, frozen
-  clock = stream problem).
+  no process groups. `systemctl status brasenia-render lunaria-stream
+  lunaria-hls-serve` is the whole health check; the on-screen clock overlay is the liveness
+  indicator (clock advancing + stale pane = renderer problem, frozen
+  clock = stream problem). `journalctl -u brasenia-render` logs each render
+  with its time, and each switch.
 - Everything here is stateless: `/var/lib/lunaria` holds only rendered PNGs.
   Rebuild-from-scratch is terraform apply + the provision play; nothing to
   back up.
@@ -200,7 +206,7 @@ no recording; the drone's SD card holds the higher-quality original).
   If brasenia-side bench validation finds Roku's HLS client mishandles the
   fallback redirect (see the `?cookieCheck=1` history above), the fallback
   line is the only thing to revert — plan B is a manual v0 repoint via
-  `lunaria_tv_url` instead.
+  `lunaria_pin_url` instead.
 - **`board` is unaffected.** `lunaria-stream`'s localhost RTSP push to
   `board` keeps working unauthenticated, exactly as before; only the new
   `live` path requires a credential.
