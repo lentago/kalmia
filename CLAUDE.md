@@ -177,4 +177,6 @@ five required status checks** — `gate`, `ansible-lint`, `shellcheck / shellche
 advisory: a red check holds the PR. Branches must also be up to date with `main`
 to merge (`strict_required_status_checks_policy` is true), so once another PR
 lands, an armed PR waits until its branch is updated (`gh pr update-branch <N>`)
-— auto-merge does not do that itself.
+— auto-merge does not do that itself. The setting is owned by the `.github`
+meta-repo's Terraform (`strict_up_to_date_repos` in `terraform/locals.tf`), not
+by kalmia.
