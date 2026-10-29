@@ -24,10 +24,19 @@ LUNARIA_SCALE device pixels per CSS pixel: 1 gives 1280x720 screens, 3 gives
 3840x2160 (a 4K display) with the same layout and sharper text.
 
 Chromium notes: throwaway profile per shot (a persistent profile's HTTP cache
-once served a stale tv.html); --no-sandbox because unprivileged LXCs lack the
-user namespaces chromium's sandbox wants (input is our own pub.lan pages).
+once served a stale tv.html). Chromium's sandbox needs user namespaces, which
+LXC 118 has only with nesting (kalmia#194). The shooter runs it sandboxed
+whenever they work, and otherwise with --no-sandbox, which is safe only for
+our own pages.
+
+Which pages it renders: pub.lan always. Any other site only when Chromium is
+sandboxed and the host (or a parent domain) is in LUNARIA_ALLOWED_SITES; any
+other URL is refused, so the existing pages stay up. A sandboxed shot of a
+pub.lan page that fails is retried once without the sandbox, so a sandbox
+problem cannot blank the screen; an outside page never is.
 """
 import os, re, shutil, subprocess, sys, tempfile, urllib.request
+from urllib.parse import urlsplit
 from PIL import Image, ImageChops
 
 PANE_URL = sys.argv[2] if len(sys.argv) == 3 and sys.argv[1] == "--pane" else None
@@ -45,14 +54,60 @@ if PREFER and not re.fullmatch(r"[\w.-]+\.html", PREFER):
 CSS_W, CSS_H = 1280, 720   # the TV contract, in CSS pixels
 W, PAGE_H, SEARCH = CSS_W * SCALE, CSS_H * SCALE, 100 * SCALE   # device pixels
 BG_TOLERANCE = 12          # px diff below this counts as background
+PUB_HOST = "pub.lan"       # our own pages: always rendered
+ALLOWED_SITES = [h.lower() for h in os.environ.get("LUNARIA_ALLOWED_SITES", "").split()]
+
+
+def sandbox_available():
+    """True when this user can create a user namespace, as Chromium's sandbox needs."""
+    try:
+        return subprocess.run(["unshare", "--user", "--map-root-user", "true"],
+                              capture_output=True, timeout=10).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+SANDBOXED = sandbox_available()
+
+
+class Refused(Exception):
+    """A URL this shooter will not render."""
+
+
+def check_site(url):
+    """Raise Refused unless url may be rendered (see the module docstring)."""
+    host = (urlsplit(url).hostname or "").lower()
+    if host == PUB_HOST:
+        return
+    if not SANDBOXED:
+        raise Refused(f"{host or url}: Chromium's sandbox is unavailable, so only {PUB_HOST} pages are rendered")
+    if not any(host == site or host.endswith("." + site) for site in ALLOWED_SITES):
+        raise Refused(f"{host or url} is not in LUNARIA_ALLOWED_SITES")
+
+
+def is_pub(url):
+    return (urlsplit(url).hostname or "").lower() == PUB_HOST
 
 
 def shoot(url, css_height):
+    check_site(url)
+    try:
+        return chromium_shot(url, css_height, SANDBOXED)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        if not (SANDBOXED and is_pub(url)):
+            raise
+        print(f"sandboxed shot of {url} failed ({exc}); retrying without the sandbox",
+              file=sys.stderr)
+        return chromium_shot(url, css_height, False)
+
+
+def chromium_shot(url, css_height, sandboxed):
     tmp = os.path.join(tempfile.gettempdir(), "lunaria-shot.png")
     profile = tempfile.mkdtemp(prefix="lunaria-chromium-")
     try:
         subprocess.run([
-            "chromium", "--headless=new", "--no-sandbox", "--disable-gpu",
+            "chromium", "--headless=new", *([] if sandboxed else ["--no-sandbox"]),
+            "--disable-gpu",
             "--no-first-run", "--no-default-browser-check", "--hide-scrollbars",
             "--user-data-dir=" + profile,
             f"--window-size={CSS_W},{css_height}",
@@ -106,6 +161,10 @@ def rendition(url):
 
 
 if PANE_URL:
+    try:
+        check_site(PANE_URL)   # before fetching anything from it
+    except Refused as exc:
+        sys.exit(f"refused: {exc}")
     url = rendition(PANE_URL)
     if not reachable(url):
         sys.exit(f"pane {url} unreachable")
