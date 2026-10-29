@@ -83,6 +83,13 @@ lunaria_regen_interval: 60
 lunaria_pointer_url: http://pub.lan/viewport/current.json
 lunaria_pointer_poll: 1
 
+# Sites other than pub.lan that Chromium may render (kalmia#194): host names,
+# each also allowing its subdomains. Only for brasenia link panes, a pane that
+# names a web page (brasenia ADR-0016). pub.lan is always allowed. Any other
+# site is refused unless Chromium runs sandboxed, which on this unprivileged
+# LXC needs `nesting` (terraform/containers.tf). Empty: only pub.lan.
+lunaria_allowed_sites: []
+
 # Additional TV-contract pane pages (1280px wide, height an exact multiple of
 # 720 — the brasenia pane contract) appended to the briefing rotation. Each URL
 # is shot like a TV edition and its 720px screens join the rotation; an

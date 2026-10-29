@@ -293,6 +293,19 @@ from CI fails with HTTP 403 even though `terraform plan` returns a clean diff.
 > a pre-create gate: the operator must stand up the container before the PR is
 > merged.
 
+**Changing features on an existing container hits the same 403, even for
+`nesting` alone** (found 2026-10-29, #194, LXC 118). On update the provider
+(0.115) sends every flag (`fuse=0,keyctl=0,mknod=0,nesting=1`), so it can
+clear a flag. PVE's `check_ct_modify_config_perm` lets the token add features
+to a featureless container only when the request is exactly `nesting`, and it
+counts any other key as a privileged change, even one set to 0. So set the
+feature live first, as root@pam, then merge; the plan then has no change for
+that container:
+
+```bash
+ssh root@pve4.local 'pct set 118 --features nesting=1 && pct reboot 118'
+```
+
 The k3s pool (`#121`, VMIDs 119/122) was the module's first attempted create
 with `keyctl = true`; it surfaced this constraint. Every earlier feature-flagged
 guest (n8n, VMID 113: `nesting + keyctl`) predates the module and was adopted
