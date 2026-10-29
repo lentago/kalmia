@@ -16,6 +16,8 @@
       - rsync
       - curl
       - ca-certificates
+      # The pane renderer uses zoneinfo America/New_York.
+      - tzdata
       # The agent's .NET runtime needs these (its installdependencies.sh list
       # for Debian 12).
       - libicu72

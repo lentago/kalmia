@@ -65,7 +65,8 @@ and [`docs/pve-host.md` § Mount hook](pve-host.md#mount-hook).
 A rebuild registers a new runner, and `--replace` takes over the old entry's
 name. Delete any leftover offline entry from the repo's runner list.
 
-**Firewalla:** the MAC is pinned in Terraform so a rebuild keeps its device
-identity. A first boot on a new MAC lands in Device Access Protection
-`learning` (WAN blocked). If the runner can't reach GitHub or PyPI, classify
-the device (see `terraform/README.md` § Runner notes).
+**Firewalla:** a new MAC is put in the Firewalla's group 45 `Quarantine` (no
+internet) the moment it appears, so step 2 fails until the device is approved
+in the Firewalla app (device → group → remove Quarantine). The MAC is pinned
+in Terraform, so a rebuild keeps that approval. See `terraform/README.md`
+§ Runner notes.

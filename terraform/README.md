@@ -136,6 +136,13 @@ post-merge if it needs `root@pam`-only settings (see Rails below). Two layers:
   classified. If a fresh guest can't reach the internet, check
   `policy:mac:<MAC>` / `host:mac:<MAC>` on the Firewalla and see the fleet
   memory; FireMain restart forces re-evaluation.
+- **Firewalla quarantine** (since 2026-10-22): New Device Quarantine also puts
+  every brand-new MAC in group 45 `Quarantine`, whose rule blocks internet
+  (LAN still works; outbound TCP is refused). First hit on a real guest:
+  CT 123 on 2026-10-29, within seconds of its create. `redis-cli hget
+  policy:mac:<MAC> tags` on the Firewalla shows `["45"]`. The owner approves
+  the device in the Firewalla app (device → group → remove Quarantine) before
+  any in-guest provisioning. Pin `mac_address` so a rebuild keeps the approval.
 
 ## State
 
