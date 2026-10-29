@@ -71,8 +71,8 @@ lunaria_full_url: http://pub.lan/viewport/briefing/pane.html
 # Seconds each screen stays up before rotating to the next.
 lunaria_page_dwell: 12
 # Seconds between re-renders of the source page. 60 so a pane that updates in
-# place without a new pointer decision is at most a minute old on screen (a
-# render is ~3 s on LXC 118; kalmia#193).
+# place without a new pointer decision reaches the screen within about 60 s
+# plus one render (~3 s on LXC 118; kalmia#193).
 lunaria_regen_interval: 60
 
 # The brasenia viewport pointer (compositor decision on pub, Contracts v1) and
