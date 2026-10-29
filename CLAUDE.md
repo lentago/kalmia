@@ -147,7 +147,7 @@ Home-Claude-managed on the on-prem cluster (pve5), outside this repo's CI.
 
 ## CI
 
-Four checks are merge-blocking (marked **required** below); see Workflow.
+Five checks are merge-blocking (marked **required** below); see Workflow.
 
 - **Ansible Lint** (`.github/workflows/ansible-lint.yml`): `--syntax-check` +
   `ansible-lint` on every non-draft PR. **required** (`ansible-lint`)
@@ -162,6 +162,9 @@ Four checks are merge-blocking (marked **required** below); see Workflow.
   `plan` → `apply` for the `terraform/` layer. `gate` is the aggregate job that
   always runs on PRs, so a PR touching no Terraform passes it on skipped
   dependencies. **required** (`gate`)
+- **Terraform Lint** (`.github/workflows/tf-lint.yml`): `terraform fmt -check`,
+  `validate` and `tflint` via the shared workflow, on every PR. **required**
+  (`tf-lint / tf-lint`)
 - **Claude** workflows: `@claude` responder + (manual) PR review. Not required.
 
 ## Workflow
@@ -169,9 +172,11 @@ Four checks are merge-blocking (marked **required** below); see Workflow.
 PR workflow + auto-merge arming is fleet-wide; see `~/repos/CLAUDE.md`. Work on
 the branch created for the issue. The branch ruleset gates on PR + squash-merge
 (squash is the only permitted merge method; zero required approvals) **and on
-four required status checks** — `gate`, `ansible-lint`, `shellcheck / shellcheck`,
-and `docs-check / docs-check`. They are merge-blocking, not advisory: a red check
-holds the PR. Branches do not have to be up to date with `main` to merge
-(`strict_required_status_checks_policy` is false), so a stale-but-passing branch
-still merges — which means a green PR can still break `main` if something landed
-underneath it.
+five required status checks** — `gate`, `ansible-lint`, `shellcheck / shellcheck`,
+`docs-check / docs-check` and `tf-lint / tf-lint`. They are merge-blocking, not
+advisory: a red check holds the PR. Branches must also be up to date with `main`
+to merge (`strict_required_status_checks_policy` is true), so once another PR
+lands, an armed PR waits until its branch is updated (`gh pr update-branch <N>`)
+— auto-merge does not do that itself. The setting is owned by the `.github`
+meta-repo's Terraform (`strict_up_to_date_repos` in `terraform/locals.tf`), not
+by kalmia.
