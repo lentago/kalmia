@@ -253,6 +253,13 @@ resource "proxmox_virtual_environment_container" "lunaria" {
   started       = true
   start_on_boot = true
 
+  # nesting gives the container user namespaces, which Chromium's sandbox
+  # needs before the renderer may show a site other than pub.lan (#194). The
+  # API token may set nesting (README "Rails"); changing it restarts the guest.
+  features {
+    nesting = true
+  }
+
   cpu {
     cores = 4
   }

@@ -15,6 +15,7 @@
       - chromium
       - python3-pil
       - fonts-dejavu-core
+      - fonts-noto-color-emoji   # emoji in pages rendered as boxes without it (kalmia#194)
       - ca-certificates
     state: present
     update_cache: true

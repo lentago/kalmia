@@ -142,9 +142,20 @@ polling.
   publisher returns). Publisher restarts on lunaria are therefore invisible
   beyond a brief freeze.
 - The shooter uses a throwaway chromium profile per shot — a persistent
-  profile's HTTP cache once served a stale tv.html. `--no-sandbox` is
-  required in the unprivileged LXC (no user namespaces); input is our own
-  pub.lan pages.
+  profile's HTTP cache once served a stale tv.html.
+- **Chromium's sandbox and the sites it renders (kalmia#194).** The sandbox
+  needs user namespaces, which the unprivileged LXC has only with `nesting`
+  (`terraform/containers.tf`, set 2026-10-29). The shooter checks with
+  `unshare --user` on each run and drops `--no-sandbox` when namespaces work.
+  - pub.lan pages always render; if a sandboxed shot of one fails, it is
+    retried once without the sandbox, so the screen cannot go blank over a
+    sandbox problem.
+  - Any other site renders only when Chromium is sandboxed and the host, or a
+    parent domain, is in `lunaria_allowed_sites` (empty by default). Anything
+    else is refused and the existing pages stay up. Those sites are brasenia's
+    link panes (brasenia ADR-0016).
+  - To check the sandbox: `pct exec 118 -- su -s /bin/sh lunaria -c 'unshare
+    --user --map-root-user true' && echo sandbox-ok`.
 - Services are ordinary systemd units with `Restart=always` — no PID files,
   no process groups. `systemctl status lunaria-frames lunaria-stream
   lunaria-hls-serve lunaria-peek` is the whole health check; the on-screen clock overlay is the liveness
