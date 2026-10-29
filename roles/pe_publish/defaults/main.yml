@@ -19,6 +19,14 @@ pe_publish_runner_dir: /opt/actions-runner
 pe_publish_runner_version: "2.338.2"
 pe_publish_runner_sha256: baebf204307bac6193480852732f0aba2ae97b6c5597c244f4d5558390147c40
 
+# The job-started hook stops every job except this workflow on this ref of
+# pe_publish_repo (#195): the runner takes any job labelled pe-publish there,
+# and a branch can edit any workflow. Root-owned, so the runner user can't
+# change it. The runner picks the hook's shell from its .sh extension.
+pe_publish_allowed_workflow: .github/workflows/publish.yml
+pe_publish_allowed_ref: refs/heads/main
+pe_publish_job_guard: /usr/local/bin/pe-publish-job-guard.sh
+
 # The share is CIFS forced to uid/gid 101000 (container 1000), mode 0770, so
 # membership of a gid-1000 group is what grants writes. Same group name as
 # pub, where Caddy reads through it.

@@ -1,0 +1,6 @@
+---
+- name: Restart the runner service
+  ansible.builtin.systemd_service:
+    name: "{{ pe_publish_service.content | b64decode | trim }}"
+    state: restarted
+  become: true
