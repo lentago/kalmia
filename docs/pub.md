@@ -247,6 +247,13 @@ is why they run here and not on LXC 118 (no NAS mount, by design).
   fleet_producer`, WorkingDirectory `/srv/brasenia/producers/fleet`). It
   carries `ConditionPathIsMountPoint=` for both mounts. It opens heartbeats,
   claim records and run `.meta` files, never a prompt or a log.
+- `brasenia-links.service` (brasenia#97, brasenia ADR-0018) reads the
+  household's standing slots (`link.<pane-id>` settings, added in
+  `viewport/configure.html`) from `viewport/rubric.json` every
+  `pub_viewport_links_interval` seconds (30). It keeps one manifest-only link
+  pane per slot under `viewport/panes/` (`python3 -m links_producer`,
+  WorkingDirectory `/srv/brasenia/producers/links`). It needs no credential
+  and no mount beyond the share.
 
 **The job-queue mount (manual, once).** Bind mounts are root@pam-only (the
 terraform API token gets HTTP 403), so `mp1` is attached on pve4 by hand.
@@ -299,13 +306,13 @@ restarts the services if the checkout or a unit file changed.
 **Health check:**
 
 ```bash
-systemctl status brasenia-compositor brasenia-focus brasenia-pipeline brasenia-family-brief brasenia-home brasenia-fleet && curl -s http://pub.lan/viewport/current.json
+systemctl status brasenia-compositor brasenia-focus brasenia-pipeline brasenia-family-brief brasenia-home brasenia-fleet brasenia-links && curl -s http://pub.lan/viewport/current.json
 ```
 
 All six units should be `active (running)`, except `brasenia-home` before
 its token is seeded (inactive, "start condition unmet"). With an empty bus, `current.json`
 points at the briefing (`http://pub.lan/brief/…`). Logs:
-`journalctl -u brasenia-compositor -u brasenia-focus -u brasenia-pipeline -u brasenia-family-brief -u brasenia-home -u brasenia-fleet`.
+`journalctl -u brasenia-compositor -u brasenia-focus -u brasenia-pipeline -u brasenia-family-brief -u brasenia-home -u brasenia-fleet -u brasenia-links`.
 A live family-brief producer logs `family-today: brief of <date> rendered for
 <date>`, and `/srv/www/viewport/panes/family-today/manifest.json` reads
 `"class": "ambient"`.

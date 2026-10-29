@@ -297,6 +297,7 @@
     - brasenia-family-brief
     - brasenia-home
     - brasenia-fleet
+    - brasenia-links
   become: true
   when: pub_viewport_enabled
   notify: Restart brasenia viewport services
@@ -314,6 +315,7 @@
     - brasenia-family-brief
     - brasenia-home
     - brasenia-fleet
+    - brasenia-links
   become: true
   when: pub_viewport_enabled
 

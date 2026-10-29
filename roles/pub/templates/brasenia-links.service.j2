@@ -1,0 +1,19 @@
+[Unit]
+Description=brasenia links producer: the household's standing slots as link panes on the viewport bus
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor={{ pub_viewport_webroot }}
+ConditionPathIsMountPoint={{ pub_viewport_webroot }}
+
+[Service]
+Type=simple
+User={{ pub_viewport_user }}
+Group={{ pub_viewport_group }}
+Environment=PYTHONDONTWRITEBYTECODE=1
+WorkingDirectory={{ pub_brasenia_checkout }}/producers/links
+ExecStart=/usr/bin/python3 -m links_producer --webroot {{ pub_viewport_webroot }} --interval {{ pub_viewport_links_interval }}
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

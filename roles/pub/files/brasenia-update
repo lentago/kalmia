@@ -10,7 +10,8 @@ set -euo pipefail
 SRC="${BRASENIA_CHECKOUT:?BRASENIA_CHECKOUT must be set}"
 SERVICES=(brasenia-compositor.service brasenia-focus.service
           brasenia-pipeline.service brasenia-family-brief.service
-          brasenia-home.service brasenia-fleet.service)
+          brasenia-home.service brasenia-fleet.service
+          brasenia-links.service)
 
 if ! git -C "$SRC" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "no brasenia checkout at $SRC; skipping" >&2
