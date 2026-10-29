@@ -9,6 +9,8 @@
     - brasenia-focus.service
     - brasenia-pipeline.service
     - brasenia-family-brief.service
+    - brasenia-home.service
+    - brasenia-fleet.service
   become: true
   when: pub_viewport_enabled
 

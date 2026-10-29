@@ -1,0 +1,20 @@
+[Unit]
+Description=brasenia fleet producer: the claytonia job queue as the fleet pane on the viewport bus
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor={{ pub_viewport_webroot }} {{ pub_viewport_fleet_jobs }}
+ConditionPathIsMountPoint={{ pub_viewport_webroot }}
+ConditionPathIsMountPoint={{ pub_viewport_fleet_jobs }}
+
+[Service]
+Type=simple
+User={{ pub_viewport_user }}
+Group={{ pub_viewport_group }}
+Environment=PYTHONDONTWRITEBYTECODE=1
+WorkingDirectory={{ pub_brasenia_checkout }}/producers/fleet
+ExecStart=/usr/bin/python3 -m fleet_producer --webroot {{ pub_viewport_webroot }} --jobs {{ pub_viewport_fleet_jobs }} --interval {{ pub_viewport_fleet_interval }}
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

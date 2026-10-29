@@ -1,0 +1,25 @@
+[Unit]
+Description=brasenia home producer: Home Assistant's states as the home and weather panes on the viewport bus
+After=network-online.target
+Wants=network-online.target
+RequiresMountsFor={{ pub_viewport_webroot }}
+ConditionPathIsMountPoint={{ pub_viewport_webroot }}
+# Skipped, not failed, until the token is seeded by hand (docs/pub.md); start
+# the unit once it is.
+ConditionPathExists={{ pub_viewport_home_token_file }}
+
+[Service]
+Type=simple
+User={{ pub_viewport_user }}
+Group={{ pub_viewport_group }}
+Environment=PYTHONDONTWRITEBYTECODE=1
+# The token reaches this unit alone, as $CREDENTIALS_DIRECTORY/ha-token.
+LoadCredential=ha-token:{{ pub_viewport_home_token_file }}
+WorkingDirectory={{ pub_brasenia_checkout }}/producers/home
+ExecStart=/usr/bin/python3 -m home_producer --webroot {{ pub_viewport_webroot }} --ha-url {{ pub_viewport_home_ha_url }} --interval {{ pub_viewport_home_interval }}{% for entity in pub_viewport_home_hide %} --hide {{ entity }}{% endfor %}
+
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

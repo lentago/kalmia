@@ -76,6 +76,21 @@ pub_viewport_pipeline_interval: 15
 # http://pub.lan/family-brief/latest.json and keeps panes/family-today/ up
 # while the brief is dated today or yesterday.
 pub_viewport_family_brief_interval: 60
+# The home producer (#180, brasenia#86) reads Home Assistant's REST API and
+# keeps panes/home/ and panes/weather/ up. Its long-lived token is a systemd
+# credential (LoadCredential=) loaded from pub_viewport_home_token_file, a
+# root-only file this role never writes: it is seeded by hand (docs/pub.md).
+# Until it exists, ConditionPathExists skips the unit rather than failing it.
+pub_viewport_home_ha_url: http://homeassistant.lan:8123
+pub_viewport_home_token_file: /etc/brasenia/ha-token
+pub_viewport_home_interval: 60
+# Entity ids kept off the home pane (each becomes a --hide).
+pub_viewport_home_hide: []
+# The fleet producer (#180, brasenia#86) reads the claytonia job queue through
+# the read-only bind mount at pub_viewport_fleet_jobs (mp1, attached by hand:
+# docs/pub.md) and keeps panes/fleet/ up.
+pub_viewport_fleet_jobs: /srv/claude-jobs
+pub_viewport_fleet_interval: 60
 
 # --- Signal sink (kalmia#165) -----------------------------------------------
 # pub-signals takes checkbox actions from pages served here:
