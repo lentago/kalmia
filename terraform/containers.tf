@@ -237,6 +237,14 @@ resource "proxmox_virtual_environment_container" "grafana_stack" {
   }
 }
 
+# Changing this input rebuilds LXC 118 (destroy, then create from the
+# template) through the container's replace_triggered_by. Terraform fires that
+# trigger only when this resource is updated or replaced, never when it is
+# first created, so it lands here alone and the rename bumps it (#63).
+resource "terraform_data" "brasenia_rebuild" {
+  input = "kalmia#63: baseline"
+}
+
 # LXC 118 — lunaria, the wall-display compositor/streamer (concept:
 # http://pub.lan/lunaria/LUNARIA.md). Renders the Family Brief pane from
 # pub.lan (headless chromium, 3x scale) into a 4K HEVC HLS stream (:8080)
@@ -303,6 +311,7 @@ resource "proxmox_virtual_environment_container" "lunaria" {
 
   lifecycle {
     # Pipeline-recreatable (token-created, no keyctl/bind mount): not guarded.
-    ignore_changes = [operating_system]
+    ignore_changes       = [operating_system]
+    replace_triggered_by = [terraform_data.brasenia_rebuild]
   }
 }
