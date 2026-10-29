@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Keep pub's brasenia checkout on main and the viewport services on its code.
 # Run daily by brasenia-update.timer: a fast-forward-only pull of
-# BRASENIA_CHECKOUT, and when that moves HEAD, a try-restart of the four
+# BRASENIA_CHECKOUT, and when that moves HEAD, a try-restart of the
 # brasenia viewport services, so a merge to brasenia main runs on pub within a
 # day. Best-effort and credential-free: an unreachable GitHub or a failed
 # restart is logged, never fatal. This used to ride on the Cast receiver
@@ -9,7 +9,8 @@
 set -euo pipefail
 SRC="${BRASENIA_CHECKOUT:?BRASENIA_CHECKOUT must be set}"
 SERVICES=(brasenia-compositor.service brasenia-focus.service
-          brasenia-pipeline.service brasenia-family-brief.service)
+          brasenia-pipeline.service brasenia-family-brief.service
+          brasenia-home.service brasenia-fleet.service)
 
 if ! git -C "$SRC" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "no brasenia checkout at $SRC; skipping" >&2

@@ -271,6 +271,18 @@
     - pub_viewport_enabled
     - pub_viewport_webroot not in (ansible_facts.mounts | map(attribute='mount'))
 
+- name: Ensure the home producer's credential directory exists (root-only)
+  # Holds pub_viewport_home_token_file, which is seeded by hand and never by
+  # this role (docs/pub.md); systemd hands it to brasenia-home alone.
+  ansible.builtin.file:
+    path: "{{ pub_viewport_home_token_file | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  become: true
+  when: pub_viewport_enabled
+
 - name: Deploy the brasenia viewport systemd services
   ansible.builtin.template:
     src: "{{ item }}.service.j2"
@@ -283,6 +295,8 @@
     - brasenia-focus
     - brasenia-pipeline
     - brasenia-family-brief
+    - brasenia-home
+    - brasenia-fleet
   become: true
   when: pub_viewport_enabled
   notify: Restart brasenia viewport services
@@ -298,6 +312,8 @@
     - brasenia-focus
     - brasenia-pipeline
     - brasenia-family-brief
+    - brasenia-home
+    - brasenia-fleet
   become: true
   when: pub_viewport_enabled
 

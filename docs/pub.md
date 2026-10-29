@@ -175,11 +175,12 @@ journalctl -u publish-family-brief --since today
 
 pub also runs brasenia's long-running viewport programs
 ([brasenia#26](https://github.com/lentago/brasenia/issues/26) Phase 2) from
-the same role-managed `/srv/brasenia` checkout. All are stdlib Python 3.9+
-(Debian 12 ships 3.11) and credential-free: their only inputs are the share
-and the public GitHub API. They read and write only under
-`/srv/www/viewport`, which is why they run here and not on LXC 118 (no NAS
-mount, by design).
+the same role-managed `/srv/brasenia` checkout. All are stdlib Python 3.11+
+(Debian 12 ships 3.11). All but one are credential-free: their only inputs
+are the share, the public GitHub API, and (for the fleet producer) a
+read-only mount of the job queue. The home producer holds a Home Assistant
+token (brasenia ADR-0014). They write only under `/srv/www/viewport`, which
+is why they run here and not on LXC 118 (no NAS mount, by design).
 
 - `brasenia-compositor.service` ranks the pane bus every 5 s and writes
   `viewport/current.json` (`python3 -m compositor`, WorkingDirectory
@@ -204,6 +205,49 @@ mount, by design).
   The unit needs brasenia#48 on `main`: until then the module is missing and
   the unit restarts every 10 s, then comes up on its own once the daily pull
   brings the producer in.
+- `brasenia-home.service` (#180, brasenia#86) reads Home Assistant's REST API
+  (`pub_viewport_home_ha_url`, default `http://homeassistant.lan:8123`) every
+  60 s and keeps `viewport/panes/home/` and `viewport/panes/weather/` up as
+  `ambient` panes (`python3 -m home_producer`, WorkingDirectory
+  `/srv/brasenia/producers/home`). Its token is a systemd credential:
+  `LoadCredential=ha-token:/etc/brasenia/ha-token` hands it to this unit
+  alone, and `ConditionPathExists=` skips the unit until the file exists.
+  The role creates `/etc/brasenia/` (0700 root) and never writes the token;
+  seed it as below. `pub_viewport_home_hide` lists entity ids to keep off the
+  pane.
+- `brasenia-fleet.service` (#180, brasenia#86) reads the claytonia job queue
+  at `/srv/claude-jobs` (the read-only `mp1` mount below) every 60 s and keeps
+  `viewport/panes/fleet/` up as an `ambient` pane (`python3 -m
+  fleet_producer`, WorkingDirectory `/srv/brasenia/producers/fleet`). It
+  carries `ConditionPathIsMountPoint=` for both mounts. It opens heartbeats,
+  claim records and run `.meta` files, never a prompt or a log.
+
+**The job-queue mount (manual, once).** Bind mounts are root@pam-only (the
+terraform API token gets HTTP 403), so `mp1` is attached on pve4 by hand.
+`terraform/containers.tf` declares it and ignores `mount_point`. It
+hotplugs into the running container:
+
+```bash
+ssh root@pve.local "ssh pve4 'pct set 114 -mp1 /mnt/neptune-lentago/claude-jobs,mp=/srv/claude-jobs,ro=1'"
+```
+
+Attached 2026-10-28. `ro=1` is the point: the viewport can read the queue
+but never submit to it.
+
+**The Home Assistant token (manual, once; rotate the same way).** Make a
+dedicated, non-admin Home Assistant user (`brasenia`, "Can only log in from
+the local network"), log in as it, and create a long-lived access token
+under its Profile → Security. Then, from your own terminal (not through an
+agent: the token must not land in a transcript or a shell history):
+
+```bash
+read -rs T && printf '%s' "$T" | ssh root@pve.local \
+  "ssh pve4 'pct exec 114 -- sh -c \"umask 077; cat > /etc/brasenia/ha-token\"'" ; unset T
+ssh root@pve.local "ssh pve4 'pct exec 114 -- systemctl restart brasenia-home'"
+```
+
+Home Assistant has no read-only role, so this token could operate the
+house: if pub is ever suspect, delete it from the brasenia user's profile.
 
 All are `Type=simple`, `Restart=always`, and run as the unprivileged
 `brasenia` system user in the `webdrop` group. The share is a CIFS mount that
@@ -220,7 +264,7 @@ compositor also creates the three directories itself on start. Toggle:
 `pub_viewport_enabled`.
 
 **How new code goes live.** `brasenia-update` (above) pulls `/srv/brasenia`
-daily and restarts the four brasenia services when the pull moves `HEAD`, so
+daily and restarts the brasenia services when the pull moves `HEAD`, so
 a merge to brasenia `main` is running on pub within a day;
 `systemctl start brasenia-update` deploys at once. Re-running the play also
 restarts the services if the checkout or a unit file changed.
@@ -228,12 +272,13 @@ restarts the services if the checkout or a unit file changed.
 **Health check:**
 
 ```bash
-systemctl status brasenia-compositor brasenia-focus brasenia-pipeline brasenia-family-brief && curl -s http://pub.lan/viewport/current.json
+systemctl status brasenia-compositor brasenia-focus brasenia-pipeline brasenia-family-brief brasenia-home brasenia-fleet && curl -s http://pub.lan/viewport/current.json
 ```
 
-All four units should be `active (running)`. With an empty bus, `current.json`
+All six units should be `active (running)`, except `brasenia-home` before
+its token is seeded (inactive, "start condition unmet"). With an empty bus, `current.json`
 points at the briefing (`http://pub.lan/brief/…`). Logs:
-`journalctl -u brasenia-compositor -u brasenia-focus -u brasenia-pipeline -u brasenia-family-brief`.
+`journalctl -u brasenia-compositor -u brasenia-focus -u brasenia-pipeline -u brasenia-family-brief -u brasenia-home -u brasenia-fleet`.
 A live family-brief producer logs `family-today: brief of <date> rendered for
 <date>`, and `/srv/www/viewport/panes/family-today/manifest.json` reads
 `"class": "ambient"`.

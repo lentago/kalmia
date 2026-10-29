@@ -122,6 +122,16 @@ resource "proxmox_virtual_environment_container" "pub" {
     path   = "/srv/www"
   }
 
+  # The claytonia job queue, read-only, for brasenia's fleet pane producer
+  # (#180, brasenia#86). Attached host-side with `pct set 114 -mp1 ...,ro=1`
+  # (docs/pub.md), like every bind mount: they are root@pam-only, and the
+  # API token gets HTTP 403. Declared to record the live shape; ignored below.
+  mount_point {
+    volume    = "/mnt/neptune-lentago/claude-jobs"
+    path      = "/srv/claude-jobs"
+    read_only = true
+  }
+
   network_interface {
     name        = "eth0"
     bridge      = "vmbr0"
@@ -154,7 +164,10 @@ resource "proxmox_virtual_environment_container" "pub" {
   lifecycle {
     # Import-only: NAS bind mount is root@pam-only; the API token cannot recreate it.
     prevent_destroy = true
-    ignore_changes  = [operating_system]
+    # mount_point: both bind mounts are attached by root@pam with `pct set`
+    # (docs/pub.md); a token-driven edit of them would fail with HTTP 403,
+    # so they are never reconciled here (the claytonia workers' pattern).
+    ignore_changes = [operating_system, mount_point]
   }
 }
 
