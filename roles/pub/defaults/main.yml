@@ -35,6 +35,13 @@ pub_family_brief_dest: /srv/www/family-brief
 # the routine runs at about 06:47, and the window leaves room for a late run.
 # The container clock runs UTC, so the explicit zone suffix is load-bearing.
 pub_family_brief_timer_oncalendar: "*-*-* 06..09:00/15:00 America/New_York"
+# The brief as a Google Doc (#186, brasenia#90), for reading on a phone away
+# from home. When a new latest.json is published, the script renders
+# brasenia's document rendition as the viewport user and imports it to this
+# rclone path as one Google Doc, updated in place so its link never changes
+# (rclone names it after the file, without .html). Its folder is shared with
+# the household by hand (docs/pub.md). Empty turns the Doc off.
+pub_family_brief_doc_dest: "Google Drive:Hobbies/Claude-Code/family-brief/Family Brief/Family Brief.html"
 
 # --- brasenia checkout and daily update (kalmia#140, #174) -------------------
 # The public brasenia repo, cloned credential-free (https) to

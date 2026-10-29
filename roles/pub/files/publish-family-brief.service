@@ -6,4 +6,6 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 EnvironmentFile=/etc/default/publish-family-brief
+# Remembers which brief the Google Doc shows (#186).
+StateDirectory=publish-family-brief
 ExecStart=/usr/local/bin/publish-family-brief

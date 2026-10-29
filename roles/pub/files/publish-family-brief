@@ -8,8 +8,11 @@
 # keeps the family-today pane on the viewport bus. Config comes from the
 # environment (set by the systemd unit / EnvironmentFile):
 #
-#   FAMILY_BRIEF_SRC    rclone path of the Drive folder holding latest.json
-#   FAMILY_BRIEF_DEST   publish target on the mounted web share
+#   FAMILY_BRIEF_SRC       rclone path of the Drive folder holding latest.json
+#   FAMILY_BRIEF_DEST      publish target on the mounted web share
+#   FAMILY_BRIEF_DOC_DEST  rclone path of the Google Doc (#186); empty: no Doc
+#   BRASENIA_CHECKOUT      the brasenia checkout that renders the Doc
+#   FAMILY_BRIEF_DOC_USER  the unprivileged user that runs the renderer
 #
 # Like publish-morning-brief, this is credential-free (the rclone remote lives
 # only in /root/.config/rclone/rclone.conf) and skips cleanly when the web
@@ -67,3 +70,28 @@ if ! cmp -s "$STAGE/latest.json" "$DEST/latest.json" 2>/dev/null; then
     mv "$DEST/latest.json.tmp" "$DEST/latest.json"
     echo "published latest.json to $DEST (http://pub.lan/family-brief/latest.json)"
 fi
+
+# --- The Google Doc (#186, brasenia#90) --------------------------------------
+# brasenia's document rendition of the published brief, imported into one
+# Google Doc that is updated in place (same file, same link) whenever the brief
+# changes. The rendition is code from the public brasenia checkout, so it runs
+# as the unprivileged viewport user; root only uploads. The state file records
+# which brief the Doc shows, so a failed render or upload is retried on the
+# next run instead of waiting for tomorrow's brief.
+DOC_DEST="${FAMILY_BRIEF_DOC_DEST:-}"
+if [ -z "$DOC_DEST" ] || [ ! -f "$DEST/latest.json" ]; then
+    exit 0
+fi
+STATE_DIR="${STATE_DIRECTORY:-/var/lib/publish-family-brief}"
+mkdir -p "$STATE_DIR"
+sum=$(sha256sum "$DEST/latest.json" | cut -d' ' -f1)
+if [ "$(cat "$STATE_DIR/doc.sha256" 2>/dev/null)" = "$sum" ]; then
+    exit 0
+fi
+runuser -u "${FAMILY_BRIEF_DOC_USER:-brasenia}" -- \
+    env -C "${BRASENIA_CHECKOUT:?BRASENIA_CHECKOUT must be set}/producers/family-brief" \
+    PYTHONDONTWRITEBYTECODE=1 python3 -m family_brief_producer.doc "$DEST/latest.json" > "$STAGE/doc.html"
+rclone copyto "$STAGE/doc.html" "$DOC_DEST" --drive-import-formats html --drive-export-formats html \
+    --ignore-times --timeout 60s
+echo "$sum" > "$STATE_DIR/doc.sha256"
+echo "updated the Google Doc at $DOC_DEST"

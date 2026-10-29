@@ -171,6 +171,30 @@ curl -s http://pub.lan/family-brief/latest.json | python3 -c 'import json,sys; p
 journalctl -u publish-family-brief --since today
 ```
 
+**The Google Doc (#186, brasenia#90).** The same run also keeps the brief as
+a Google Doc, for reading on a phone away from home, which `pub.lan` can't
+offer. When the published `latest.json` differs from the one the Doc last
+showed (`/var/lib/publish-family-brief/doc.sha256`), the script renders
+brasenia's document rendition (`python3 -m family_brief_producer.doc`) as the
+unprivileged `brasenia` user, then imports it with `rclone copyto
+--drive-import-formats html --drive-export-formats html` to
+`pub_family_brief_doc_dest`: the Google Doc **Family Brief** in the **Family
+Brief** subfolder of the family-brief folder. The import updates that one
+file in place, so its link never changes. A failed render or upload fails
+the run and is retried on the next one (every 15 minutes in the morning
+window, or `systemctl start publish-family-brief`). Setting `pub_family_brief_doc_dest`
+to an empty string turns the Doc off.
+
+The **Family Brief** folder is shared with Rachel (reader) from Chris's Drive.
+That share was made by hand and is live Drive state, not something this role
+sets; anything in the folder inherits it. Her address is kept out of this
+repo. Readers, not editors: the next morning's import replaces the Doc's
+contents, so any edits would be lost.
+
+```bash
+journalctl -u publish-family-brief --since today | grep -i doc
+```
+
 ## brasenia viewport runtime (#140)
 
 pub also runs brasenia's long-running viewport programs
