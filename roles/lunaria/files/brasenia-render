@@ -26,13 +26,20 @@ image and is retried after RETRY_S: a stale page beats a dead screen.
 
 Which sites: pub.lan always. Any other site only while Chromium runs
 sandboxed (it needs user namespaces, which LXC 118 has with nesting) and the
-host, or a parent domain, is in LUNARIA_ALLOWED_SITES. The rule holds for
+host, or a subdomain of it, is in LUNARIA_ALLOWED_SITES. The rule holds for
 every document Chromium loads, not only the one asked for: each navigation
-request (redirects, frames, a page that navigates itself) is intercepted
+request (redirect hops, frames, a page that navigates itself) is intercepted
 (Fetch) and blocked when its host is not allowed, and the final URL is checked
-again before the capture. If the sandboxed browser cannot start, an
-unsandboxed one renders pub.lan pages only, and the sandbox is tried again
-every SANDBOX_RETRY_S. A refused page is shown as a notice naming the site.
+again before the capture. A link pane renders in its own disposable browser
+context where every request is intercepted: besides the document rule,
+nothing may reach a private address (the LAN, loopback, link-local, .lan and
+.local names, checked after resolving), popups are disabled, and every child
+frame or worker is held until the same interception is on it. Not covered:
+WebSocket connections, and a name that resolves differently for Chromium than
+for this check; the sandbox and the short render bound both. If the
+sandboxed browser cannot start, an unsandboxed one renders pub.lan pages only,
+and the sandbox is tried again every SANDBOX_RETRY_S. A refused page is shown
+as a notice naming the site, and is tried again once the sandbox is back.
 
 Pane-contract pages are laid out at 1280x720 CSS pixels and rendered at
 LUNARIA_SCALE, one page per 720 px band with content (up to 4). Link panes
@@ -44,8 +51,8 @@ ranges here too, so a bad line-up can never make the renderer spin.
 `brasenia-render --once URL [URL ...] [--source JSON] --out DIR` renders the
 URLs in one browser to DIR/NN-page-MM.png and exits, for testing.
 """
-import argparse, base64, io, json, math, os, queue, select, shutil, signal, subprocess
-import sys, tempfile, threading, time, urllib.error, urllib.request
+import argparse, base64, fcntl, io, ipaddress, json, math, os, queue, select, shutil, signal
+import socket, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
 from PIL import Image, ImageChops, ImageDraw, ImageFont
@@ -168,13 +175,35 @@ def rendition(url):
 
 # -------------------------------------------------------------- browser ----
 
+# Requests a page in a link render may never make: anything on the LAN or the
+# host itself. Checked by name, as an address, and after resolving the name.
+PRIVATE_SUFFIXES = (".lan", ".local", ".internal", ".home.arpa", ".localhost")
+
+
+def private_ip(ip):
+    return (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
+            or ip.is_multicast or ip.is_unspecified)
+
+
 class Browser:
     """One headless Chromium, driven over --remote-debugging-pipe: requests on
     fd 3 and replies on fd 4, each a JSON message ending in a NUL byte.
 
-    Every document request is paused (Fetch) and let through only when its
-    host is allowed for this browser's sandbox mode; replies to those and
-    other events are handled whenever a message is read."""
+    Two kinds of page session:
+    - the persistent one, for pub.lan pages: every document request (each
+      redirect hop, frames, self-navigation) is paused (Fetch) and continued
+      only when its host is allowed for this browser's sandbox mode;
+    - a link render's, in its own disposable browser context: every request
+      is paused; documents must be allowed sites, and nothing may reach a
+      private address. Popups are disabled, and every child target (an
+      out-of-process frame, a worker) is attached before it runs and stays
+      paused unless the same interception is enabled on it.
+    The context, with its service workers and storage, is disposed after the
+    render."""
+
+    DOCUMENTS = [{"urlPattern": "*", "resourceType": "Document", "requestStage": "Request"}]
+    EVERYTHING = [{"urlPattern": "*", "requestStage": "Request"}]
+    NO_POPUPS = "window.open = function () { return null; };"
 
     def __init__(self, sandboxed):
         self.sandboxed = sandboxed
@@ -184,57 +213,70 @@ class Browser:
 
     def start(self):
         self.profile = tempfile.mkdtemp(prefix="brasenia-render-")
-        fds = []
+        r_in = w_in = r_out = w_out = hi_in = hi_out = None
         try:
             r_in, w_in = os.pipe()
-            fds += [r_in, w_in]
             r_out, w_out = os.pipe()
-            fds += [r_out, w_out]
-
-            def child():
-                # Copy first: if a pipe end already is fd 3 or 4, dup2(x, x)
-                # would leave it close-on-exec and Chromium would find it closed.
-                a, b = os.dup(r_in), os.dup(w_out)
-                os.dup2(a, 3)
-                os.dup2(b, 4)
-
+            # Chromium's ends go to fds 3 and 4 through bash, not a preexec_fn,
+            # which is unsafe in a process with threads. They are copied above
+            # fd 9 first, so placing them can never close one onto the other.
+            hi_in = fcntl.fcntl(r_in, fcntl.F_DUPFD_CLOEXEC, 10)
+            hi_out = fcntl.fcntl(w_out, fcntl.F_DUPFD_CLOEXEC, 10)
+            args = ["chromium", "--headless=new", *([] if self.sandboxed else ["--no-sandbox"]),
+                    "--disable-gpu", "--no-first-run", "--no-default-browser-check",
+                    "--hide-scrollbars", "--mute-audio", "--remote-debugging-pipe",
+                    "--user-data-dir=" + self.profile, "about:blank"]
             self.proc = subprocess.Popen(
-                ["chromium", "--headless=new", *([] if self.sandboxed else ["--no-sandbox"]),
-                 "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-                 "--hide-scrollbars", "--mute-audio", "--remote-debugging-pipe",
-                 "--user-data-dir=" + self.profile, "about:blank"],
+                ["/bin/bash", "-c", f'exec "$@" 3<&{hi_in} 4>&{hi_out} {hi_in}<&- {hi_out}>&-',
+                 "bash", *args],
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                close_fds=False, preexec_fn=child)
+                pass_fds=(hi_in, hi_out))
         except Exception:
-            for fd in fds:
-                os.close(fd)
+            for fd in (r_in, w_in, r_out, w_out, hi_in, hi_out):
+                if fd is not None:
+                    os.close(fd)
             shutil.rmtree(self.profile, ignore_errors=True)
             self.proc = None
             raise
-        os.close(r_in)
-        os.close(w_out)
+        for fd in (r_in, w_out, hi_in, hi_out):
+            os.close(fd)
         self.wfd, self.rfd = w_in, r_out
         self.buf, self.mid, self.born = b"", 0, time.monotonic()
         self.lifecycle, self.blocked = set(), []
+        self.pending = {}        # reply id -> callback(reply)
+        self.link_sessions = set()
+        self.resolved = {}       # host -> private?
+        self.session = None
         target = self.call("Target.createTarget", {"url": "about:blank"}, session=False)["targetId"]
         self.session = self.call("Target.attachToTarget", {"targetId": target, "flatten": True},
                                  session=False)["sessionId"]
-        self.call("Page.enable")
-        self.call("Page.setLifecycleEventsEnabled", {"enabled": True})
-        self.call("Network.enable")
-        self.call("Network.setCacheDisabled", {"cacheDisabled": True})   # never a stale page
-        self.call("Fetch.enable", {"patterns": [{"urlPattern": "*", "resourceType": "Document",
-                                                 "requestStage": "Request"}]})
+        self.setup(self.session, link=False)
+
+    def setup(self, session, link):
+        """Prepare a page session; for a link render, before anything loads."""
+        if link:
+            self.link_sessions.add(session)
+            self.call("Page.addScriptToEvaluateOnNewDocument", {"source": self.NO_POPUPS}, session=session)
+        self.call("Page.enable", session=session)
+        self.call("Page.setLifecycleEventsEnabled", {"enabled": True}, session=session)
+        self.call("Network.enable", session=session)
+        self.call("Network.setCacheDisabled", {"cacheDisabled": True}, session=session)   # never a stale page
+        self.call("Fetch.enable", {"patterns": self.EVERYTHING if link else self.DOCUMENTS}, session=session)
+        self.call("Target.setAutoAttach", {"autoAttach": True, "waitForDebuggerOnStart": True,
+                                           "flatten": True}, session=session)
 
     def stop(self):
-        if self.proc is not None:
-            self.proc.terminate()
-            try:
-                self.proc.wait(5)
-            except subprocess.TimeoutExpired:
-                self.proc.kill()
-                self.proc.wait(5)
-            self.proc = None
+        try:
+            if self.proc is not None:
+                self.proc.terminate()
+                try:
+                    self.proc.wait(5)
+                except subprocess.TimeoutExpired:
+                    self.proc.kill()
+                    self.proc.wait(5)
+        except Exception as exc:     # never let a stuck child take the worker down
+            log(f"chromium did not stop cleanly: {exc}")
+        self.proc = None
         for fd in (self.wfd, self.rfd):
             if fd is not None:
                 try:
@@ -255,17 +297,23 @@ class Browser:
         return time.monotonic() - self.born > BROWSER_MAX_AGE_S
 
     # --- the pipe ---------------------------------------------------------
-    def _send(self, method, params=None, session=True):
+    def _send(self, method, params=None, session=True, then=None):
+        """Send a command; ``session`` True is the current page session,
+        False the browser, a string that session. ``then`` is called with
+        the reply when it arrives."""
         self.mid += 1
         msg = {"id": self.mid, "method": method, "params": params or {}}
-        if session:
-            msg["sessionId"] = self.session
+        sid = self.session if session is True else (session or None)
+        if sid:
+            msg["sessionId"] = sid
         data = json.dumps(msg).encode() + b"\0"
         try:
             while data:
                 data = data[os.write(self.wfd, data):]
         except OSError as exc:
             raise RenderError(f"chromium is gone ({exc})")
+        if then:
+            self.pending[self.mid] = then
         return self.mid
 
     def _read(self, deadline, what):
@@ -282,18 +330,77 @@ class Browser:
         raw, self.buf = self.buf.split(b"\0", 1)
         return json.loads(raw)
 
+    def _handle(self, msg):
+        """Anything read that is not the reply being waited for."""
+        if "method" in msg:
+            self._event(msg)
+        elif msg.get("id") in self.pending:
+            self.pending.pop(msg["id"])(msg)
+
+    def private_host(self, host):
+        host = host.strip("[]").lower()
+        if not host or host == "localhost" or host.endswith(PRIVATE_SUFFIXES):
+            return True
+        try:
+            return private_ip(ipaddress.ip_address(host))
+        except ValueError:
+            pass
+        if host not in self.resolved:
+            try:
+                addrs = {ai[4][0].split("%")[0] for ai in socket.getaddrinfo(host, None)}
+                self.resolved[host] = any(private_ip(ipaddress.ip_address(a)) for a in addrs)
+            except (OSError, ValueError, UnicodeError):
+                self.resolved[host] = True   # unresolvable: nothing is lost by blocking it
+        return self.resolved[host]
+
+    def _allowed(self, session, request_type, url):
+        if session not in self.link_sessions:
+            return site_allowed(url, self.sandboxed)          # documents only, pub.lan pages
+        if request_type == "Document":
+            return site_allowed(url, self.sandboxed)
+        scheme = urlsplit(url).scheme if url else ""
+        if scheme in ("data", "blob"):
+            return True
+        return scheme in ("http", "https") and not self.private_host(host_of(url))
+
     def _event(self, msg):
-        method, params = msg.get("method"), msg.get("params") or {}
+        method, params, session = msg.get("method"), msg.get("params") or {}, msg.get("sessionId")
         if method == "Fetch.requestPaused":
             url = (params.get("request") or {}).get("url", "")
-            if site_allowed(url, self.sandboxed):
-                self._send("Fetch.continueRequest", {"requestId": params.get("requestId")})
+            if self._allowed(session, params.get("resourceType"), url):
+                self._send("Fetch.continueRequest", {"requestId": params.get("requestId")}, session=session)
             else:
                 self.blocked.append(url)
                 self._send("Fetch.failRequest", {"requestId": params.get("requestId"),
-                                                 "errorReason": "BlockedByClient"})
-        elif method == "Page.lifecycleEvent":
+                                                 "errorReason": "BlockedByClient"}, session=session)
+        elif method == "Page.lifecycleEvent" and session == self.session:
             self.lifecycle.add((params.get("loaderId"), params.get("name")))
+        elif method == "Target.attachedToTarget":
+            self._child(session, params)
+
+    def _child(self, parent, params):
+        """A frame or worker attached before it runs: give it the parent's
+        interception, and let it run only once that is confirmed."""
+        child = params.get("sessionId")
+        kind = (params.get("targetInfo") or {}).get("type")
+        if not child:
+            return
+        link = parent in self.link_sessions
+        if link:
+            self.link_sessions.add(child)
+            if kind in ("iframe", "page"):
+                self._send("Page.addScriptToEvaluateOnNewDocument", {"source": self.NO_POPUPS}, session=child)
+        self._send("Target.setAutoAttach", {"autoAttach": True, "waitForDebuggerOnStart": True,
+                                            "flatten": True}, session=child)
+
+        def enabled(reply):
+            if "error" in reply:     # cannot intercept it: it never runs
+                log(f"left a {kind} paused: no request interception ({reply['error'].get('message')})")
+                return
+            self._send("Runtime.runIfWaitingForDebugger", session=child)
+
+        self._send("Fetch.enable", {"patterns": self.EVERYTHING if link else self.DOCUMENTS},
+                   session=child, then=enabled)
 
     def call(self, method, params=None, session=True, timeout=CALL_TIMEOUT_S):
         mid = self._send(method, params, session)
@@ -304,16 +411,12 @@ class Browser:
                 if "error" in msg:
                     raise RenderError(f"{method}: {msg['error'].get('message')}")
                 return msg.get("result", {})
-            if "method" in msg:
-                self._event(msg)
-            # else: the reply to a Fetch.continue/failRequest sent from _event
+            self._handle(msg)
 
     def wait_for(self, done, timeout, what):
         deadline = time.monotonic() + timeout
         while not done():
-            msg = self._read(deadline, what)
-            if "method" in msg:
-                self._event(msg)
+            self._handle(self._read(deadline, what))
 
     def evaluate(self, expression, await_promise=False, timeout=CALL_TIMEOUT_S):
         result = self.call("Runtime.evaluate", {"expression": expression, "returnByValue": True,
@@ -354,7 +457,13 @@ class Browser:
         status = self.evaluate("(performance.getEntriesByType('navigation')[0] || {}).responseStatus || 0")
         if isinstance(status, int) and status >= 400:
             raise RenderError(f"{url}: HTTP {status}")
-        time.sleep(settle)
+        # Pause for late content, answering paused requests meanwhile.
+        deadline = time.monotonic() + settle
+        try:
+            self.wait_for(lambda: False, settle, "settling")
+        except RenderError as exc:
+            if "timed out" not in str(exc) or time.monotonic() < deadline:
+                raise
         # The page may have moved on by itself (a refresh, a script); whatever
         # is showing now must be allowed too.
         final = self.evaluate("location.href")
@@ -382,13 +491,29 @@ class Browser:
         return [shot.crop((0, i * OUT_H, OUT_W, (i + 1) * OUT_H)) for i in range(bands)]
 
     def link_pages(self, url, source):
-        """A link pane: laid out at source.viewport, its first source.screens
-        bands each fitted onto a page."""
-        width, height = source["viewport"]
-        screens = source["screens"]
-        dpr = min(OUT_W / width, OUT_H / height)
-        self.load(url, width, height * screens, dpr, source["theme"], 1.5, LINK_LOAD_TIMEOUT_S)
-        shot = self.capture()
+        """A link pane, in its own disposable browser context: laid out at
+        source.viewport, its first source.screens bands each fitted onto a page."""
+        context = self.call("Target.createBrowserContext", {"disposeOnDetach": True},
+                            session=False)["browserContextId"]
+        persistent = self.session
+        try:
+            target = self.call("Target.createTarget", {"url": "about:blank", "browserContextId": context},
+                               session=False)["targetId"]
+            self.session = self.call("Target.attachToTarget", {"targetId": target, "flatten": True},
+                                     session=False)["sessionId"]
+            self.setup(self.session, link=True)
+            width, height = source["viewport"]
+            screens = source["screens"]
+            dpr = min(OUT_W / width, OUT_H / height)
+            self.load(url, width, height * screens, dpr, source["theme"], 1.5, LINK_LOAD_TIMEOUT_S)
+            shot = self.capture()
+        finally:
+            self.session = persistent
+            self.link_sessions.clear()
+            try:
+                self.call("Target.disposeBrowserContext", {"browserContextId": context}, session=False)
+            except RenderError as exc:
+                log(f"could not dispose a link render's context: {exc}")
         band_w, band_h = round(width * dpr), round(height * dpr)
         pages = []
         for i in range(screens):
@@ -474,7 +599,7 @@ def fetch_json(url):
     """``(doc, None)``, ``(None, "404")`` or ``(None, reason)``."""
     req = urllib.request.Request(url, headers={"Cache-Control": "no-cache"})
     try:
-        with urllib.request.urlopen(req, timeout=4) as resp:
+        with urllib.request.urlopen(req, timeout=2) as resp:
             return json.loads(resp.read()), None
     except urllib.error.HTTPError as exc:
         return None, "404" if exc.code == 404 else f"HTTP {exc.code}"
@@ -515,7 +640,7 @@ class Worker(threading.Thread):
 
     def __init__(self):
         super().__init__(daemon=True)
-        self.capable = sandbox_available()
+        self.capable = None      # can this user create namespaces? probed on first use
         self.browser = None
         self.fell_back = None    # monotonic time of an unsandboxed fallback
         self.jobs = queue.Queue(maxsize=1)
@@ -525,7 +650,13 @@ class Worker(threading.Thread):
         return "sandboxed" if self.browser and self.browser.sandboxed else (
             "unsandboxed (pub.lan only)" if self.browser else "not started")
 
+    @property
+    def sandboxed(self):
+        return bool(self.browser and self.browser.sandboxed)
+
     def ensure_browser(self):
+        if self.capable is None:
+            self.capable = sandbox_available()
         retry = (self.fell_back is not None and time.monotonic() - self.fell_back > SANDBOX_RETRY_S)
         if self.browser and self.browser.alive and not self.browser.old and not retry:
             return
@@ -567,23 +698,29 @@ class Worker(threading.Thread):
                 return
             started = time.monotonic()
             try:
-                pages, outcome = self.render(item), "ok"
-            except Refused as exc:
-                pages, outcome = [notice_page(f"{item.title}: this page isn't shown here", str(exc))], f"refused: {exc}"
-            except Exception as exc:
-                self.results.put((item, None, f"FAILED: {exc}", time.monotonic() - started))
-                if not isinstance(exc, RenderError) or "timed out" in str(exc) or "chromium" in str(exc):
-                    self.drop_browser()      # a fresh one next time
-                continue
-            try:
-                work = tempfile.mkdtemp(prefix="." + item.id + "-", dir=CACHE)
-                for i, page in enumerate(pages, 1):
-                    page.save(os.path.join(work, f"page-{i:02d}.png"), "PNG")
-                pages[0].resize(PEEK_SIZE, Image.LANCZOS).save(os.path.join(work, "peek.png"), "PNG")
-            except Exception as exc:
-                self.results.put((item, None, f"FAILED saving: {exc}", time.monotonic() - started))
-                continue
-            self.results.put((item, (work, len(pages)), outcome, time.monotonic() - started))
+                self.results.put((item,) + self.job(item) + (time.monotonic() - started, self.sandboxed))
+            except BaseException as exc:    # the thread must outlive any one item
+                self.results.put((item, None, f"FAILED: {exc!r}", time.monotonic() - started, self.sandboxed))
+                try:
+                    self.drop_browser()
+                except BaseException:
+                    self.browser = None
+
+    def job(self, item):
+        """Render one item and save it; ``(result, outcome)``."""
+        try:
+            pages, outcome = self.render(item), "ok"
+        except Refused as exc:
+            pages, outcome = [notice_page(f"{item.title}: this page isn't shown here", str(exc))], f"refused: {exc}"
+        except Exception as exc:
+            if not isinstance(exc, RenderError) or "timed out" in str(exc) or "chromium" in str(exc):
+                self.drop_browser()      # a fresh one next time
+            return None, f"FAILED: {exc}"
+        work = tempfile.mkdtemp(prefix="." + item.id + "-", dir=CACHE)
+        for i, page in enumerate(pages, 1):
+            page.save(os.path.join(work, f"page-{i:02d}.png"), "PNG")
+        pages[0].resize(PEEK_SIZE, Image.LANCZOS).save(os.path.join(work, "peek.png"), "PNG")
+        return (work, len(pages)), outcome
 
 
 # ------------------------------------------------------------- renderer ----
@@ -597,7 +734,7 @@ class Renderer:
         self.busy = None     # the Item being rendered
         self.done = {}       # id -> {"key", "at", "pages": [paths]}
         self.failed = {}     # id -> (key, monotonic time)
-        self.refused = {}    # id -> key: shown as a notice until the item changes
+        self.refused = {}    # id -> (key, sandboxed): a notice until the item or the sandbox changes
         self.lineup, self.decided_at, self.defaults = [], None, set()
         self.showing = None  # the Item on screen
         self.shown = None    # (id, at) whose pages frame.png is cycling
@@ -607,7 +744,7 @@ class Renderer:
         self.last_error = None
 
     # --- results ---------------------------------------------------------
-    def install(self, item, result, outcome, elapsed):
+    def install(self, item, result, outcome, elapsed, sandboxed):
         if result is None:
             self.failed[item.id] = (item.key, time.monotonic())
             log(f"render {item.id} {outcome} ({elapsed:.1f}s); keeping its last image")
@@ -631,12 +768,15 @@ class Renderer:
             self.refused.pop(item.id, None)
             log(f"rendered {item.id}: {count} page(s) in {elapsed:.1f}s")
         else:
-            self.refused[item.id] = item.key
+            self.refused[item.id] = (item.key, sandboxed)
             log(f"render {item.id} {outcome}; showing a notice")
         self.write_index()
 
     def due(self, item, on_screen):
-        if self.refused.get(item.id) == item.key:
+        refused = self.refused.get(item.id)
+        # A refusal stands until the item changes, or the sandbox comes back
+        # after one made without it.
+        if refused and refused[0] == item.key and (refused[1] or not self.worker.sandboxed):
             return False
         done = self.done.get(item.id)
         failed = self.failed.get(item.id)
@@ -769,13 +909,22 @@ class Renderer:
         if now >= schedule["lineup"]:
             schedule["lineup"] = now + LINEUP_POLL
             self.poll_lineup()
+        if not self.worker.is_alive():
+            log("render worker died; starting a new one")
+            self.worker = Worker()
+            self.worker.start()
+            self.busy = None
         while True:
             try:
-                item, result, outcome, elapsed = self.worker.results.get_nowait()
+                item, result, outcome, elapsed, sandboxed = self.worker.results.get_nowait()
             except queue.Empty:
                 break
             self.busy = None
-            self.install(item, result, outcome, elapsed)
+            try:
+                self.install(item, result, outcome, elapsed, sandboxed)
+            except Exception as exc:     # e.g. the peek directory: back off as for a failed render
+                self.failed[item.id] = (item.key, time.monotonic())
+                log(f"installing {item.id} failed, retrying in {RETRY_S}s: {exc!r}")
         if self.busy is None:
             job = self.next_job()
             if job is not None:
@@ -785,8 +934,7 @@ class Renderer:
 
     def run(self):
         self.worker.start()
-        log(f"brasenia-render: user namespaces {'available' if self.worker.capable else 'unavailable'},"
-            f" allowed sites: {' '.join(ALLOWED_SITES) or 'none'}")
+        log(f"brasenia-render: allowed sites: {' '.join(ALLOWED_SITES) or 'none'}")
         schedule = {"pointer": 0.0, "lineup": 0.0}
         while True:
             try:
@@ -818,6 +966,8 @@ def once(urls, source, out):
             for i, page in enumerate(pages, 1):
                 page.save(os.path.join(out, f"{n:02d}-page-{i:02d}.png"))
             print(f"{url}: {len(pages)} page(s) in {time.monotonic() - started:.1f}s ({worker.mode()})")
+            if worker.browser and worker.browser.blocked:
+                print("  blocked: " + ", ".join(sorted(set(worker.browser.blocked))))
     finally:
         worker.drop_browser()
     return status

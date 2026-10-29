@@ -93,16 +93,33 @@ content, up to 4. Link panes (lentago/brasenia ADR-0016) are laid out at their
 first `source.screens` bands are each fitted onto a page.
 
 **Which sites.** pub.lan always. Any other site renders only while Chromium is
-sandboxed and the host, or a parent domain, is in `lunaria_allowed_sites`.
+sandboxed and the host is in `lunaria_allowed_sites`. Subdomains count:
+`github.com` also allows `gist.github.com`.
 - **Every document, not just the one asked for:** each navigation request is
   intercepted (DevTools `Fetch`) and blocked when its host isn't allowed. That
   covers each hop of a redirect, frames, and a page that navigates itself.
   The final URL is checked again before the capture. For example,
   `github.com/<org>.png`, which redirects to `avatars.githubusercontent.com`,
-  is refused.
+  is refused. The Fetch check is the real gate: Python's URL parsing can
+  differ from Chromium's on odd URLs, so the pre-check alone is not trusted.
+- **Link panes run in a cage.** Each renders in its own disposable browser
+  context, which takes its storage and service workers with it.
+  - Every request is intercepted. Scripts, images and requests may load from
+    public hosts (GitHub's CDNs), but nothing may reach a private address:
+    the LAN, loopback, link-local, `.lan` and `.local` names, checked after
+    resolving the name.
+  - Popups are disabled.
+  - Every child frame or worker is attached before it runs, and stays paused
+    unless the same interception is on it.
+  - Tested on 118: a link render of a page with a cross-site iframe, a LAN
+    iframe, a LAN image and a script fetching a LAN service. All four were
+    blocked, and the page's script saw its request fail.
+  - Not covered: WebSocket connections, and a name that resolves to a public
+    address for this check but a private one for Chromium. The sandbox and
+    the few seconds a render lasts bound both.
 - **Refusals:** a refused link pane is shown once as a notice page naming the
-  site, rather than leaving an older pane up, and is not retried until it
-  changes.
+  site, rather than leaving an older pane up. It is tried again when it
+  changes, or when the sandbox comes back after a refusal made without it.
 
 The sandbox and the gate are described under Operational notes.
 
