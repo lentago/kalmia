@@ -238,10 +238,11 @@ but never submit to it.
 dedicated, non-admin Home Assistant user (`brasenia`, "Can only log in from
 the local network"), log in as it, and create a long-lived access token
 under its Profile → Security. Then, from your own terminal (not through an
-agent: the token must not land in a transcript or a shell history):
+agent: the token must not land in a transcript or a shell history). The
+prompt doesn't echo: paste the token and press Enter.
 
 ```bash
-read -rs T && printf '%s' "$T" | ssh root@pve.local \
+read -rsp 'Home Assistant token: ' T && echo && printf '%s' "$T" | ssh root@pve.local \
   "ssh pve4 'pct exec 114 -- sh -c \"umask 077; cat > /etc/brasenia/ha-token\"'" ; unset T
 ssh root@pve.local "ssh pve4 'pct exec 114 -- systemctl restart brasenia-home'"
 ```
