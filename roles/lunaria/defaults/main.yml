@@ -28,15 +28,15 @@ lunaria_mediamtx_dir: /opt/mediamtx
 # (lunaria_pointer_url, below; lentago/brasenia#59).
 #
 # Set to pin the display to one page instead: the pointer is never read, and
-# the page is shot as a pane every lunaria_regen_interval seconds. Empty
+# the page is rendered as a pane every lunaria_regen_interval seconds. Empty
 # follows the pointer.
 lunaria_pin_url: ""
 # When the pointer names a pane's pane.html and the pane also offers this
-# sibling rendition, shoot the rendition. detail.html is the Family Brief's
+# sibling rendition, render the rendition. detail.html is the Family Brief's
 # desk edition (lentago/brasenia#56): a 1920x1080 layout with every decision
 # and the to-do list, which zooms to fit the 1280x720 viewport and lands on
 # 3840x2160 at an effective 2x. Panes without one show pane.html. Empty
-# always shoots pane.html.
+# always renders pane.html.
 lunaria_prefer_rendition: detail.html
 # Device pixels per CSS pixel. Pages keep the 1280x720 pane contract; 3 renders
 # them at 3840x2160 for a 4K display (1 = the old 720p stream).
@@ -49,37 +49,34 @@ lunaria_bitrate_kbps: 6000
 # The Roku plays http://<LXC 118>:<port>/master.m3u8 (brasenia's VideoScene.xml).
 lunaria_hls_port: 8080
 
-# The Roku remote's peek (lentago/brasenia#80): Up/Down shows another pane at
-# once as an image over the live video, and never changes what the compositor
-# decided. lunaria-peek re-reads the compositor's line-up every
-# lunaria_peek_poll seconds, keeps a 1920x1080 image per item, re-shot every
-# lunaria_peek_regen seconds, and lunaria-hls-serve serves them at /peek/.
+# The line-up (lentago/brasenia Contracts v1) and the Roku remote's peek
+# (lentago/brasenia#80): brasenia-render (kalmia#194) re-reads the line-up
+# every lunaria_peek_poll seconds and keeps every item rendered ahead, so a
+# switch is a file swap; an item without a content revision is rendered again
+# every lunaria_peek_regen seconds while off screen. Each item's first page,
+# at 1920x1080, is the peek image lunaria-hls-serve serves at /peek/: Up/Down
+# shows it over the live video and changes nothing the compositor decided.
 lunaria_lineup_url: http://pub.lan/viewport/lineup.json
 lunaria_peek_poll: 10
 lunaria_peek_regen: 300
 
-# The briefing rotation (pointer fallback "briefing", or no compositor): the
-# Family Brief from brasenia's briefing slot (lentago/brasenia#76). The TV
-# edition is preferred: detail.html, the 1920x1080 desk edition, which zooms to
-# fit the 1280x720 viewport and lands on 3840x2160. If it is unreachable, the
-# full page is shot and sliced into 720px pages: pane.html, the 1280x720 wall
-# layout. (Until 2026-10-28 these were the morning brief at /brief/, which
-# stopped publishing on 2026-08-31.)
-lunaria_tv_url: http://pub.lan/viewport/briefing/detail.html
-lunaria_full_url: http://pub.lan/viewport/briefing/pane.html
+# The briefing slot (pointer fallback "briefing", or no compositor): the
+# Family Brief (lentago/brasenia#76). Rendered like a pane, so its detail.html
+# desk edition is preferred (lunaria_prefer_rendition).
+lunaria_briefing_url: http://pub.lan/viewport/briefing/pane.html
 
 # Seconds each screen stays up before rotating to the next.
 lunaria_page_dwell: 12
-# Seconds between re-renders of the source page. 60 so a pane that updates in
-# place without a new pointer decision reaches the screen within about 60 s
-# plus one render (~3 s on LXC 118; kalmia#193).
+# Seconds between re-renders of the page on screen when it carries no content
+# revision (the status card, or a compositor older than lentago/brasenia#101);
+# a page with a revision is rendered again as soon as it changes.
 lunaria_regen_interval: 60
 
 # The brasenia viewport pointer (compositor decision on pub, Contracts v1) and
-# how often it is polled, in seconds. The rotation follows the pointer: a
-# pane or status url is shot alone; fallback "briefing" or a 404 (no
-# compositor) shows the brief plus lunaria_extra_urls. LXC 118 has no NAS
-# mount; it reads the pointer through pub over HTTP.
+# how often it is polled, in seconds. The screen follows the pointer: the pane,
+# the status card, or, on fallback "briefing" or a 404 (no compositor), the
+# briefing slot. LXC 118 has no NAS mount; it reads the pointer through pub
+# over HTTP.
 lunaria_pointer_url: http://pub.lan/viewport/current.json
 lunaria_pointer_poll: 1
 
@@ -87,17 +84,10 @@ lunaria_pointer_poll: 1
 # each also allowing its subdomains. Only for brasenia link panes, a pane that
 # names a web page (brasenia ADR-0016). pub.lan is always allowed. Any other
 # site is refused unless Chromium runs sandboxed, which on this unprivileged
-# LXC needs `nesting` (terraform/containers.tf). Empty: only pub.lan.
-lunaria_allowed_sites: []
-
-# Additional TV-contract pane pages (1280px wide, height an exact multiple of
-# 720 — the brasenia pane contract) appended to the briefing rotation. Each URL
-# is shot like a TV edition and its 720px screens join the rotation; an
-# unreachable or failing extra pane is skipped without touching the brief
-# pages. Empty: the praxis Obsidian graph that used to follow the brief was
-# dropped on 2026-10-28 (its pub.lan export was retired on 2026-08-18), and
-# anything that should share the screen now claims a pane on the bus.
-lunaria_extra_urls: []
+# LXC needs `nesting` (terraform/containers.tf). github.com: a pull request's
+# page, the case link panes were made for (brasenia#97).
+lunaria_allowed_sites:
+  - github.com
 
 # --- RTMP live-ingest (kalmia#102) -------------------------------------------
 # Generic RTMP publish path for LAN producers (first client: DJI Fly's

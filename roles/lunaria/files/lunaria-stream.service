@@ -1,7 +1,7 @@
 [Unit]
 Description=lunaria encoder (frame.png -> HEVC HLS in /run/lunaria-hls)
-After=network-online.target lunaria-frames.service
-Wants=network-online.target lunaria-frames.service lunaria-hls-serve.service
+After=network-online.target brasenia-render.service
+Wants=network-online.target brasenia-render.service lunaria-hls-serve.service
 
 [Service]
 User=lunaria

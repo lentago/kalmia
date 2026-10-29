@@ -9,7 +9,7 @@ User={{ pub_viewport_user }}
 Group={{ pub_viewport_group }}
 Environment=PYTHONDONTWRITEBYTECODE=1
 WorkingDirectory={{ pub_brasenia_checkout }}
-ExecStart=/usr/bin/python3 -m compositor --webroot {{ pub_viewport_webroot }} --url-base {{ pub_viewport_url_base }} --interval {{ pub_viewport_compositor_interval }}
+ExecStart=/usr/bin/python3 -m compositor --webroot {{ pub_viewport_webroot }} --url-base {{ pub_viewport_url_base }} --interval {{ pub_viewport_compositor_interval }}{% if pub_viewport_link_panes %} --link-panes{% endif %}
 Restart=always
 RestartSec=10
 

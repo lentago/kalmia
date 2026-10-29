@@ -6,9 +6,9 @@
     state: restarted
   become: true
 
-- name: Restart lunaria-frames
+- name: Restart brasenia-render
   ansible.builtin.systemd_service:
-    name: lunaria-frames.service
+    name: brasenia-render.service
     daemon_reload: true
     state: restarted
   become: true
@@ -23,13 +23,6 @@
 - name: Restart lunaria-hls-serve
   ansible.builtin.systemd_service:
     name: lunaria-hls-serve.service
-    daemon_reload: true
-    state: restarted
-  become: true
-
-- name: Restart lunaria-peek
-  ansible.builtin.systemd_service:
-    name: lunaria-peek.service
     daemon_reload: true
     state: restarted
   become: true
