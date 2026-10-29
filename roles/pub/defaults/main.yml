@@ -84,8 +84,13 @@ pub_viewport_family_brief_interval: 60
 pub_viewport_home_ha_url: http://homeassistant.lan:8123
 pub_viewport_home_token_file: /etc/brasenia/ha-token
 pub_viewport_home_interval: 60
-# Entity ids kept off the home pane (each becomes a --hide).
-pub_viewport_home_hide: []
+# Entity ids kept off the home pane (each becomes a --hide): the kids'
+# bedroom doors, usually open, and the older, offline sensors on the same doors.
+pub_viewport_home_hide:
+  - binary_sensor.z_wave_door_window_sensor
+  - binary_sensor.z_wave_door_window_sensor_2
+  - binary_sensor.hannahsroom
+  - binary_sensor.jacobsroom
 # The fleet producer (#180, brasenia#86) reads the claytonia job queue through
 # the read-only bind mount at pub_viewport_fleet_jobs (mp1, attached by hand:
 # docs/pub.md) and keeps panes/fleet/ up.
