@@ -125,16 +125,7 @@
     mode: "0755"
   become: true
 
-# The agent reads .env (written by config.sh) when it starts, so a change
-# restarts it, and with it any job running at the time.
-- name: Point the runner's job-started hook at the guard
-  ansible.builtin.lineinfile:
-    path: "{{ pe_publish_runner_dir }}/.env"
-    regexp: "^ACTIONS_RUNNER_HOOK_JOB_STARTED="
-    line: "ACTIONS_RUNNER_HOOK_JOB_STARTED={{ pe_publish_job_guard }}"
-  become: true
-  notify: Restart the runner service
-
+# svc.sh install enables the unit but does not start it.
 - name: Install the runner systemd service
   ansible.builtin.command:
     cmd: ./svc.sh install {{ pe_publish_runner_user }}
@@ -146,6 +137,22 @@
   ansible.builtin.slurp:
     src: "{{ pe_publish_runner_dir }}/.service"
   register: pe_publish_service
+
+# The agent reads .env (written by config.sh) when it starts, so a change
+# restarts it, and with it any job running at the time.
+- name: Point the runner's job-started hook at the guard
+  ansible.builtin.lineinfile:
+    path: "{{ pe_publish_runner_dir }}/.env"
+    regexp: "^ACTIONS_RUNNER_HOOK_JOB_STARTED="
+    line: "ACTIONS_RUNNER_HOOK_JOB_STARTED={{ pe_publish_job_guard }}"
+  become: true
+  notify: Restart the runner service
+
+# Restart now, not at the end of the play: a later failure would drop the
+# handler, and the next run, seeing .env unchanged, would leave the running
+# agent without its hook.
+- name: Restart the runner now if its hook changed
+  ansible.builtin.meta: flush_handlers
 
 - name: Enable and start the runner service
   ansible.builtin.systemd_service:

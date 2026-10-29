@@ -13,7 +13,7 @@ wall panes, so merges reach pub.lan without anyone opening a session.
 | Provisioned by | `pe-publish.yml` + the `pe_publish` role |
 | Runner | `/opt/actions-runner`, user `runner` (in `webdrop`, gid 1000), systemd service from `svc.sh` |
 | Labels | `self-hosted`, `Linux`, `X64`, `pe-publish` |
-| Job guard | `/usr/local/bin/pe-publish-job-guard.sh`, the job-started hook: only `publish.yml` on `main` runs (see below) |
+| Job guard | `/usr/local/bin/pe-publish-job-guard.sh`, the job-started hook (a script the runner runs before any of a job's steps): only `publish.yml` on `main` runs (see below) |
 
 It is deliberately not LXC 115 `gha-runner`. That runner holds this repo's
 `PROXMOX_VE_API_TOKEN` and runs the kalmia and claytonia applies, so a personal
@@ -26,7 +26,8 @@ edit any workflow. It can point a `pull_request` job at
 `runs-on: [self-hosted, pe-publish]`, or drop `publish.yml`'s
 `if: github.ref == 'refs/heads/main'` and dispatch it from itself. Bullpen
 agents push branches to that repo, so the runner enforces main-only itself
-(#195). The workflow's own guard is editable by the branch.
+([#195](https://github.com/lentago/kalmia/issues/195)). The workflow's own
+guard is editable by the branch.
 
 `ACTIONS_RUNNER_HOOK_JOB_STARTED` in `/opt/actions-runner/.env` points at the
 root-owned `/usr/local/bin/pe-publish-job-guard.sh`. It lets a job through
