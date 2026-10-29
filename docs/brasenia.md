@@ -9,8 +9,10 @@
 > units, service user, `/etc/default/brasenia` and paths all carry the new
 > name. Concept snapshot: `http://pub.lan/brasenia/concept.md`.
 
-**The runtime** renders the viewport's panes to a continuous 4K HEVC HLS stream
-that the office Roku's sideloaded dev channel plays (#167). It is the
+**The runtime** renders the viewport's panes to a continuous 4K stream, HEVC
+(H.265) video served as HLS (HTTP Live Streaming: a playlist of short video
+segments over plain HTTP), that the office Roku's sideloaded dev channel plays
+(#167). It is the
 containerized productization of the 2026-07-20 Roku HLS validation (worked
 example: `~/roku-hls-test/NOTES.md` on the ThinkPad); the 720p play-room Roku
 it first served was retired on 2026-10-28. Concept and roadmap (the
@@ -178,6 +180,12 @@ takes the wall dark from the destroy until the first frame after
 provisioning, about 5–10 minutes. Schedule it outside the pe-publish windows
 (21:50–22:10Z, 23:20–23:40Z).
 
+The role provisions a **fresh guest only**: it no longer stops or removes the
+units of the old renderer (`lunaria-*`, the Cast watchdog), so on a guest that
+predates the rename the old `lunaria-hls-serve` would still hold :8080 and
+`brasenia-hls-serve` would fail to bind. Rebuild such a guest, don't re-run the
+play on it.
+
 1. **Guest.** `container.brasenia` in `terraform/containers.tf`, created by
    the CI apply on merge:
    - hostname `brasenia`, unprivileged, 4 cores, 4 GB, 10 GB on `local-lvm`,
@@ -192,7 +200,10 @@ provisioning, about 5–10 minutes. Schedule it outside the pe-publish windows
    every flag, which PVE refuses (see terraform/README, "Rails"). To rebuild
    on purpose, change `terraform_data.brasenia_rebuild`'s input. The
    container's `replace_triggered_by` turns that into one destroy-then-create
-   of VMID 118.
+   of VMID 118. If an apply records the new input but fails before the
+   container is destroyed, change the input again: the CI apply takes no
+   `-replace`, and an unchanged input plans no replacement. If the destroy
+   succeeded and the create failed, the next apply creates it with no change.
 2. **Provision**, as root on pve4, once the guest is up (the same
    self-provisioning flow as pub):
 
@@ -207,12 +218,13 @@ provisioning, about 5–10 minutes. Schedule it outside the pe-publish windows
    live ingest (see below). Without it, ingest stays off, failing closed.
 3. **Verify:**
    - `pct exec 118 -- hostname` reads `brasenia`.
-   - `systemctl is-active brasenia-render brasenia-stream brasenia-hls-serve mediamtx`.
-   - `id brasenia`, and `/etc/default/brasenia` exists.
-   - The sandbox works: `su -s /bin/sh brasenia -c 'unshare --user
-     --map-root-user true'` succeeds, and no Chromium runs with
-     `--no-sandbox`.
-   - `journalctl -u brasenia-render` shows the panes rendering.
+   - `pct exec 118 -- systemctl is-active brasenia-render brasenia-stream brasenia-hls-serve mediamtx`.
+   - `pct exec 118 -- id brasenia`, and `/etc/default/brasenia` exists in the
+     guest.
+   - The sandbox works: `pct exec 118 -- su -s /bin/sh brasenia -c 'unshare
+     --user --map-root-user true'` succeeds, and no Chromium in the guest runs
+     with `--no-sandbox`.
+   - `pct exec 118 -- journalctl -u brasenia-render` shows the panes rendering.
    - `curl -s http://192.168.139.19:8080/master.m3u8` answers.
 4. **Display:** the office Roku's dev channel plays
    `http://192.168.139.19:8080/master.m3u8` (brasenia's `VideoScene.xml`;
@@ -307,18 +319,24 @@ role) and is never committed. If the variable is unset, the rendered
 config simply grants no one publish access to `live` — RTMP live-ingest
 stays off (fails closed) rather than falling open.
 
-1. Generate a random credential and stash it in a host-local env file,
-   following the existing `~/.config/kalmia/proxmox.env` precedent:
+Every step runs **inside LXC 118** (`pct enter 118` on pve4). The inventory
+targets `localhost`, so the play provisions whatever machine runs it: run from
+a workstation or pve4 checkout, it would install the wall display there. The
+credential already lives in the guest's rendered mediamtx config, so keeping
+the env file in the guest's root home adds no exposure; a rebuild discards
+it, and the steps below seed a new one.
+
+1. Generate a random credential into a root-only env file in the guest:
    ```bash
    mkdir -p ~/.config/kalmia
    umask 077
    printf 'export BRASENIA_RTMP_PUBLISH_PASS=%s\n' "$(openssl rand -hex 20)" \
      >> ~/.config/kalmia/brasenia-rtmp.env
    ```
-2. Before running the play, source it:
+2. Source it, then run the play from the guest's checkout:
    ```bash
    source ~/.config/kalmia/brasenia-rtmp.env
-   ansible-playbook -i inventory/hosts.yml brasenia.yml
+   cd /opt/kalmia && ansible-playbook -i inventory/hosts.yml brasenia.yml
    ```
 3. Give DJI Fly's custom-RTMP field the publish URL (`brasenia_rtmp_publish_user`
    defaults to `live` and is committed — not a secret):

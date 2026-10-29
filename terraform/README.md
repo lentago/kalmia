@@ -240,7 +240,7 @@ pipeline-recreatable guests unguarded so ordinary replacements still work.
 | k3s CT 119, 122 | `container.k3s` | yes | `keyctl` ⇒ root@pam pre-create + import (see Rails below), so effectively import-only |
 | HAOS VM 100 | `vm.haos` | yes | Hardware-pinned USB radios (since #28) |
 | backup jobs | `backup-jobs.tf` | yes | Pre-existing |
-| brasenia CT 118 | `container.brasenia` | no | Pipeline-recreatable: token-created (nesting alone is allowed on create), no keyctl/bind mount; `terraform_data.brasenia_rebuild` forces a rebuild |
+| brasenia CT 118 | `container.brasenia` | no | Pipeline-recreatable: token-created (nesting alone is allowed on create), no keyctl/bind mount; `terraform_data.brasenia_rebuild` forces a rebuild ([`containers.tf`](containers.tf); create-path evidence on [#63](https://github.com/lentago/kalmia/issues/63#issuecomment-6509707205)) |
 | gha-runner CT 115 | `container.gha_runner` | no | Pipeline-recreatable: token-created, no keyctl/bind mount. Note it runs this pipeline, so a self-replace mid-apply would need manual recovery |
 | pe-publish CT 123 | `container.pe_publish` | no | Pipeline-recreatable: token-created, bind mounts re-attached by the mount hook (§ below) |
 

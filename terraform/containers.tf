@@ -241,6 +241,8 @@ resource "proxmox_virtual_environment_container" "grafana_stack" {
 # template) through the container's replace_triggered_by. Terraform fires that
 # trigger only when this resource is updated or replaced, never when it is
 # first created, so it landed alone (#212) and the rename changed it (#63).
+# If an apply records a new input but fails before the destroy, change the
+# input again: CI applies take no -replace (docs/brasenia.md, Build / rebuild).
 resource "terraform_data" "brasenia_rebuild" {
   input = "kalmia#63: rebuilt as brasenia"
 }

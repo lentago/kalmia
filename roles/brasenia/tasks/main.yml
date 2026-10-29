@@ -5,7 +5,9 @@
 # distro ffmpeg + chromium, the renderer (brasenia-render, #194), the encoder
 # and the HLS server the office Roku plays from (#167), a pinned mediamtx (RTMP
 # live ingest, #102), and their systemd services. Credential-free: it reads
-# http://pub.lan/ and the sites in brasenia_allowed_sites. See docs/brasenia.md.
+# http://pub.lan/ and the sites in brasenia_allowed_sites. Fresh guest only:
+# it does not retire the pre-rename lunaria-* units, so rebuild an old guest
+# instead of re-running this on it. See docs/brasenia.md.
 # ============================================================================
 - name: Install packages (ffmpeg, chromium, PIL, fonts)
   ansible.builtin.apt:

@@ -284,7 +284,8 @@ The second: `brasenia.yml` + the `brasenia` role codify the wall display's
 runtime (LXC 118) for **brasenia** (named `lunaria` until its runtime rename,
 [#63](https://github.com/lentago/kalmia/issues/63); see
 [`docs/brasenia.md`](docs/brasenia.md)): the viewport's panes, rendered ahead by
-a sandboxed Chromium → ffmpeg 4K HEVC → HLS for the office Roku. Credential-free
+a sandboxed Chromium → ffmpeg 4K HEVC (H.265 video) → HLS (HTTP Live
+Streaming, short segments over plain HTTP) for the office Roku. Credential-free
 by design; the guest itself is defined in `terraform/containers.tf`.
 
 The third targets the hypervisors themselves: `pve-host.yml` + the `pve_host`
