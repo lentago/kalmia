@@ -1,0 +1,132 @@
+---
+# ============================================================================
+# pe_publish — installs the publish toolchain (python3 + venv for the MkDocs
+# build, git, rsync) and the GitHub Actions runner agent, registers it to
+# cpitzi/professional-endeavors and runs it as a systemd service under an
+# unprivileged user in the share's gid-1000 group. Registration needs a
+# one-hour token in PE_PUBLISH_RUNNER_TOKEN on the first run only; see
+# docs/pe-publish.md.
+# ============================================================================
+- name: Install the publish toolchain and runner dependencies
+  ansible.builtin.apt:
+    name:
+      - python3
+      - python3-venv
+      - git
+      - rsync
+      - curl
+      - ca-certificates
+      # The agent's .NET runtime needs these (its installdependencies.sh list
+      # for Debian 12).
+      - libicu72
+      - libkrb5-3
+      - libssl3
+      - liblttng-ust1
+      - zlib1g
+    state: present
+    update_cache: true
+  become: true
+
+- name: Ensure the share's gid-1000 group exists
+  ansible.builtin.group:
+    name: "{{ pe_publish_group }}"
+    gid: "{{ pe_publish_group_gid }}"
+    system: true
+  become: true
+
+- name: Create the runner user
+  ansible.builtin.user:
+    name: "{{ pe_publish_runner_user }}"
+    groups: "{{ pe_publish_group }}"
+    append: true
+    shell: /bin/bash
+    create_home: true
+  become: true
+
+- name: Ensure the runner directory exists
+  ansible.builtin.file:
+    path: "{{ pe_publish_runner_dir }}"
+    state: directory
+    owner: "{{ pe_publish_runner_user }}"
+    group: "{{ pe_publish_runner_user }}"
+    mode: "0755"
+  become: true
+
+- name: Download the runner agent {{ pe_publish_runner_version }}
+  ansible.builtin.get_url:
+    url: "https://github.com/actions/runner/releases/download/v{{ pe_publish_runner_version }}/actions-runner-linux-x64-{{ pe_publish_runner_version }}.tar.gz"
+    dest: "/var/cache/actions-runner-linux-x64-{{ pe_publish_runner_version }}.tar.gz"
+    checksum: "sha256:{{ pe_publish_runner_sha256 }}"
+    mode: "0644"
+  become: true
+
+- name: Unpack the runner agent
+  ansible.builtin.unarchive:
+    src: "/var/cache/actions-runner-linux-x64-{{ pe_publish_runner_version }}.tar.gz"
+    dest: "{{ pe_publish_runner_dir }}"
+    remote_src: true
+    owner: "{{ pe_publish_runner_user }}"
+    group: "{{ pe_publish_runner_user }}"
+    creates: "{{ pe_publish_runner_dir }}/config.sh"
+  become: true
+
+- name: Check whether the runner is registered
+  ansible.builtin.stat:
+    path: "{{ pe_publish_runner_dir }}/.runner"
+  register: pe_publish_registered
+
+- name: Require a registration token for the first registration
+  ansible.builtin.fail:
+    msg: >-
+      The runner is not registered yet. Mint a token and pass it in the
+      environment: PE_PUBLISH_RUNNER_TOKEN=$(gh api -X POST
+      repos/{{ pe_publish_repo }}/actions/runners/registration-token -q .token)
+      — see docs/pe-publish.md.
+  when:
+    - not pe_publish_registered.stat.exists
+    - lookup('ansible.builtin.env', 'PE_PUBLISH_RUNNER_TOKEN') | length == 0
+
+# config.sh refuses to run as root; runuser avoids needing sudo in the guest.
+- name: Register the runner with {{ pe_publish_repo }}
+  ansible.builtin.command:
+    argv:
+      - runuser
+      - -u
+      - "{{ pe_publish_runner_user }}"
+      - --
+      - ./config.sh
+      - --unattended
+      - --url
+      - "https://github.com/{{ pe_publish_repo }}"
+      - --token
+      - "{{ lookup('ansible.builtin.env', 'PE_PUBLISH_RUNNER_TOKEN') }}"
+      - --name
+      - "{{ pe_publish_runner_name }}"
+      - --labels
+      - "{{ pe_publish_runner_labels }}"
+      - --work
+      - _work
+      - --replace
+    chdir: "{{ pe_publish_runner_dir }}"
+    creates: "{{ pe_publish_runner_dir }}/.runner"
+  no_log: true
+  become: true
+
+- name: Install the runner systemd service
+  ansible.builtin.command:
+    cmd: ./svc.sh install {{ pe_publish_runner_user }}
+    chdir: "{{ pe_publish_runner_dir }}"
+    creates: "{{ pe_publish_runner_dir }}/.service"
+  become: true
+
+- name: Read the runner service name
+  ansible.builtin.slurp:
+    src: "{{ pe_publish_runner_dir }}/.service"
+  register: pe_publish_service
+
+- name: Enable and start the runner service
+  ansible.builtin.systemd_service:
+    name: "{{ pe_publish_service.content | b64decode | trim }}"
+    enabled: true
+    state: started
+  become: true

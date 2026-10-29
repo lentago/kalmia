@@ -1,8 +1,10 @@
 ---
 # ============================================================================
-# pve_host — storage safety on a Proxmox VE node: lvmthin autoextend and a
-# nightly LXC fstrim timer. Runs as root over SSH (PVE nodes have no sudo),
-# hence no `become`. See docs/pve-host.md.
+# pve_host — storage safety on a Proxmox VE node (lvmthin autoextend and a
+# nightly LXC fstrim timer), plus the CI mount hook on the nodes that host
+# hook-mounted guests (mount_hook.yml, #190). Runs as root over SSH (PVE
+# nodes ship no sudo; only the mount hook installs it), hence no `become`.
+# See docs/pve-host.md.
 # ============================================================================
 - name: Configure lvmthin pool autoextend in lvmlocal.conf
   ansible.builtin.blockinfile:
@@ -78,3 +80,7 @@
     state: started
   # In --check the unit file was never written, so systemd can't find it.
   ignore_errors: "{{ ansible_check_mode }}"
+
+- name: Install the CI mount hook
+  ansible.builtin.include_tasks: mount_hook.yml
+  when: inventory_hostname in pve_host_mount_hook_nodes

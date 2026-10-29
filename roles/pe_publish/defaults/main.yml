@@ -1,0 +1,26 @@
+---
+# ============================================================================
+# pe_publish — the self-hosted Actions runner for cpitzi/professional-endeavors
+# on LXC 123 (pve4, #190). Its workflow builds the MkDocs wiki into
+# /srv/www/wiki and renews the search-map/search-board brasenia panes; both
+# are NAS bind mounts attached by the kalmia mount hook. See
+# docs/pe-publish.md.
+# ============================================================================
+pe_publish_repo: cpitzi/professional-endeavors
+pe_publish_runner_name: pe-publish
+# Comma-separated; GitHub adds self-hosted, Linux and X64 on its own.
+pe_publish_runner_labels: pe-publish
+pe_publish_runner_user: runner
+pe_publish_runner_dir: /opt/actions-runner
+
+# Bootstrap version only: the agent updates itself once registered, and the
+# install is skipped whenever config.sh exists, so bumping this affects
+# rebuilds only. Checksum from the release notes.
+pe_publish_runner_version: "2.338.2"
+pe_publish_runner_sha256: baebf204307bac6193480852732f0aba2ae97b6c5597c244f4d5558390147c40
+
+# The share is CIFS forced to uid/gid 101000 (container 1000), mode 0770, so
+# membership of a gid-1000 group is what grants writes. Same group name as
+# pub, where Caddy reads through it.
+pe_publish_group: webdrop
+pe_publish_group_gid: 1000

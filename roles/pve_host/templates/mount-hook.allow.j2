@@ -1,0 +1,7 @@
+# {{ ansible_managed }} (pve_host role, #190)
+# Bind mounts the CI mount hook may apply: "<vmid> <mpN> <spec>", matched
+# whole-line by /usr/local/sbin/kalmia-mount-attach. Source of truth:
+# pve_host_mount_hook_allow in roles/pve_host/defaults/main.yml.
+{% for entry in pve_host_mount_hook_allow %}
+{{ entry.vmid }} {{ entry.key }} {{ entry.spec }}
+{% endfor %}

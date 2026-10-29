@@ -1,0 +1,21 @@
+---
+# ============================================================================
+# Provision the pe-publish LXC (123, pve4) — the self-hosted Actions runner
+# that publishes cpitzi/professional-endeavors to pub.lan on every merge
+# (#190). Self-provisioning, same as pub.yml and lunaria.yml: run this ON the
+# container.
+#
+#   PE_PUBLISH_RUNNER_TOKEN=<token> ansible-playbook -i inventory/hosts.yml pe-publish.yml
+#
+# The token is needed only for the first registration. The guest and its NAS
+# bind mounts are created by terraform/pe-publish.tf (CI apply-on-merge,
+# mounts via the pve_host mount hook). See docs/pe-publish.md.
+# ============================================================================
+- name: Provision the professional-endeavors publish runner
+  hosts: all
+  gather_facts: true
+  become: false
+
+  roles:
+    - role: pe_publish
+      tags: [pe_publish, runner]

@@ -1,0 +1,2 @@
+# {{ ansible_managed }} (pve_host role, #190)
+restrict,from="{{ pve_host_mount_hook_from }}",command="sudo -n /usr/local/sbin/kalmia-mount-attach \"$SSH_ORIGINAL_COMMAND\"" {{ pve_host_mount_hook_pubkey }}
