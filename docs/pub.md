@@ -185,11 +185,13 @@ the run and is retried on the next one (every 15 minutes in the morning
 window, or `systemctl start publish-family-brief`). Setting `pub_family_brief_doc_dest`
 to an empty string turns the Doc off.
 
-The **Family Brief** folder is shared with Rachel (reader) from Chris's Drive.
-That share was made by hand and is live Drive state, not something this role
-sets; anything in the folder inherits it. Her address is kept out of this
-repo. Readers, not editors: the next morning's import replaces the Doc's
-contents, so any edits would be lost.
+The **Family Brief** folder is shared with Rachel as a **commenter** from
+Chris's Drive, and anything in the folder inherits that. The share is live
+Drive state, made once on 2026-10-29, and not something this role sets. Her
+address is kept out of this repo. Change it from the folder's Share dialog in
+Drive. Commenters, not editors: the next morning's import replaces the Doc's
+text, so edits would be lost, and a comment can lose its anchor when the text
+it was on goes.
 
 ```bash
 journalctl -u publish-family-brief --since today | grep -i doc
