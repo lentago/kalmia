@@ -24,22 +24,19 @@ source.refresh_s; an item without a rev every LUNARIA_REGEN_INTERVAL while on
 screen and LUNARIA_PEEK_REGEN otherwise. A failed render keeps the previous
 image and is retried after RETRY_S: a stale page beats a dead screen.
 
-Which sites: pub.lan always. Any other site only while Chromium runs
-sandboxed (it needs user namespaces, which LXC 118 has with nesting) and the
-host, or a subdomain of it, is in LUNARIA_ALLOWED_SITES. The rule holds for
-every document Chromium loads, not only the one asked for: each navigation
-request (redirect hops, frames, a page that navigates itself) is intercepted
-(Fetch) and blocked when its host is not allowed, and the final URL is checked
-again before the capture. A link pane renders in its own disposable browser
-context where every request is intercepted: besides the document rule,
-nothing may reach a private address (the LAN, loopback, link-local, .lan and
-.local names, checked after resolving), popups are disabled, and every child
-frame or worker is held until the same interception is on it. Not covered:
-WebSocket connections, and a name that resolves differently for Chromium than
-for this check; the sandbox and the short render bound both. If the
-sandboxed browser cannot start, an unsandboxed one renders pub.lan pages only,
-and the sandbox is tried again every SANDBOX_RETRY_S. A refused page is shown
-as a notice naming the site, and is tried again once the sandbox is back.
+Which sites (docs/lunaria.md has the reasoning, threat model and limits): a
+pane without a link source renders only from pub.lan. Documents must be
+pub.lan or, while Chromium runs sandboxed (it needs user namespaces, which
+LXC 118 has with nesting), a host in LUNARIA_ALLOWED_SITES or a subdomain of
+one. Every document request is checked (Fetch), every redirect hop included,
+and the final URL again before the capture. A link pane renders in its own
+disposable browser context, where no document but pub.lan, and no
+subresource, may reach a private address (names resolved per render), popups
+are disabled, and every child frame or worker is held until the same
+interception is on it. If the sandboxed browser cannot start, an unsandboxed
+one renders pub.lan pages only, and the sandbox is tried again every
+SANDBOX_RETRY_S. A refused page is shown as a notice naming the site, and is
+tried again once the sandbox is back.
 
 Pane-contract pages are laid out at 1280x720 CSS pixels and rendered at
 LUNARIA_SCALE, one page per 720 px band with content (up to 4). Link panes
@@ -181,8 +178,11 @@ PRIVATE_SUFFIXES = (".lan", ".local", ".internal", ".home.arpa", ".localhost")
 
 
 def private_ip(ip):
-    return (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
-            or ip.is_multicast or ip.is_unspecified)
+    """Not on the public internet: RFC1918, CGNAT/Tailscale (100.64/10),
+    loopback, link-local, IPv6 ULA and site-local, and the like."""
+    if ip.version == 6 and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return not ip.is_global or ip.is_multicast or getattr(ip, "is_site_local", False)
 
 
 class Browser:
@@ -225,6 +225,10 @@ class Browser:
             args = ["chromium", "--headless=new", *([] if self.sandboxed else ["--no-sandbox"]),
                     "--disable-gpu", "--no-first-run", "--no-default-browser-check",
                     "--hide-scrollbars", "--mute-audio", "--remote-debugging-pipe",
+                    # Fetch never sees these, so they are off: WebRTC's UDP
+                    # and DNS prefetching.
+                    "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+                    "--dns-prefetch-disable",
                     "--user-data-dir=" + self.profile, "about:blank"]
             self.proc = subprocess.Popen(
                 ["/bin/bash", "-c", f'exec "$@" 3<&{hi_in} 4>&{hi_out} {hi_in}<&- {hi_out}>&-',
@@ -357,7 +361,8 @@ class Browser:
         if session not in self.link_sessions:
             return site_allowed(url, self.sandboxed)          # documents only, pub.lan pages
         if request_type == "Document":
-            return site_allowed(url, self.sandboxed)
+            host = host_of(url)
+            return site_allowed(url, self.sandboxed) and (host == PUB_HOST or not self.private_host(host))
         scheme = urlsplit(url).scheme if url else ""
         if scheme in ("data", "blob"):
             return True
@@ -493,6 +498,7 @@ class Browser:
     def link_pages(self, url, source):
         """A link pane, in its own disposable browser context: laid out at
         source.viewport, its first source.screens bands each fitted onto a page."""
+        self.resolved = {}       # a name's answer is trusted for this render only
         context = self.call("Target.createBrowserContext", {"disposeOnDetach": True},
                             session=False)["browserContextId"]
         persistent = self.session
@@ -685,6 +691,9 @@ class Worker(threading.Thread):
 
     def render(self, item):
         self.ensure_browser()                        # first: it may fall back to unsandboxed
+        if not item.source and host_of(item.url) != PUB_HOST:
+            # Its session gates documents only, which is right for our own pages.
+            raise Refused(f"{host_of(item.url) or item.url}: a pane without a source must be on {PUB_HOST}")
         check_site(item.url, self.browser.sandboxed)
         if item.source:
             return self.browser.link_pages(item.url, item.source)
@@ -740,6 +749,7 @@ class Renderer:
         self.shown = None    # (id, at) whose pages frame.png is cycling
         self.page, self.next_flip = 0, 0.0
         self.last_bg = 0.0
+        self.worker_started = time.monotonic()
         self.bad_since, self.bad_logged = None, False
         self.last_error = None
 
@@ -909,10 +919,15 @@ class Renderer:
         if now >= schedule["lineup"]:
             schedule["lineup"] = now + LINEUP_POLL
             self.poll_lineup()
-        if not self.worker.is_alive():
+        if not self.worker.is_alive() and now - self.worker_started >= RETRY_S:
             log("render worker died; starting a new one")
+            try:
+                self.worker.drop_browser()     # its thread is gone: safe to stop its Chromium
+            except Exception as exc:
+                log(f"could not stop the old worker's chromium: {exc!r}")
             self.worker = Worker()
             self.worker.start()
+            self.worker_started = now
             self.busy = None
         while True:
             try:
@@ -934,6 +949,7 @@ class Renderer:
 
     def run(self):
         self.worker.start()
+        self.worker_started = time.monotonic()
         log(f"brasenia-render: allowed sites: {' '.join(ALLOWED_SITES) or 'none'}")
         schedule = {"pointer": 0.0, "lineup": 0.0}
         while True:

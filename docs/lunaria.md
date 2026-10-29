@@ -92,31 +92,54 @@ content, up to 4. Link panes (lentago/brasenia ADR-0016) are laid out at their
 `source.viewport`, with `prefers-color-scheme` set to `source.theme`. Their
 first `source.screens` bands are each fitted onto a page.
 
-**Which sites.** pub.lan always. Any other site renders only while Chromium is
-sandboxed and the host is in `lunaria_allowed_sites`. Subdomains count:
-`github.com` also allows `gist.github.com`.
-- **Every document, not just the one asked for:** each navigation request is
-  intercepted (DevTools `Fetch`) and blocked when its host isn't allowed. That
-  covers each hop of a redirect, frames, and a page that navigates itself.
-  The final URL is checked again before the capture. For example,
-  `github.com/<org>.png`, which redirects to `avatars.githubusercontent.com`,
-  is refused. The Fetch check is the real gate: Python's URL parsing can
-  differ from Chromium's on odd URLs, so the pre-check alone is not trusted.
-- **Link panes run in a cage.** Each renders in its own disposable browser
-  context, which takes its storage and service workers with it.
-  - Every request is intercepted. Scripts, images and requests may load from
-    public hosts (GitHub's CDNs), but nothing may reach a private address:
-    the LAN, loopback, link-local, `.lan` and `.local` names, checked after
-    resolving the name.
-  - Popups are disabled.
-  - Every child frame or worker is attached before it runs, and stays paused
-    unless the same interception is on it.
-  - Tested on 118: a link render of a page with a cross-site iframe, a LAN
-    iframe, a LAN image and a script fetching a LAN service. All four were
-    blocked, and the page's script saw its request fail.
-  - Not covered: WebSocket connections, and a name that resolves to a public
-    address for this check but a private one for Chromium. The sandbox and
-    the few seconds a render lasts bound both.
+**Which sites.** The gate stops anyone on the LAN who can add a link pane
+from pointing the wall at an arbitrary URL. Sites in `lunaria_allowed_sites`
+are trusted by definition (the household lists them), so the gate does not
+defend against a malicious allowed site.
+
+What is enforced, each request checked by DevTools `Fetch`, and every hop of a
+redirect too:
+- **Panes without a link source** (our pane-contract pages) render only from
+  pub.lan. Their documents, frames included, are checked against the rule
+  below.
+- **Documents** must be pub.lan, or, while Chromium is sandboxed, a host in
+  `lunaria_allowed_sites` or a subdomain of one (`github.com` also allows
+  `gist.github.com`).
+  - In a link render, no document may be on a private address except pub.lan,
+    so an allowed name that resolves to the LAN is refused. Private here means
+    RFC1918, CGNAT and Tailscale (100.64/10), loopback, link-local, IPv6 ULA
+    and site-local, and `.lan`/`.local` names.
+  - The final URL is checked again before the capture.
+  - Example: `github.com/<org>.png`, which redirects to
+    `avatars.githubusercontent.com`, is refused.
+- **Subresources of a link render** (scripts, images, requests) may reach
+  public hosts, such as GitHub's CDNs, and never a private one. Names are
+  resolved, and answers are trusted for one render only.
+- **Each link render gets its own disposable browser context**, with popups
+  disabled (`window.open`). Every child frame or worker is attached before it
+  runs and stays paused unless the same interception is on it.
+- **Tested on 118:** a link render of a page with a cross-site iframe, a LAN
+  iframe, a LAN image and a script fetching a LAN service. All four were
+  blocked, and the page saw its request fail.
+
+Limits, each with why it is acceptable here:
+- **WebSocket connections** are not seen by `Fetch`. Only an allowed, trusted
+  site's page could open one, and its context is gone within seconds.
+- **`rel=preconnect`** opens TCP connections without sending a request. It is
+  the same trusted-site case, and no data is exchanged. DNS prefetching and
+  WebRTC's UDP are switched off (`--dns-prefetch-disable`,
+  `--force-webrtc-ip-handling-policy=disable_non_proxied_udp`).
+- **Service and shared workers** may not be attached (unverified). They live
+  in the render's context, which is disposed after the render.
+- **Popups** are stopped only by replacing `window.open`. `target=_blank`
+  needs a click, and nothing clicks.
+- **DNS rebinding**, a name that answers publicly to this check and privately
+  to Chromium, has a window of one render. Names are resolved again for every
+  link render.
+- **Odd URLs** may parse differently in Python than in Chromium. The `Fetch`
+  check, which sees the URL Chromium actually requests, is the gate; the
+  Python pre-check is a fast path only.
+
 - **Refusals:** a refused link pane is shown once as a notice page naming the
   site, rather than leaving an older pane up. It is tried again when it
   changes, or when the sandbox comes back after a refusal made without it.
