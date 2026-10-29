@@ -100,12 +100,12 @@ the brasenia compositor writes on pub, `http://pub.lan/viewport/current.json`,
 naming what the wall should show right now; this runtime is the Roku/HLS
 adapter, the leg that turns that page into the video stream the Roku plays
 (brasenia#26). `lunaria-frames` polls `lunaria_pointer_url` every
-`lunaria_pointer_poll` seconds (5) over HTTP. When the pointer names a pane
+`lunaria_pointer_poll` seconds (1) over HTTP. When the pointer names a pane
 (`fallback` null) or the status card (`fallback: "status"`), the TV shows that
 URL alone, shot as a TV-contract page. When the pointer says
 `fallback: "briefing"`, or is absent (404 — no compositor), the TV shows the
 brief plus the extra panes as above. The rotation is re-shot when `url` or
-`decided_at` changes and every `lunaria_regen_interval` seconds, so a pane
+`decided_at` changes and every `lunaria_regen_interval` seconds (60), so a pane
 that updates in place is re-rendered. When the pointer is unreadable (pub
 down, a non-404 error, bad JSON, a schema other than 1), the existing pages
 keep rotating and the journal gets one line after 30 s, plus one when it is
