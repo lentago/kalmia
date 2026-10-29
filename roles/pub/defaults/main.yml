@@ -103,6 +103,12 @@ pub_viewport_home_hide:
 # docs/pub.md) and keeps panes/fleet/ up.
 pub_viewport_fleet_jobs: /srv/claude-jobs
 pub_viewport_fleet_interval: 60
+# The links producer (brasenia#97, ADR-0018) reads the household's standing
+# slots from viewport/rubric.json and keeps one link pane on the bus per slot.
+# Its seconds between cycles: how long a slot added in the configurator takes
+# to reach the bus. At most 300, half the panes' 10-minute TTL (asserted in
+# tasks/main.yml).
+pub_viewport_links_interval: 30
 
 # --- Signal sink (kalmia#165) -----------------------------------------------
 # pub-signals takes checkbox actions from pages served here:
