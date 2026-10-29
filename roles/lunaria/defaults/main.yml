@@ -70,8 +70,10 @@ lunaria_full_url: http://pub.lan/viewport/briefing/pane.html
 
 # Seconds each screen stays up before rotating to the next.
 lunaria_page_dwell: 12
-# Seconds between re-renders of the source page.
-lunaria_regen_interval: 600
+# Seconds between re-renders of the source page. 60 so a pane that updates in
+# place without a new pointer decision reaches the screen within about 60 s
+# plus one render (~3 s on LXC 118; kalmia#193).
+lunaria_regen_interval: 60
 
 # The brasenia viewport pointer (compositor decision on pub, Contracts v1) and
 # how often it is polled, in seconds. The rotation follows the pointer: a
@@ -79,7 +81,7 @@ lunaria_regen_interval: 600
 # compositor) shows the brief plus lunaria_extra_urls. LXC 118 has no NAS
 # mount; it reads the pointer through pub over HTTP.
 lunaria_pointer_url: http://pub.lan/viewport/current.json
-lunaria_pointer_poll: 5
+lunaria_pointer_poll: 1
 
 # Additional TV-contract pane pages (1280px wide, height an exact multiple of
 # 720 — the brasenia pane contract) appended to the briefing rotation. Each URL

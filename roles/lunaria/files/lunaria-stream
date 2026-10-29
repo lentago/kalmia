@@ -5,7 +5,9 @@
 # HEVC because Roku plays H.264 only up to 1080p. ffmpeg's muxer rather than
 # mediamtx because mediamtx's MPEG-TS HLS is H.264-only and its fMP4 HLS
 # declares a playlist version (10) the Roku rejects (kalmia#167). One GOP per
-# 2s segment; omit_endlist so an encoder restart never leaves a finished
+# 2s segment, and a 3-segment playlist (the HLS minimum) so the Roku joins
+# 4-6 s behind live; on 7 segments it joined up to 14 s behind (brasenia
+# ADR-0015). omit_endlist so an encoder restart never leaves a finished
 # playlist behind, and epoch-numbered segments so the sequence never runs
 # backwards across restarts. The feeder re-cats frame.png per frame, so atomic
 # replacements from lunaria-frames appear within one frame. The wall-clock
@@ -51,7 +53,7 @@ exec ffmpeg -loglevel warning \
   -b:v "${KBPS}k" -maxrate "$(( KBPS * 4 / 3 ))k" -bufsize "$(( KBPS * 2 ))k" \
   -x265-params log-level=error:scenecut=0:repeat-headers=1 \
   -c:a aac -b:a 64k \
-  -f hls -hls_time 2 -hls_list_size 7 -hls_segment_type mpegts \
+  -f hls -hls_time 2 -hls_list_size 3 -hls_segment_type mpegts \
   -hls_flags delete_segments+independent_segments+omit_endlist+temp_file \
   -hls_start_number_source epoch \
   -hls_segment_filename "$HLS_DIR/seg-%d.ts" \

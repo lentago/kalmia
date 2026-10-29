@@ -208,7 +208,7 @@ read-only mount of the job queue. The home producer holds a Home Assistant
 token (brasenia ADR-0014). They write only under `/srv/www/viewport`, which
 is why they run here and not on LXC 118 (no NAS mount, by design).
 
-- `brasenia-compositor.service` ranks the pane bus every 5 s and writes
+- `brasenia-compositor.service` ranks the pane bus every second and writes
   `viewport/current.json` (`python3 -m compositor`, WorkingDirectory
   `/srv/brasenia`).
 - `brasenia-focus.service` turns session beacons in `viewport/focus/` into
