@@ -270,11 +270,27 @@ jobs:
           terraform_version: "1.14.9"
           terraform_wrapper: false
 
+      # Bind mounts are root@pam-only, so terraform_data resources attach them
+      # through the PVE nodes' mount hook over SSH (mount-hook.sh, #190). The
+      # key can only apply mounts on the node's allowlist. Apply-only: plan
+      # never runs provisioners, so PR runs never see it.
+      - name: Load the mount-hook key
+        env:
+          PVE_MOUNT_HOOK_SSH_KEY: ${{ secrets.PVE_MOUNT_HOOK_SSH_KEY }}
+        run: |
+          key="$RUNNER_TEMP/pve-mount-hook-key"
+          (umask 077 && printf '%s\n' "$PVE_MOUNT_HOOK_SSH_KEY" > "$key")
+          echo "PVE_MOUNT_HOOK_SSH_KEY_FILE=$key" >> "$GITHUB_ENV"
+
       - name: init
         run: terraform init -input=false
 
       - name: apply
         run: terraform apply -auto-approve -no-color -input=false
+
+      - name: Remove the mount-hook key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/pve-mount-hook-key"
 
   # Single required status check for the terraform pipeline. Runs on every PR
   # (if: always()) so the ruleset can require exactly `gate`: it reports green

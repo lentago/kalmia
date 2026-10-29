@@ -56,6 +56,10 @@ provider operations require SSH to the node or root@pam (snippet uploads,
 disk imports via `source_file.path`) — not needed for guest lifecycle; if one
 ever is, wire the provider `ssh {}` block rather than widening the token.
 
+A second, much narrower secret, `PVE_MOUNT_HOOK_SSH_KEY`, lets the apply attach
+allowlisted bind mounts, which the token can't. See § Bind mounts — the mount
+hook.
+
 ### TLS — trusting the PVE CA (why `insecure = false`)
 
 The cluster serves a self-signed cert issued by its PVE Cluster Manager CA.
@@ -152,6 +156,7 @@ runs use the `cpitzi-iac` IAM credentials already on the workstation.
 | 121 | qemu | fedora-xfce-test | pve5 | 3 |
 | 100 | qemu | haos-17.1 | pve3 | 3 — **last** |
 | 115 | lxc | gha-runner | pve4 | n/a — created BY this layer (phase 2) |
+| 123 | lxc | pe-publish | pve4 | n/a — created BY this layer (#190) |
 
 VM 100 (Home Assistant OS) is mission-critical and USB-pinned to pve3
 (Z-Wave/Zigbee/Matter radios; passthrough does not survive migration). It is
@@ -213,7 +218,7 @@ unsupported — fine here, `ha-manager` is deliberately unused (VM 100 pinning).
 
 The bpg provider treats some edits (e.g. adding a `mount_point`) as ForceNew,
 and an API-token apply cannot recreate guests that need `root@pam`-only
-features (bind mounts, `keyctl`). The 2026-07-12 CT 113 destruction was exactly
+features (`keyctl`, or bind mounts the mount hook doesn't attach). The 2026-07-12 CT 113 destruction was exactly
 that. `prevent_destroy = true` turns a destroy into a hard plan-time failure.
 Rule: guard every guest the token pipeline cannot rebuild; leave
 pipeline-recreatable guests unguarded so ordinary replacements still work.
@@ -230,9 +235,43 @@ pipeline-recreatable guests unguarded so ordinary replacements still work.
 | backup jobs | `backup-jobs.tf` | yes | Pre-existing |
 | lunaria CT 118 | `container.lunaria` | no | Pipeline-recreatable: token-created, no keyctl/bind mount |
 | gha-runner CT 115 | `container.gha_runner` | no | Pipeline-recreatable: token-created, no keyctl/bind mount. Note it runs this pipeline, so a self-replace mid-apply would need manual recovery |
+| pe-publish CT 123 | `container.pe_publish` | no | Pipeline-recreatable: token-created, bind mounts re-attached by the mount hook (§ below) |
 
 Intentionally replacing a guarded guest means removing the guard in a
 dedicated PR first (and, for import-only guests, pre-creating as root@pam).
+
+## Bind mounts — the mount hook
+
+PVE lets only root@pam set a bind mount point (`mount point type bind is only
+allowed for root@pam`; directory mappings cover VM virtiofs, not containers),
+so a `mount_point` block on a token-created guest fails the apply with HTTP 403.
+Imported guests (pub CT 114, the claytonia workers) keep theirs from a manual
+`pct set` and ignore `mount_point`; rebuilt, they would come back without it.
+
+The mount hook (#190) closes that for any mount on its allowlist:
+
+1. The guest resource declares **no** `mount_point` and carries `mount_point`
+   in `ignore_changes`. Its mounts live in a locals map,
+   `mpN => "<host path>,mp=<ct path>[,ro=1]"` (PVE's canonical form, as
+   `pct config` prints it).
+2. A `terraform_data` per mount runs [`mount-hook.sh`](mount-hook.sh) via
+   `local-exec`, with `replace_triggered_by` on the guest: whenever the guest is
+   created, replaced or updated, each mount is re-requested (a no-op when it's
+   already attached).
+3. `mount-hook.sh` SSHes to the node as `kalmia-mounts` with the key the apply
+   job writes from secret `PVE_MOUNT_HOOK_SSH_KEY`, pinning the node's host
+   key from [`pve-known-hosts`](pve-known-hosts). That user can only run
+   `kalmia-mount-attach`, which applies the mount only if the exact
+   `<vmid> <mpN> <spec>` is in the node's root-owned allowlist.
+
+The allowlist is the root-side approval. It lives in `roles/pve_host` and
+reaches the node only when an operator pushes `pve-host.yml`, so CI can
+re-attach approved mounts but never choose a host path. **Push the play before
+merging** a PR that adds a mount, or the merge's apply fails at the hook. Plan
+never runs provisioners, so PR plans neither need nor see the key. Host side,
+security envelope and key rotation: [`docs/pve-host.md` § Mount hook](../docs/pve-host.md#mount-hook).
+
+Worked example: `pe-publish.tf` (CT 123, three NAS mounts).
 
 ## Rails — non-`nesting` feature flags require root@pam pre-create
 

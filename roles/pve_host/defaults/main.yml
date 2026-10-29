@@ -10,3 +10,29 @@ pve_host_thin_autoextend_percent: 10
 # containers on its own). After guests-weekly (sun 03:00) and clear of the
 # HAOS 4-hourly slots.
 pve_host_lxc_fstrim_on_calendar: "*-*-* 04:30:00"
+
+# --- CI mount hook (#190, docs/pve-host.md § Mount hook) ---------------------
+# Nodes that get the hook: only those hosting a hook-mounted guest. Names are
+# the inventory names the play is pushed with (-i pve,pve2,pve3,pve4,pve5,).
+pve_host_mount_hook_nodes: [pve4]
+pve_host_mount_hook_user: kalmia-mounts
+# The only address the key is accepted from: LXC 115 gha-runner, where the
+# terraform apply job runs.
+pve_host_mount_hook_from: 192.168.139.15
+# Public half of repo secret PVE_MOUNT_HOOK_SSH_KEY. Rotate both together.
+pve_host_mount_hook_pubkey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHwka+aJSg5D7Jsl+/H0WOlopb0iwMV9yWNSiAjIyenp kalmia-ci-mount-hook"
+# Every bind mount the hook may apply. Each must equal, character for
+# character, a mount the terraform layer requests (terraform/pe-publish.tf);
+# anything else is refused. `spec` is PVE's canonical mpN string, as
+# `pct config` prints it.
+pve_host_mount_hook_allow:
+  # LXC 123 pe-publish: cpitzi/professional-endeavors publish runner.
+  - vmid: 123
+    key: mp0
+    spec: /mnt/neptune-lentago/web/wiki,mp=/srv/www/wiki
+  - vmid: 123
+    key: mp1
+    spec: /mnt/neptune-lentago/web/viewport/panes/search-map,mp=/srv/www/viewport/panes/search-map
+  - vmid: 123
+    key: mp2
+    spec: /mnt/neptune-lentago/web/viewport/panes/search-board,mp=/srv/www/viewport/panes/search-board

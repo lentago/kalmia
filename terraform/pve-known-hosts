@@ -1,0 +1,3 @@
+# pve4 SSH host key, pinned for the CI mount hook (mount-hook.sh, #190). Public;
+# re-pin from /etc/ssh/ssh_host_ed25519_key.pub if the node is ever rebuilt.
+192.168.139.210 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPrBEZxkio8op5ldOfiDIs+HyXQFX9n5JNo3mQmz8wkb

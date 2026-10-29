@@ -44,7 +44,7 @@ graph TB
     end
 
     FORGE["forge/ — substrate.sh\nbuilds versioned LXC templates"]
-    ANSIBLE["Ansible — separate plane\nsite.yml / pub.yml / lunaria.yml\nidempotent roles provision inside each guest"]
+    ANSIBLE["Ansible — separate plane\nsite.yml / pub.yml / lunaria.yml / pe-publish.yml\nidempotent roles provision inside each guest"]
 
     PR --> VALIDATE
     VALIDATE -->|"same-repo PRs only — fork PRs\nnever reach the LAN runner"| PLAN
@@ -289,9 +289,15 @@ ffmpeg → mediamtx HLS for the play-room Roku. Credential-free by design; the
 guest itself is defined in `terraform/containers.tf`.
 
 The third targets the hypervisors themselves: `pve-host.yml` + the `pve_host`
-role set lvmthin autoextend and a nightly LXC fstrim on every Proxmox node.
-Unlike the others it is pushed over SSH, since PVE nodes carry no Ansible —
-see [`docs/pve-host.md`](docs/pve-host.md).
+role set lvmthin autoextend and a nightly LXC fstrim on every Proxmox node,
+and install the mount hook that lets the Terraform pipeline attach allowlisted
+bind mounts (#190). Unlike the others it is pushed over SSH, since PVE nodes
+carry no Ansible — see [`docs/pve-host.md`](docs/pve-host.md).
+
+The fourth: `pe-publish.yml` + the `pe_publish` role provision LXC 123, the
+self-hosted Actions runner that publishes `cpitzi/professional-endeavors` to
+pub.lan on every merge, the first guest to get its NAS bind mounts from the
+pipeline — see [`docs/pe-publish.md`](docs/pe-publish.md).
 
 The Terraform layer that declares these guests carries its own naming-debt
 footnote: kalmia's state backend migrated to `solidago-tfstate-*` keys

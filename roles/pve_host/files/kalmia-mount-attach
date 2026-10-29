@@ -1,0 +1,41 @@
+#!/bin/bash
+# ============================================================================
+# kalmia-mount-attach — the only command the CI mount-hook key can run (#190).
+# Bind mount points are root@pam-only, so the terraform API token cannot set
+# them; CI apply asks this wrapper instead, over SSH as kalmia-mounts, which
+# may sudo exactly this file and nothing else. See docs/pve-host.md.
+#
+# Request (one argument): "attach <vmid> <mpN> <spec>". It is applied only
+# when "<vmid> <mpN> <spec>" is a whole line of the root-owned allowlist, so
+# CI can re-attach approved mounts to a rebuilt guest but can never choose a
+# host path. Re-sending an attached mount is a no-op.
+# ============================================================================
+set -euo pipefail
+
+ALLOW=/etc/kalmia/mount-hook.allow
+req="${1:-}"
+
+deny() {
+    logger -t kalmia-mount-attach "denied ($1): ${req@Q}"
+    echo "kalmia-mount-attach: $1" >&2
+    exit 1
+}
+
+[[ $req =~ ^attach\ ([0-9]+)\ (mp[0-9]+)\ ([^[:space:]]+)$ ]] || deny "malformed request"
+vmid=${BASH_REMATCH[1]}
+key=${BASH_REMATCH[2]}
+spec=${BASH_REMATCH[3]}
+
+grep -qxF -- "$vmid $key $spec" "$ALLOW" || deny "not in $ALLOW"
+
+current=$(pct config "$vmid" | sed -n "s/^$key: //p")
+if [[ $current == "$spec" ]]; then
+    echo "$vmid $key: unchanged"
+    exit 0
+fi
+
+# Hotplugs into a running container; a changed (not new) mount on a running
+# container stays pending until its next restart.
+pct set "$vmid" "-$key" "$spec"
+logger -t kalmia-mount-attach "attached: $vmid $key $spec"
+echo "$vmid $key: attached"

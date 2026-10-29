@@ -1,4 +1,4 @@
-# Proxmox VE node storage safety
+# Proxmox VE node substrate — storage safety and the mount hook
 
 Every guest disk lives on its node's `local-lvm` thin pool, on a single SSD.
 Guests are provisioned well past pool size on pve4 and pve5 (123% and 157% at
@@ -45,3 +45,38 @@ pvesm set local --content import,backup,vztmpl,snippets,iso
 All five VMs set `agent { enabled = true }` and their images carry
 `qemu-guest-agent` (HAOS ships it). LXCs have no agent; PVE reaches them
 directly with `pct exec`.
+
+## Mount hook
+
+Bind mount points are root@pam-only (PVE rejects any non-volume `mpN` from an
+API token), so the token-driven Terraform pipeline cannot give a guest a NAS
+bind mount on its own. The mount hook lets it, without handing CI root (#190).
+On each node in `pve_host_mount_hook_nodes` (pve4 today) the `pve_host` role
+installs:
+
+| Piece | What it allows |
+|---|---|
+| `kalmia-mounts` user, `/var/lib/kalmia-mounts/.ssh/authorized_keys` | One key, the public half of kalmia's `PVE_MOUNT_HOOK_SSH_KEY` secret: `restrict`, accepted only `from=` LXC 115 (the apply runner), forced command |
+| `/etc/sudoers.d/kalmia-mount-hook` | That user may sudo `/usr/local/sbin/kalmia-mount-attach` and nothing else |
+| `/usr/local/sbin/kalmia-mount-attach` | Takes `attach <vmid> <mpN> <spec>` and runs `pct set` only when that exact triple is a line of the allowlist; a no-op if already attached |
+| `/etc/kalmia/mount-hook.allow` | The allowlist, from `pve_host_mount_hook_allow` in `roles/pve_host/defaults/main.yml` |
+
+So a leaked key can re-attach approved mounts to their approved guests and do
+nothing else. It is strictly weaker than the API token CI already holds.
+Every refusal is logged (`journalctl -t kalmia-mount-attach`).
+
+**Adding a mount:** add it to `pve_host_mount_hook_allow` *and* to the
+guest's mount map in `terraform/`, character for character, in one PR. Push
+this play to the node **before merging**: the merge's apply calls the hook,
+and a mount missing from the node's allowlist fails the apply. Pushing the
+play is the root approval step. CI can never widen the allowlist itself.
+
+```bash
+ansible-playbook -i pve4, -u root pve-host.yml --check --diff
+ansible-playbook -i pve4, -u root pve-host.yml
+```
+
+**Rotating the key:** `ssh-keygen -t ed25519 -N '' -C kalmia-ci-mount-hook`,
+set the private half as repo secret `PVE_MOUNT_HOOK_SSH_KEY`, put the public
+half in `pve_host_mount_hook_pubkey`, push the play, then shred the local
+private key.

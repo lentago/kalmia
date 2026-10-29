@@ -1,0 +1,72 @@
+---
+# ============================================================================
+# The CI mount hook (#190): a node-local kalmia-mounts user whose one SSH key
+# (from the LAN runner only, forced command) may sudo kalmia-mount-attach,
+# which applies a bind mount only if it is a line of the allowlist below.
+# Lets the token-driven terraform pipeline rebuild a guest WITH its
+# root@pam-only bind mounts. See docs/pve-host.md § Mount hook.
+# ============================================================================
+- name: Install sudo for the mount hook
+  ansible.builtin.apt:
+    name: sudo
+    state: present
+
+- name: Create the mount-hook user
+  ansible.builtin.user:
+    name: "{{ pve_host_mount_hook_user }}"
+    system: true
+    home: "/var/lib/{{ pve_host_mount_hook_user }}"
+    create_home: true
+    # The forced command runs through the login shell, so it can't be nologin.
+    shell: /bin/sh
+    password: "!"
+
+- name: Ensure the mount-hook .ssh directory exists
+  ansible.builtin.file:
+    path: "/var/lib/{{ pve_host_mount_hook_user }}/.ssh"
+    state: directory
+    owner: "{{ pve_host_mount_hook_user }}"
+    group: "{{ pve_host_mount_hook_user }}"
+    mode: "0700"
+
+# Exclusive: this file only ever holds the one restricted CI key.
+- name: Install the restricted CI key
+  ansible.builtin.template:
+    src: mount-hook.authorized_keys.j2
+    dest: "/var/lib/{{ pve_host_mount_hook_user }}/.ssh/authorized_keys"
+    owner: "{{ pve_host_mount_hook_user }}"
+    group: "{{ pve_host_mount_hook_user }}"
+    mode: "0600"
+
+- name: Deploy the kalmia-mount-attach wrapper
+  ansible.builtin.copy:
+    src: kalmia-mount-attach
+    dest: /usr/local/sbin/kalmia-mount-attach
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Allow the mount-hook user to sudo the wrapper only
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/kalmia-mount-hook
+    content: "{{ pve_host_mount_hook_user }} ALL=(root) NOPASSWD: /usr/local/sbin/kalmia-mount-attach\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: visudo -cf %s
+
+- name: Ensure /etc/kalmia exists
+  ansible.builtin.file:
+    path: /etc/kalmia
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write the mount-hook allowlist
+  ansible.builtin.template:
+    src: mount-hook.allow.j2
+    dest: /etc/kalmia/mount-hook.allow
+    owner: root
+    group: root
+    mode: "0644"
