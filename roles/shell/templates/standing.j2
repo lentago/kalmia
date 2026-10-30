@@ -21,7 +21,8 @@
 #                                  idempotent: running panes are left alone, dead ones
 #                                  respawned; opens a terminal for each window lacking one
 #   standing up --director NAME    tell each EM which session is its Director (NAME from
-#                                  the "This session is …" line of ListAgents)
+#                                  the "This session is …" line of ListAgents); remembered
+#                                  for later up/restart calls — `--no-director` forgets it
 #   standing up --no-open ...      don't open terminal windows
 #   standing up --no-prompt ...    start claude at an empty prompt (no kickoff turn)
 #   standing up --prompt 'text'    custom kickoff prompt
@@ -197,16 +198,18 @@ resolve_repos() {
 # The Director's session name is remembered on the base tmux session so later
 # `up`/`restart` calls without --director keep pointing the EMs at it.
 remember_director() { has_session && tmux set-option -t "$TMUX_SESSION:" @director "$1" 2>/dev/null || true; }
+forget_director()   { has_session && tmux set-option -qu -t "$TMUX_SESSION:" @director 2>/dev/null || true; }
 recall_director()   { has_session && tmux show-options -qv -t "$TMUX_SESSION:" @director 2>/dev/null || true; }
 
 # Flags shared by `up` and `restart`: sets PROMPT, USE_PROMPT, OPEN, DIRECTOR,
 # SEL (repo names) and EXTRA (args after --). DIRECTOR falls back to the
 # remembered one; call remember_director after the session exists.
 parse_launch_flags() {
-    PROMPT="$KICKOFF_DEFAULT"; USE_PROMPT=1; OPEN=1; DIRECTOR=""; SEL=(); EXTRA=()
+    PROMPT="$KICKOFF_DEFAULT"; USE_PROMPT=1; OPEN=1; DIRECTOR=""; NO_DIRECTOR=0; SEL=(); EXTRA=()
     while (( $# )); do
         case "$1" in
             --no-prompt)  USE_PROMPT=0; shift ;;
+            --no-director) NO_DIRECTOR=1; shift ;;
             --no-open)    OPEN=0; shift ;;
             --director)   [[ $# -ge 2 ]] || die "--director needs a session name"; DIRECTOR=$2; shift 2 ;;
             --director=*) DIRECTOR=${1#--director=}; shift ;;
@@ -216,7 +219,11 @@ parse_launch_flags() {
             *)            SEL+=("$1"); shift ;;
         esac
     done
-    [[ -n "$DIRECTOR" ]] || DIRECTOR=$(recall_director)
+    if (( NO_DIRECTOR )); then
+        DIRECTOR=""
+    elif [[ -z "$DIRECTOR" ]]; then
+        DIRECTOR=$(recall_director)
+    fi
     local dsent=""
     [[ -n "$DIRECTOR" ]] && dsent=${DIRECTOR_SENTENCE//%NAME%/$DIRECTOR}
     PROMPT=${PROMPT//%DIRECTOR%/$dsent}
@@ -368,7 +375,7 @@ cmd_up() {
         fi
         apply_options
     done
-    [[ -n "$DIRECTOR" ]] && remember_director "$DIRECTOR"
+    if (( NO_DIRECTOR )); then forget_director; elif [[ -n "$DIRECTOR" ]]; then remember_director "$DIRECTOR"; fi
     say ""
     say "Up: $started started, $respawned respawned, $kept already running, $(std_windows | wc -l) window(s)${DIRECTOR:+, Director $DIRECTOR}"
     if (( OPEN )) && have_display; then
@@ -376,7 +383,9 @@ cmd_up() {
     else
         local w lacking=0
         for w in $(std_windows); do (( $(clients_of "$(view_for "$w")") == 0 )) && lacking=$((lacking + 1)); done
-        (( lacking )) && say "$lacking window(s) without a terminal: 'standing open' or 'standing attach' to look in"
+        if (( lacking )); then
+            say "$lacking window(s) without a terminal: 'standing open' or 'standing attach' to look in"
+        fi
     fi
 }
 
@@ -405,7 +414,7 @@ cmd_restart() {
         n=$((n + 1))
     done
     apply_options
-    [[ -n "$DIRECTOR" ]] && remember_director "$DIRECTOR"
+    if (( NO_DIRECTOR )); then forget_director; elif [[ -n "$DIRECTOR" ]]; then remember_director "$DIRECTOR"; fi
     say ""
     say "Restarted $n pane(s) in place as fresh sessions${DIRECTOR:+, Director $DIRECTOR}"
 }
