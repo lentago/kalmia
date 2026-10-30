@@ -9,7 +9,7 @@ down with it. Three layers keep that from happening:
 |---|---|---|
 | Autoextend | `pve-host.yml` → `pve_host` role | dmeventd grows `pve/data` by 10% at 80% full, from the VG's ~16 GiB free |
 | Trim | `pve_host` role | `pve-lxc-fstrim.timer` runs `pct fstrim` on every running CT nightly at 04:30; VMs use `discard = "on"` (Terraform) plus the guest's own `fstrim.timer` |
-| Alert | homelab-observability | `lvm_thin_pool_*_percent` textfile metrics and the thin pool and root filesystem rules in its "On-prem availability" alert group |
+| Alert | [drosera](https://github.com/lentago/drosera) | `lvm_thin_pool_*_percent` textfile metrics and the thin pool and root filesystem rules in its "On-prem availability" alert group |
 
 ## Apply
 
