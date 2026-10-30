@@ -58,7 +58,7 @@ jobs:
       review_prompt: |
         This repository is lentago/kalmia, the Lentago Labs provisioning system
         for workstations, VMs and containers. Ansible (repo root: roles,
-        profiles, the site/pub/lunaria/pe-publish/pve-host playbooks,
+        profiles, the site/pub/brasenia/pe-publish/pve-host playbooks,
         bootstrap.sh) owns what is inside a machine's OS; Terraform
         (`terraform/`, bpg/proxmox) owns Proxmox guest existence and shape and
         is applied from CI on merge. Focus your review on:
@@ -74,7 +74,7 @@ jobs:
           not hard-coded in a role, and a change to one of the five profiles
           (crostini, baguette, xubuntu, fedora, ubuntu_laptop) should be
           reflected in the others, adapted per package manager. Server
-          playbooks (pub, lunaria, pe-publish) stay standalone rather than
+          playbooks (pub, brasenia, pe-publish) stay standalone rather than
           becoming desktop profiles.
         - **Terraform live-apply safety**: a merge to `main` applies
           `terraform/**` to the real cluster. Flag anything that would destroy
