@@ -27,9 +27,11 @@
 #   standing up --prompt 'text'    custom kickoff prompt
 #   standing up kalmia -- --model opus   anything after `--` is passed to claude
 #   standing restart [repo ...] [same flags as up]
-#                                  /exit each pane and respawn it in place with the current
-#                                  settings (new model, prompt, director) — windows and their
-#                                  terminals stay put
+#                                  /exit each pane and start a FRESH session in it (new model,
+#                                  prompt, director); the EM's conversation and any in-flight
+#                                  work are gone. Windows and terminals stay put. The Director
+#                                  from the last --director is remembered on the tmux session,
+#                                  so a bare `standing restart` keeps it.
 #   standing down [repo ...]       send /exit, wait, then kill the pane(s);
 #                                  with no repos: everything, then the tmux sessions
 #   standing status                per window: repo, state, pid, size, session name
@@ -192,8 +194,14 @@ resolve_repos() {
     done
 }
 
+# The Director's session name is remembered on the base tmux session so later
+# `up`/`restart` calls without --director keep pointing the EMs at it.
+remember_director() { has_session && tmux set-option -t "$TMUX_SESSION:" @director "$1" 2>/dev/null || true; }
+recall_director()   { has_session && tmux show-options -qv -t "$TMUX_SESSION:" @director 2>/dev/null || true; }
+
 # Flags shared by `up` and `restart`: sets PROMPT, USE_PROMPT, OPEN, DIRECTOR,
-# SEL (repo names) and EXTRA (args after --).
+# SEL (repo names) and EXTRA (args after --). DIRECTOR falls back to the
+# remembered one; call remember_director after the session exists.
 parse_launch_flags() {
     PROMPT="$KICKOFF_DEFAULT"; USE_PROMPT=1; OPEN=1; DIRECTOR=""; SEL=(); EXTRA=()
     while (( $# )); do
@@ -208,6 +216,7 @@ parse_launch_flags() {
             *)            SEL+=("$1"); shift ;;
         esac
     done
+    [[ -n "$DIRECTOR" ]] || DIRECTOR=$(recall_director)
     local dsent=""
     [[ -n "$DIRECTOR" ]] && dsent=${DIRECTOR_SENTENCE//%NAME%/$DIRECTOR}
     PROMPT=${PROMPT//%DIRECTOR%/$dsent}
@@ -359,12 +368,15 @@ cmd_up() {
         fi
         apply_options
     done
+    [[ -n "$DIRECTOR" ]] && remember_director "$DIRECTOR"
     say ""
-    say "Up: $started started, $respawned respawned, $kept already running, $(std_windows | wc -l) window(s)"
+    say "Up: $started started, $respawned respawned, $kept already running, $(std_windows | wc -l) window(s)${DIRECTOR:+, Director $DIRECTOR}"
     if (( OPEN )) && have_display; then
         cmd_open
     else
-        say "Windows without a terminal: 'standing open' or 'standing attach' to look in"
+        local w lacking=0
+        for w in $(std_windows); do (( $(clients_of "$(view_for "$w")") == 0 )) && lacking=$((lacking + 1)); done
+        (( lacking )) && say "$lacking window(s) without a terminal: 'standing open' or 'standing attach' to look in"
     fi
 }
 
@@ -393,8 +405,9 @@ cmd_restart() {
         n=$((n + 1))
     done
     apply_options
+    [[ -n "$DIRECTOR" ]] && remember_director "$DIRECTOR"
     say ""
-    say "Restarted $n pane(s) in place"
+    say "Restarted $n pane(s) in place as fresh sessions${DIRECTOR:+, Director $DIRECTOR}"
 }
 
 cmd_status() {
@@ -553,7 +566,12 @@ cmd_trust() {
         trust_cursor_on_yes "$id" || { tmux send-keys -t "$id" Down; sleep 0.6; }
         if trust_cursor_on_yes "$id"; then
             tmux send-keys -t "$id" Enter
-            sleep 0.6
+            # Give the dialog up to 5 s to go away before calling it a failure.
+            for (( a = 0; a < 10; a++ )); do
+                sleep 0.5
+                pane_dead "$id" && break
+                at_trust_prompt "$id" || break
+            done
             if pane_dead "$id"; then
                 warn "$repo ($w): claude exited instead of accepting — 'standing up' respawns it"
             elif at_trust_prompt "$id"; then
