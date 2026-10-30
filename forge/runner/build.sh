@@ -26,7 +26,8 @@ VERIFY=0; [ "${2:-}" = "--verify" ] && VERIFY=1
 CLAYTONIA_URL="${CLAYTONIA_URL:-https://github.com/lentago/claytonia.git}"
 CLAYTONIA_REF="${CLAYTONIA_REF:-main}"
 BASE_TEMPLATE="${BASE_TEMPLATE:-local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst}"
-# No defaults: the old ones (119, 118) are k3s-1 and brasenia now (claytonia#65).
+# No default: a hardcoded VMID eventually collides with a live guest (the old
+# 119/118 defaults did, claytonia#65). Pick one free across the cluster.
 BUILD_VMID="${BUILD_VMID:?set BUILD_VMID to a VMID free across the cluster (the throwaway build CT)}"
 BUILD_STORAGE="${BUILD_STORAGE:-local-lvm}"   # throwaway rootfs
 DISK_GB="${DISK_GB:-12}"
@@ -41,7 +42,14 @@ SUBSTRATE="${SUBSTRATE:-$HERE/substrate.sh}"
 say(){ echo "=== $* ==="; }
 # Cluster-wide: `pct status` sees only this node, so a VMID in use on another
 # node used to pass. `nextid --vmid` is the same check `pct create` applies.
-vmid_free(){ pvesh get /cluster/nextid --vmid "$1" >/dev/null 2>&1; }
+# Returns 1 only for "already exists"; any other failure (no quorum, no
+# permission) stops the build with pvesh's own message.
+vmid_free(){
+  local out
+  out="$(pvesh get /cluster/nextid --vmid "$1" 2>&1)" && return 0
+  case "$out" in *"already exists"*) return 1 ;; esac
+  echo "cannot check VMID $1 cluster-wide: $out" >&2; exit 1
+}
 [ -f "$SUBSTRATE" ] || { echo "missing substrate: $SUBSTRATE" >&2; exit 1; }
 [ -d "$OUT_CACHE" ] || { echo "vztmpl cache not found: $OUT_CACHE (is $OUT_STORAGE mounted?)" >&2; exit 1; }
 [ -e "$OUT" ] && { echo "refusing to overwrite existing $OUT (bump the version)" >&2; exit 1; }
@@ -52,11 +60,20 @@ if [ "$VERIFY" = 1 ]; then
   vmid_free "$VERIFY_VMID" || { echo "verify vmid $VERIFY_VMID is in use somewhere in the cluster" >&2; exit 1; }
 fi
 
-BUILT=0
-cleanup(){ # destroy the throwaway on any exit path, but only one this run created
-  [ "$BUILT" = 1 ] || return 0
-  pct unmount "$BUILD_VMID" >/dev/null 2>&1 || true
-  pct status  "$BUILD_VMID" >/dev/null 2>&1 && pct destroy "$BUILD_VMID" --force >/dev/null 2>&1 || true
+# Destroy this run's containers on any exit path, and nothing else: only once
+# this run has tried to create one, and only if it carries this run's hostname,
+# so a create that half-failed is cleaned up and a guest that took the VMID in
+# between is not.
+BUILT=0; VERIFYING=0
+ours(){ pct config "$1" 2>/dev/null | grep -qx "hostname: $2"; }
+cleanup(){
+  if [ "$BUILT" = 1 ] && ours "$BUILD_VMID" claytonia-forge-build; then
+    pct unmount "$BUILD_VMID" >/dev/null 2>&1 || true
+    pct destroy "$BUILD_VMID" --force >/dev/null 2>&1 || true
+  fi
+  if [ "$VERIFYING" = 1 ] && ours "$VERIFY_VMID" forge-verify; then
+    pct destroy "$VERIFY_VMID" --force >/dev/null 2>&1 || true
+  fi
 }
 trap cleanup EXIT
 
@@ -65,6 +82,7 @@ trap cleanup EXIT
 # template), so `pct create --unprivileged` re-maps it correctly. It is
 # destroyed at the end regardless.
 say "create build CT $BUILD_VMID (privileged, transient)"
+BUILT=1
 pct create "$BUILD_VMID" "$BASE_TEMPLATE" \
   --hostname claytonia-forge-build \
   --cores 2 --memory 2048 --swap 512 \
@@ -72,7 +90,6 @@ pct create "$BUILD_VMID" "$BASE_TEMPLATE" \
   --net0 name=eth0,bridge=vmbr0,ip=dhcp \
   --nameserver 192.168.139.1 --searchdomain local \
   --unprivileged 0 --start 1 >/dev/null
-BUILT=1
 
 say "wait for network egress"
 for i in $(seq 1 30); do
@@ -172,6 +189,7 @@ if [ "$VERIFY" = 1 ]; then
   if ! vmid_free "$VID"; then
     echo "verify vmid $VID was taken during the build — skipping verify" >&2
   else
+    VERIFYING=1
     pct create "$VID" "${OUT_STORAGE}:vztmpl/${NAME}.tar.zst" \
       --hostname forge-verify --cores 1 --memory 512 \
       --rootfs "${BUILD_STORAGE}:8" --net0 name=eth0,bridge=vmbr0,ip=dhcp \

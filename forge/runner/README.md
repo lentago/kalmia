@@ -57,10 +57,12 @@ BUILD_VMID=N VERIFY_VMID=M ./build.sh v2 --verify   # + instantiate and smoke-te
 ```
 
 `BUILD_VMID` (the throwaway build container) and, with `--verify`,
-`VERIFY_VMID` are required, with no defaults: the old defaults, 119 and 118,
-are k3s-1 and brasenia now. The build refuses a VMID that any node in the
-cluster already uses (`pvesh get /cluster/nextid --vmid`, the check `pct
-create` applies), and its cleanup destroys only a container it created.
+`VERIFY_VMID` are required, with no defaults: a hardcoded VMID eventually
+collides with a live guest (the old 119/118 defaults did, claytonia#65). The
+build refuses a VMID that any node in the cluster already uses (`pvesh get
+/cluster/nextid --vmid`, the check `pct create` applies), and stops with
+pvesh's message if the check itself fails. Its cleanup destroys only a
+container this run created, recognised by its hostname.
 
 Other tunables are environment variables (see the header of `build.sh`):
 `CLAYTONIA_REF`, `BASE_TEMPLATE`, `OUT_STORAGE`/`OUT_CACHE`, `RETAIN`
