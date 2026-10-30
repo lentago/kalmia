@@ -81,16 +81,21 @@ lives only there). **LXC 118 is credential-free**: its inputs are
 - **The fallbacks:** on `fallback: "status"` it shows the status card. On
   `fallback: "briefing"`, or a 404 (no compositor), it shows the briefing slot
   (`brasenia_briefing_url`, the Family Brief, lentago/brasenia#76).
-- **Pages:** each page stays up `brasenia_page_dwell` seconds before the next.
-  When the pointer is unreadable, the current pages keep going, and the journal
+- **Bands:** each band (one 16:9 screenful of a pane) stays up
+  `brasenia_band_dwell` seconds before the next. When the pointer is unreadable,
+  the current bands keep going, and the journal
   gets one line after 30 s and one when it is readable again.
 - **A pin:** `brasenia_pin_url` pins the screen to one page instead.
 
-**Pages.** Pane-contract pages are laid out at 1280×720 CSS pixels and
-rendered at `brasenia_scale` (3: 3840×2160), one page per 720 px band with
-content, up to 4. Link panes (lentago/brasenia ADR-0016) are laid out at their
-`source.viewport`, with `prefers-color-scheme` set to `source.theme`. Their
-first `source.screens` bands are each fitted onto a page.
+**Bands.** Pane-contract pages are laid out at 1280×720 CSS pixels and
+rendered at `brasenia_scale` (3: 3840×2160), one band per 720 px with content,
+up to 4. A page that declares `<meta name="brasenia-canvas" content="1920x1080">`
+(lentago/brasenia ADR-0019) is laid out at 1920×1080 per band instead, at 2×,
+so its bands are the same 3840×2160. Producers move to that canvas one at a
+time; a page without the tag renders as before. Link panes (lentago/brasenia
+ADR-0016) are laid out at their `source.viewport`, with `prefers-color-scheme`
+set to `source.theme`. Their first `source.screens` bands are each fitted onto
+a full-size band.
 
 **Which sites.** The gate stops anyone on the LAN who can add a link pane
 from pointing the wall at an arbitrary URL. Sites in `brasenia_allowed_sites`
