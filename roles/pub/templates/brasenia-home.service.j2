@@ -16,8 +16,7 @@ Environment=PYTHONDONTWRITEBYTECODE=1
 # The token reaches this unit alone, as $CREDENTIALS_DIRECTORY/ha-token.
 LoadCredential=ha-token:{{ pub_viewport_home_token_file }}
 WorkingDirectory={{ pub_brasenia_checkout }}/producers/home
-ExecStart=/usr/bin/python3 -m home_producer --webroot {{ pub_viewport_webroot }} --ha-url {{ pub_viewport_home_ha_url }} --interval {{ pub_viewport_home_interval }}{% for entity in pub_viewport_home_hide %} --hide {{ entity }}{% endfor %}
-
+ExecStart=/usr/bin/python3 -m home_producer --webroot {{ pub_viewport_webroot }} --ha-url {{ pub_viewport_home_ha_url }} --interval {{ pub_viewport_home_interval }}{{ pub_viewport_home_hide | map('regex_replace', '^', ' --hide ') | join('') }}
 Restart=always
 RestartSec=10
 
