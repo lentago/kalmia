@@ -28,7 +28,7 @@ apt-get update -qq
 # host-key regen even without recommends.
 apt-get install -y -qq --no-install-recommends \
   curl ca-certificates git jq ripgrep inotify-tools sudo python3 less \
-  openssh-server openssh-client tini cron >/dev/null
+  openssh-server openssh-client tini cron rsync shellcheck >/dev/null
 echo "PKGS_OK"
 
 echo ">>> [substrate] claude service user + sudoers"

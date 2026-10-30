@@ -27,8 +27,9 @@ storage `neptune`, LAN-wide).
 **Software** — claytonia's, installed by its own `gitops/install.sh` and enabled,
 not copied here:
 
-- `/opt/bullpen` — a claytonia checkout + `bullpen-gitops.timer` (pulls `main`,
-  redeploys on drift every 5 min).
+- `/opt/claytonia` — a claytonia checkout + `claytonia-gitops.timer` (pulls
+  `main`, redeploys on drift every 5 min). Before v2 the checkout was
+  `/opt/bullpen` and the loop `bullpen-gitops` (claytonia#65).
 - The runner (`bin/`, the `claude-inbox`/`claude-heartbeat` pollers, cron,
   `runner.env`) force-deployed once so the image is runner-ready before its
   first poll. A booted worker converges to claytonia `main` regardless — the
@@ -51,13 +52,21 @@ Run **as root on a PVE node** (the Proxmox API + `pct` are LAN-only). From a
 kalmia checkout on the node, or by copying `forge/runner/` over:
 
 ```bash
-./build.sh v1              # claytonia-runner-v1 from claytonia@main
-./build.sh v1 --verify     # + instantiate and smoke-test the result
+BUILD_VMID=N ./build.sh v2                          # claytonia-runner-v2 from claytonia@main
+BUILD_VMID=N VERIFY_VMID=M ./build.sh v2 --verify   # + instantiate and smoke-test the result
 ```
 
-Tunables are environment variables (see the header of `build.sh`):
-`CLAYTONIA_REF`, `BASE_TEMPLATE`, `BUILD_VMID` (throwaway, default 119),
-`OUT_STORAGE`/`OUT_CACHE`, `RETAIN` (default 3). The build is idempotent-safe: it
+`BUILD_VMID` (the throwaway build container) and, with `--verify`,
+`VERIFY_VMID` are required, with no defaults: a hardcoded VMID eventually
+collides with a live guest (the old 119/118 defaults did, claytonia#65). The
+build refuses a VMID that any node in the cluster already uses (`pvesh get
+/cluster/nextid --vmid`, the check `pct create` applies), and stops with
+pvesh's message if the check itself fails. Its cleanup destroys only a
+container this run created, recognised by its hostname.
+
+Other tunables are environment variables (see the header of `build.sh`):
+`CLAYTONIA_REF`, `BASE_TEMPLATE`, `OUT_STORAGE`/`OUT_CACHE`, `RETAIN`
+(default 3). The build is idempotent-safe: it
 refuses to overwrite an existing version, cleans up its throwaway container on
 any exit, and writes the template atomically (`.partial` → rename) with a
 `.sha256` sidecar.

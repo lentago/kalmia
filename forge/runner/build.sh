@@ -2,9 +2,11 @@
 # build.sh — forge a versioned claytonia (bullpen) runner LXC template and
 # publish it to a Proxmox vztmpl storage. Run as root ON A PVE NODE.
 #
-#   ./build.sh v1                       # build claytonia-runner-v1 from claytonia@main
-#   CLAYTONIA_REF=abc123 ./build.sh v2  # pin the software layer to a commit
-#   ./build.sh v1 --verify              # also instantiate + smoke-test the result
+#   BUILD_VMID=N ./build.sh v2                          # build claytonia-runner-v2 from claytonia@main
+#   BUILD_VMID=N VERIFY_VMID=M ./build.sh v2 --verify   # also instantiate + smoke-test the result
+#
+# BUILD_VMID (and VERIFY_VMID for --verify) have no default: pick VMIDs free
+# across the whole cluster. The build refuses one that any node already uses.
 #
 # It is a "script + pct capture" builder (see forge/README.md § Tooling): the
 # portable recipe is substrate.sh + claytonia's own gitops/install.sh; only this
@@ -24,7 +26,9 @@ VERIFY=0; [ "${2:-}" = "--verify" ] && VERIFY=1
 CLAYTONIA_URL="${CLAYTONIA_URL:-https://github.com/lentago/claytonia.git}"
 CLAYTONIA_REF="${CLAYTONIA_REF:-main}"
 BASE_TEMPLATE="${BASE_TEMPLATE:-local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst}"
-BUILD_VMID="${BUILD_VMID:-119}"
+# No default: a hardcoded VMID eventually collides with a live guest (the old
+# 119/118 defaults did, claytonia#65). Pick one free across the cluster.
+BUILD_VMID="${BUILD_VMID:?set BUILD_VMID to a VMID free across the cluster (the throwaway build CT)}"
 BUILD_STORAGE="${BUILD_STORAGE:-local-lvm}"   # throwaway rootfs
 DISK_GB="${DISK_GB:-12}"
 OUT_STORAGE="${OUT_STORAGE:-neptune}"         # publish target (must allow vztmpl)
@@ -36,14 +40,40 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 SUBSTRATE="${SUBSTRATE:-$HERE/substrate.sh}"
 
 say(){ echo "=== $* ==="; }
+# Cluster-wide: `pct status` sees only this node, so a VMID in use on another
+# node used to pass. `nextid --vmid` is the same check `pct create` applies.
+# Returns 1 only for "already exists"; any other failure (no quorum, no
+# permission) stops the build with pvesh's own message.
+vmid_free(){
+  local out
+  out="$(pvesh get /cluster/nextid --vmid "$1" 2>&1)" && return 0
+  case "$out" in *"already exists"*) return 1 ;; esac
+  echo "cannot check VMID $1 cluster-wide: $out" >&2; exit 1
+}
 [ -f "$SUBSTRATE" ] || { echo "missing substrate: $SUBSTRATE" >&2; exit 1; }
 [ -d "$OUT_CACHE" ] || { echo "vztmpl cache not found: $OUT_CACHE (is $OUT_STORAGE mounted?)" >&2; exit 1; }
 [ -e "$OUT" ] && { echo "refusing to overwrite existing $OUT (bump the version)" >&2; exit 1; }
-pct status "$BUILD_VMID" >/dev/null 2>&1 && { echo "build vmid $BUILD_VMID is in use" >&2; exit 1; }
+vmid_free "$BUILD_VMID" || { echo "build vmid $BUILD_VMID is in use somewhere in the cluster" >&2; exit 1; }
+if [ "$VERIFY" = 1 ]; then
+  VERIFY_VMID="${VERIFY_VMID:?--verify needs VERIFY_VMID, a VMID free across the cluster}"
+  [ "$VERIFY_VMID" != "$BUILD_VMID" ] || { echo "VERIFY_VMID must differ from BUILD_VMID" >&2; exit 1; }
+  vmid_free "$VERIFY_VMID" || { echo "verify vmid $VERIFY_VMID is in use somewhere in the cluster" >&2; exit 1; }
+fi
 
-cleanup(){ # destroy the throwaway on any exit path
-  pct unmount "$BUILD_VMID" >/dev/null 2>&1 || true
-  pct status  "$BUILD_VMID" >/dev/null 2>&1 && pct destroy "$BUILD_VMID" --force >/dev/null 2>&1 || true
+# Destroy this run's containers on any exit path, and nothing else: only once
+# this run has tried to create one, and only if it carries this run's hostname,
+# so a create that half-failed is cleaned up and a guest that took the VMID in
+# between is not.
+BUILT=0; VERIFYING=0
+ours(){ pct config "$1" 2>/dev/null | grep -qx "hostname: $2"; }
+cleanup(){
+  if [ "$BUILT" = 1 ] && ours "$BUILD_VMID" claytonia-forge-build; then
+    pct unmount "$BUILD_VMID" >/dev/null 2>&1 || true
+    pct destroy "$BUILD_VMID" --force >/dev/null 2>&1 || true
+  fi
+  if [ "$VERIFYING" = 1 ] && ours "$VERIFY_VMID" forge-verify; then
+    pct destroy "$VERIFY_VMID" --force >/dev/null 2>&1 || true
+  fi
 }
 trap cleanup EXIT
 
@@ -52,6 +82,7 @@ trap cleanup EXIT
 # template), so `pct create --unprivileged` re-maps it correctly. It is
 # destroyed at the end regardless.
 say "create build CT $BUILD_VMID (privileged, transient)"
+BUILT=1
 pct create "$BUILD_VMID" "$BASE_TEMPLATE" \
   --hostname claytonia-forge-build \
   --cores 2 --memory 2048 --swap 512 \
@@ -77,26 +108,26 @@ say "install claytonia software layer @ ${CLAYTONIA_REF}"
 pct exec "$BUILD_VMID" -- env \
   CLAYTONIA_URL="$CLAYTONIA_URL" CLAYTONIA_REF="$CLAYTONIA_REF" bash -s <<'SOFTWARE'
 set -euo pipefail
-REPO_DIR=/opt/bullpen
+REPO_DIR=/opt/claytonia
 git clone --quiet "$CLAYTONIA_URL" "$REPO_DIR"
 git -C "$REPO_DIR" checkout --quiet "$CLAYTONIA_REF"
-# claytonia's own bootstrap: installs + enables bullpen-gitops.timer.
-BULLPEN_REPO_DIR="$REPO_DIR" bash "$REPO_DIR/gitops/install.sh"
+# claytonia's own bootstrap: installs + enables claytonia-gitops.timer.
+CLAYTONIA_REPO_DIR="$REPO_DIR" bash "$REPO_DIR/gitops/install.sh"
 # Force the INITIAL deploy through claytonia's OWN gitops code path. On a real
 # worker provision/02–05 lay the runner down and gitops only handles later
-# updates; bullpen-gitops deploys on git *drift* and a fresh clone has none, so
-# it would no-op. Rewind one commit and let bullpen-gitops fast-forward back to
+# updates; claytonia-gitops deploys on git *drift* and a fresh clone has none, so
+# it would no-op. Rewind one commit and let claytonia-gitops fast-forward back to
 # origin/main, running its real deploy() — so the image ships the runner in
 # place (offline-ready) with zero duplication of the deploy mapping here.
 # (Requires REF on main; a detached pinned SHA fails the run-job guard below.)
 git -C "$REPO_DIR" reset --hard --quiet HEAD~1
-/usr/local/sbin/bullpen-gitops || true
+/usr/local/sbin/claytonia-gitops || true
 # Enable the pollers (gitops deploys the unit files but does not enable them;
 # claytonia provision 02/05 did — the forge takes that role now).
 systemctl enable claude-inbox.timer claude-heartbeat.timer >/dev/null 2>&1 || true
 # Sanity: the runner binary and the loop must be present + enabled.
 test -x /opt/claude-runner/bin/run-job
-systemctl is-enabled bullpen-gitops.timer claude-inbox.timer claude-heartbeat.timer
+systemctl is-enabled claytonia-gitops.timer claude-inbox.timer claude-heartbeat.timer
 echo SOFTWARE_DONE
 SOFTWARE
 
@@ -153,11 +184,12 @@ ls -1 "${OUT_CACHE}"/claytonia-runner-v*.tar.zst 2>/dev/null \
 # Verify runs AFTER publish, so a soft check (host-key regen timing) must not
 # fail the build; the verify CT is always torn down.
 if [ "$VERIFY" = 1 ]; then
-  VID="${VERIFY_VMID:-118}"
+  VID="$VERIFY_VMID"   # required and checked free at the start
   say "verify: instantiate $NAME as unprivileged CT $VID"
-  if pct status "$VID" >/dev/null 2>&1; then
-    echo "verify vmid $VID in use — skipping verify" >&2
+  if ! vmid_free "$VID"; then
+    echo "verify vmid $VID was taken during the build — skipping verify" >&2
   else
+    VERIFYING=1
     pct create "$VID" "${OUT_STORAGE}:vztmpl/${NAME}.tar.zst" \
       --hostname forge-verify --cores 1 --memory 512 \
       --rootfs "${BUILD_STORAGE}:8" --net0 name=eth0,bridge=vmbr0,ip=dhcp \
@@ -170,8 +202,12 @@ if [ "$VERIFY" = 1 ]; then
       su - claude -c "PATH=\$HOME/.local/bin:\$PATH claude --version" >/dev/null 2>&1 \
         && echo "OK   Claude Code" || { echo "ERR  Claude Code"; rc=1; }
       test -x /opt/claude-runner/bin/run-job && echo "OK   runner deployed" || { echo "ERR  runner missing"; rc=1; }
-      systemctl is-enabled bullpen-gitops.timer claude-inbox.timer claude-heartbeat.timer >/dev/null 2>&1 \
+      systemctl is-enabled claytonia-gitops.timer claude-inbox.timer claude-heartbeat.timer >/dev/null 2>&1 \
         && echo "OK   gitops + pollers enabled" || { echo "ERR  timers not enabled"; rc=1; }
+      [ "$(node -p "process.versions.node.split(\".\")[0]" 2>/dev/null)" = 22 ] \
+        && echo "OK   node 22" || { echo "ERR  node is not 22 ($(node --version 2>&1))"; rc=1; }
+      [ -d /opt/claytonia ] && [ ! -e /opt/bullpen ] \
+        && echo "OK   /opt/claytonia, no /opt/bullpen" || { echo "ERR  checkout path (want /opt/claytonia, no /opt/bullpen)"; rc=1; }
       grep -q "OAUTH_TOKEN=." /etc/claude-runner/token.env 2>/dev/null \
         && { echo "ERR  token BAKED (must be empty)"; rc=1; } || echo "OK   token placeholder empty"
       ls /etc/ssh/ssh_host_*_key >/dev/null 2>&1 \
