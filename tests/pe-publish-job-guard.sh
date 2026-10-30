@@ -50,23 +50,30 @@ render() {
 # A Runner.Listener whose worker runs the job.
 listener() {
     printf Runner.Listener > "/proc/$$/comm"
-    "$0" worker "$@"
-    exit $?
+    # wait's stderr is where the shell reports a worker the guard killed.
+    "$0" worker "$@" &
+    wait $! 2>/dev/null
 }
 
-# A worker named $2 runs the guard with the github context in ${@:3}, the
+# A worker named $3 runs the guard with the github context in ${@:4}, the
 # way the runner starts a hook, then a post step (an `if: always()` step):
-# a hook that only fails the job still lets that run. Like the real worker, a
-# SIGTERM cancels the running hook (SIGINT, SIGTERM, then SIGKILL) and ends
-# the job without running anything else.
+# a hook that only fails the job still lets that run. A cooperative worker
+# ($2) answers SIGTERM like the real one shutting down: it cancels the running
+# hook (SIGINT, SIGTERM, then SIGKILL) and ends the job without running
+# anything else. A stubborn one ignores SIGTERM, like a worker that isn't
+# shutting down.
 worker() {
-    local work=$1 name=$2
-    shift 2
+    local work=$1 mode=$2 name=$3
+    shift 3
     printf %s "$name" > "/proc/$$/comm"
-    trap 'touch "$work/worker-term"
-          kill -INT "$hook" 2>/dev/null; sleep 0.2
-          kill -TERM "$hook" 2>/dev/null; sleep 0.2
-          kill -KILL "$hook" 2>/dev/null; exit 143' TERM
+    if [[ $mode == stubborn ]]; then
+        trap '' TERM
+    else
+        trap 'touch "$work/worker-term"
+              kill -INT "$hook" 2>/dev/null; sleep 0.2
+              kill -TERM "$hook" 2>/dev/null; sleep 0.2
+              kill -KILL "$hook" 2>/dev/null; exit 143' TERM
+    fi
     env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin "$@" \
         bash --noprofile --norc -e -o pipefail "$work/guard.sh" > "$work/guard.out" 2>&1 &
     hook=$!
@@ -77,14 +84,17 @@ worker() {
 
 # --- the cases, run as root ------------------------------------------------
 
-# Runs one job under a worker named $1 with the github context in ${@:2}.
+# Runs one job under a worker named $1 with the github context in ${@:2};
+# worker_mode says how the worker takes SIGTERM. Sets elapsed, in seconds.
 job() {
+    local started=$SECONDS
     pkill -KILL -U "$test_uid"
     rm -f "$work"/{guard.out,guard.rc,post-step,worker-term}
     # wait's stderr is where the shell reports the fallback's SIGKILL.
     timeout -s KILL 60 setpriv --reuid="$test_uid" --regid="$test_uid" --clear-groups \
-        "$work/tree.sh" listener "$work" "$@" &
+        "$work/tree.sh" listener "$work" "$worker_mode" "$@" &
     wait $! 2>/dev/null
+    elapsed=$((SECONDS - started))
 }
 
 # No process of test_uid is left, zombies aside. SIGKILL lands at once, but
@@ -105,6 +115,13 @@ allowed_job() {
 
 stopped_job() {
     [[ ! -e $work/post-step && -e $work/worker-term ]] && grep -q Refused "$work/guard.out"
+}
+
+# A worker that ignores SIGTERM: the guard SIGKILLs it after its 30s wait,
+# before the hook's exit could hand control back to it.
+killed_late() {
+    [[ ! -e $work/post-step && ! -e $work/guard.rc ]] && grep -q Refused "$work/guard.out" &&
+        (( elapsed >= 30 ))
 }
 
 # No worker to stop: everything the runner user ran is gone, and nothing else.
@@ -139,6 +156,7 @@ run() {
     install -m 0755 "$0" "$work/tree.sh"
     sleep 300 &
     bystander=$!
+    worker_mode=cooperative
 
     local main=(GITHUB_REPOSITORY="$repo" GITHUB_REF=refs/heads/main GITHUB_WORKFLOW_REF="$workflow_ref")
     local branch=(GITHUB_REPOSITORY="$repo" GITHUB_REF=refs/heads/topic
@@ -163,6 +181,11 @@ run() {
     job Runner.Worker GITHUB_REPOSITORY="$repo" GITHUB_REF=refs/heads/main \
         GITHUB_WORKFLOW_REF="$repo/.github/workflows/other.yml@refs/heads/main" GITHUB_EVENT_NAME=push
     check "another workflow on main: worker stopped" stopped_job
+
+    worker_mode=stubborn
+    job Runner.Worker "${branch[@]}"
+    check "worker ignores SIGTERM: killed after 30s" killed_late
+    worker_mode=cooperative
 
     # A runner release that renames the worker.
     job dotnet "${main[@]}" GITHUB_EVENT_NAME=push
