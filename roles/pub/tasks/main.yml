@@ -283,6 +283,35 @@
   become: true
   when: pub_viewport_enabled
 
+- name: Ensure the grafana producer's slot directory exists
+  # Not the credential directory above: the producer reads its slot file as
+  # pub_viewport_user, who cannot enter /etc/brasenia.
+  ansible.builtin.file:
+    path: "{{ pub_viewport_grafana_slots_file | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+  when: pub_viewport_enabled
+
+- name: Render the grafana producer's slot file
+  # Validated with the producer's own parser from the checkout above, so a
+  # refused slot file fails the play and leaves the running one in place.
+  ansible.builtin.template:
+    src: brasenia-grafana-slots.json.j2
+    dest: "{{ pub_viewport_grafana_slots_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: >-
+      /usr/bin/python3 -c "import sys;
+      sys.path.insert(0, '{{ pub_brasenia_checkout }}/producers/grafana');
+      from grafana_producer.slots import load; load(sys.argv[1])" %s
+  become: true
+  when: pub_viewport_enabled
+  notify: Restart brasenia-grafana
+
 - name: Check the links producer's interval against its panes' lifetime
   ansible.builtin.assert:
     that:
@@ -308,6 +337,7 @@
     - brasenia-home
     - brasenia-fleet
     - brasenia-links
+    - brasenia-grafana
   become: true
   when: pub_viewport_enabled
   notify: Restart brasenia viewport services
@@ -326,6 +356,7 @@
     - brasenia-home
     - brasenia-fleet
     - brasenia-links
+    - brasenia-grafana
   become: true
   when: pub_viewport_enabled
 
