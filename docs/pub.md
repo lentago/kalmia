@@ -202,10 +202,11 @@ journalctl -u publish-family-brief --since today | grep -i doc
 pub also runs brasenia's long-running viewport programs
 ([brasenia#26](https://github.com/lentago/brasenia/issues/26) Phase 2) from
 the same role-managed `/srv/brasenia` checkout. All are stdlib Python 3.11+
-(Debian 12 ships 3.11). All but one are credential-free: their only inputs
+(Debian 12 ships 3.11). All but two are credential-free: their only inputs
 are the share, the public GitHub API, and (for the fleet producer) a
 read-only mount of the job queue. The home producer holds a Home Assistant
-token (brasenia ADR-0014). They write only under `/srv/www/viewport`, which
+token (brasenia ADR-0014) and the grafana producer a Grafana Cloud Viewer
+token (brasenia ADR-0017). They write only under `/srv/www/viewport`, which
 is why they run here and not on LXC 118 (no NAS mount, by design).
 
 - `brasenia-compositor.service` ranks the pane bus every second and writes
@@ -264,6 +265,32 @@ is why they run here and not on LXC 118 (no NAS mount, by design).
   - **On screen:** its panes show only once the compositor runs with
     `--link-panes` and LXC 118's renderer can show web pages (#205). Until
     then the rubric board lists them as `off`.
+- `brasenia-grafana.service` (#202, brasenia#98, brasenia ADR-0017) renders
+  Grafana Cloud dashboards through the stack's render API and keeps one
+  `ambient` pane per dashboard under `viewport/panes/` (`dashboard.png` and a
+  `pane.html` that frames it). Grafana needs a login, so a dashboard can't be
+  a link pane; pub holds the token instead and LXC 118 stays credential-free.
+  - **What it renders:** `pub_viewport_grafana_slots`, one pane per slot
+    (default: `grafana-infra`, the `firewalla-infra-health` dashboard). The
+    role writes them to `/etc/brasenia-viewport/grafana-slots.json` (0644: not
+    secret, and outside the root-only `/etc/brasenia/` so the `brasenia` user
+    can read it), validating the file with the producer's own parser first,
+    and restarts this unit alone when it changes. Slot keys and defaults are in
+    brasenia's `producers/grafana/README.md`. Each slot re-renders every
+    `refresh_s` (300 s), and a failure backs off up to an hour.
+  - **How it runs:** `python3 -m grafana_producer --grafana-url
+    https://lentago.grafana.net`, WorkingDirectory
+    `/srv/brasenia/producers/grafana`. Its token is a systemd credential:
+    `LoadCredential=grafana-token:/etc/brasenia/grafana-token` hands it to this
+    unit alone, and `ConditionPathExists=` skips the unit until the file
+    exists. The role never writes the token; seed it as below.
+    `RestartPreventExitStatus=2` stops it restarting on a refused slot file or
+    stack URL; it fails and stays down until the config is fixed.
+  - **On first run:** `crop_px` (default 40) cuts Grafana's "Powered by"
+    footer off the render, and it is an estimate. Look at the first
+    `http://pub.lan/viewport/panes/grafana-infra/pane.html` at 1280×720; if
+    the footer still shows at the frame's bottom edge, raise `crop_px` for
+    that slot.
 
 **The job-queue mount (manual, once).** Bind mounts are root@pam-only (the
 terraform API token gets HTTP 403), so `mp1` is attached on pve4 by hand.
@@ -293,6 +320,27 @@ ssh root@pve.local "ssh pve4 'pct exec 114 -- systemctl restart brasenia-home'"
 Home Assistant has no read-only role, so this token could operate the
 house: if pub is ever suspect, delete it from the brasenia user's profile.
 
+**The Grafana token (manual, once; rotate the same way).** The
+`brasenia-viewer` service account (role Viewer) is defined in drosera
+([drosera#287](https://github.com/lentago/drosera/issues/287)); don't create it
+by hand. Its token is minted by hand so it stays out of Terraform state. In
+the stack, **Administration → Users and access → Service accounts**, open
+`brasenia-viewer`, **Add service account token**, name it `brasenia pub`, and
+copy it. Then, from your own terminal (not through an agent), paste it at the
+prompt, which doesn't echo:
+
+```bash
+read -rsp 'Grafana token: ' T && echo && printf '%s' "$T" | ssh root@pve.local \
+  "ssh pve4 'pct exec 114 -- sh -c \"umask 077; cat > /etc/brasenia/grafana-token\"'" ; unset T
+ssh root@pve.local "ssh pve4 'pct exec 114 -- systemctl restart brasenia-grafana'"
+```
+
+A Viewer token can only read dashboards. To revoke it, delete the token from
+the service account in the stack; the grafana panes then leave the bus at
+their TTL. `journalctl -u brasenia-grafana` stays quiet after the first
+render. "redirected to a login" or "rejected the token" means the token is
+missing, revoked, or not `brasenia-viewer`'s.
+
 All are `Type=simple`, `Restart=always`, and run as the unprivileged
 `brasenia` system user in the `webdrop` group. The share is a CIFS mount that
 forces every file to uid/gid 1000 at mode 0770, so gid-1000 membership is
@@ -316,13 +364,14 @@ restarts the services if the checkout or a unit file changed.
 **Health check:**
 
 ```bash
-systemctl status brasenia-compositor brasenia-focus brasenia-pipeline brasenia-family-brief brasenia-home brasenia-fleet brasenia-links && curl -s http://pub.lan/viewport/current.json
+systemctl status brasenia-compositor brasenia-focus brasenia-pipeline brasenia-family-brief brasenia-home brasenia-fleet brasenia-links brasenia-grafana && curl -s http://pub.lan/viewport/current.json
 ```
 
-All six units should be `active (running)`, except `brasenia-home` before
-its token is seeded (inactive, "start condition unmet"). With an empty bus, `current.json`
+All eight units should be `active (running)`, except `brasenia-home` and
+`brasenia-grafana` before their tokens are seeded (inactive, "start condition
+unmet"). With an empty bus, `current.json`
 points at the briefing (`http://pub.lan/brief/…`). Logs:
-`journalctl -u brasenia-compositor -u brasenia-focus -u brasenia-pipeline -u brasenia-family-brief -u brasenia-home -u brasenia-fleet -u brasenia-links`.
+`journalctl -u brasenia-compositor -u brasenia-focus -u brasenia-pipeline -u brasenia-family-brief -u brasenia-home -u brasenia-fleet -u brasenia-links -u brasenia-grafana`.
 A live family-brief producer logs `family-today: brief of <date> rendered for
 <date>`, and `/srv/www/viewport/panes/family-today/manifest.json` reads
 `"class": "ambient"`.

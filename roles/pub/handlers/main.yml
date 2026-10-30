@@ -12,6 +12,16 @@
     - brasenia-home.service
     - brasenia-fleet.service
     - brasenia-links.service
+    - brasenia-grafana.service
+  become: true
+  when: pub_viewport_enabled
+
+# A changed slot file restarts the grafana producer alone, not the compositor.
+- name: Restart brasenia-grafana
+  ansible.builtin.systemd_service:
+    name: brasenia-grafana.service
+    daemon_reload: true
+    state: restarted
   become: true
   when: pub_viewport_enabled
 
