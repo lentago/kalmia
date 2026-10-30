@@ -75,27 +75,29 @@ lives only there). **LXC 118 is credential-free**: its inputs are
 - **The pointer:** the renderer polls `brasenia_pointer_url` (the compositor's
   `viewport/current.json` on pub) every `brasenia_pointer_poll` seconds (1).
 - **A pane:** when the pointer names a pane (`fallback` null), the screen shows
-  that pane's pages. A pub.lan pane that also offers `brasenia_prefer_rendition`
-  beside its `pane.html` (the Family Brief's `detail.html` desk edition,
-  lentago/brasenia#56) is shown as that rendition.
+  that pane. A pub.lan pane that also offers `brasenia_prefer_rendition` beside
+  its `pane.html` is shown as that rendition. The default is empty: the
+  Family Brief's `detail.html` desk editions are below lentago/brasenia
+  ADR-0019's 30 px floor, so the stream shows `pane.html` (#217).
 - **The fallbacks:** on `fallback: "status"` it shows the status card. On
   `fallback: "briefing"`, or a 404 (no compositor), it shows the briefing slot
   (`brasenia_briefing_url`, the Family Brief, lentago/brasenia#76).
-- **Bands:** each band (one 16:9 screenful of a pane) stays up
-  `brasenia_band_dwell` seconds before the next. When the pointer is unreadable,
-  the current bands keep going, and the journal
+- **One band, nothing rotates** (lentago/brasenia ADR-0020): a pane is one
+  16:9 band, and it stays on screen until the pointer or the pane's content
+  changes. When the pointer is unreadable, the current pane stays, and the
+  journal
   gets one line after 30 s and one when it is readable again.
 - **A pin:** `brasenia_pin_url` pins the screen to one page instead.
 
-**Bands.** Pane-contract pages are laid out at 1280×720 CSS pixels and
-rendered at `brasenia_scale` (3: 3840×2160), one band per 720 px with content,
-up to 4. A page that declares `<meta name="brasenia-canvas" content="1920x1080">`
-(lentago/brasenia ADR-0019) is laid out at 1920×1080 per band instead, at 2×,
-so its bands are the same 3840×2160. Producers move to that canvas one at a
-time; a page without the tag renders as before. Link panes (lentago/brasenia
+**One band.** Pane-contract pages are laid out at 1280×720 CSS pixels and
+rendered at `brasenia_scale` (3: 3840×2160). A page that declares
+`<meta name="brasenia-canvas" content="1920x1080">` (lentago/brasenia ADR-0019)
+is laid out at 1920×1080 instead, at 2×, so its band is the same 3840×2160.
+Only the first band is captured: a pane is one band (lentago/brasenia
+ADR-0020), and anything below it is not shown. Link panes (lentago/brasenia
 ADR-0016) are laid out at their `source.viewport`, with `prefers-color-scheme`
-set to `source.theme`. Their first `source.screens` bands are each fitted onto
-a full-size band.
+set to `source.theme`, and their first band is fitted onto a full-size band;
+`source.screens` is treated as 1.
 
 **Which sites.** The gate stops anyone on the LAN who can add a link pane
 from pointing the wall at an arbitrary URL. Sites in `brasenia_allowed_sites`
