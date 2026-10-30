@@ -28,6 +28,9 @@
 #   standing down [repo ...]       send /exit, wait, then kill the pane(s);
 #                                  with no repos: everything, then the tmux session
 #   standing status                one line per pane: repo, state, pid, size, session name
+#                                  (state "trust?" = waiting at Claude's folder-trust dialog)
+#   standing trust                 accept the folder-trust dialog in every pane waiting at it
+#                                  (your call to run — these are your repos; Claude won't run it for you)
 #   standing open [--new]          open a maximized terminal attached to the session
 #   standing attach [repo]         attach in *this* terminal (or switch-client inside tmux)
 #   standing tile                  re-apply the tiled layout
@@ -104,6 +107,10 @@ pane_for() {
         | awk -F'\t' -v r="$1" '$2 == r { print $1; exit }'
 }
 pane_dead() { [[ "$(tmux display-message -p -t "$1" '#{pane_dead}' 2>/dev/null)" == 1 ]]; }
+# Claude's first-run folder-trust dialog is on screen (options "No, exit" /
+# "Yes, I trust this folder"; the cursor starts on No).
+at_trust_prompt() { tmux capture-pane -p -t "$1" 2>/dev/null | grep -qF 'Yes, I trust this folder'; }
+trust_cursor_on_yes() { tmux capture-pane -p -t "$1" 2>/dev/null | grep -qE '❯ *Yes, I trust this folder'; }
 pane_exists() { tmux display-message -p -t "$1" '#{pane_id}' >/dev/null 2>&1; }
 
 in_exclude() { local r; for r in "${EXCLUDE[@]}"; do [[ "$r" == "$1" ]] && return 0; done; return 1; }
@@ -255,6 +262,8 @@ cmd_status() {
         [[ -n "$repo" ]] || repo="${c_dim}(untagged $id)${c_off}"
         if [[ "$dead" == 1 ]]; then
             state="${c_err}dead${c_off}"
+        elif [[ "$cmdname" == claude* || "$cmdname" == node* ]] && at_trust_prompt "$id"; then
+            state="${c_warn}trust?${c_off}"
         elif [[ "$cmdname" == claude* || "$cmdname" == node* ]]; then
             state="${c_ok}running${c_off}"
         else
@@ -356,6 +365,26 @@ cmd_attach() {
     fi
 }
 
+cmd_trust() {
+    need tmux
+    has_window || die "no '$WINDOW' window in session '$TMUX_SESSION'"
+    local id repo n=0
+    while IFS=$'\t' read -r id repo; do
+        at_trust_prompt "$id" || continue
+        # Move the cursor onto "Yes" unless it is already there, then confirm.
+        trust_cursor_on_yes "$id" || { tmux send-keys -t "$id" Down; sleep 0.3; }
+        if trust_cursor_on_yes "$id"; then
+            tmux send-keys -t "$id" Enter
+            ok "$repo: accepted folder trust"
+        else
+            warn "$repo: could not put the cursor on Yes — click the pane and accept by hand"
+            continue
+        fi
+        n=$((n + 1))
+    done < <(tmux list-panes -t "$WT" -F $'#{pane_id}\t#{@repo}')
+    say "Accepted in $n pane(s)"
+}
+
 cmd_tile() {
     need tmux
     has_window || die "no '$WINDOW' window in session '$TMUX_SESSION'"
@@ -380,6 +409,7 @@ main() {
         open|show)      cmd_open "$@" ;;
         attach|a)       cmd_attach "$@" ;;
         tile)           cmd_tile "$@" ;;
+        trust)          cmd_trust "$@" ;;
         repos)          cmd_repos "$@" ;;
         -h|--help|help) usage ;;
         *)              die "unknown command: $sub (try --help)" ;;
