@@ -8,14 +8,14 @@ a pipe (--remote-debugging-pipe, stdlib only), and a ready 4K image of every
 item the compositor's line-up lists (lentago/brasenia Contracts v1). A switch
 to a rendered item is then a file swap, and the remote's peek shows the same
 image as the screen. Rendering runs on a worker thread, so a slow or stuck
-render never holds up the pointer, a switch, or the page rotation.
+render never holds up the pointer, a switch, or the band rotation.
 
 What is on screen: the pane the pointer (current.json) names, or its sibling
 rendition (BRASENIA_PREFER_RENDITION, e.g. detail.html) when it offers one; the
 briefing slot when the pointer falls back to it (or there is no compositor);
-the status card; or, with BRASENIA_PIN_URL, that one page. Its pages go to
-frame.png in turn, each for BRASENIA_PAGE_DWELL seconds, and brasenia-stream
-encodes frame.png.
+the status card; or, with BRASENIA_PIN_URL, that one page. Its bands (16:9
+screenfuls) go to frame.png in turn, each for BRASENIA_BAND_DWELL seconds, and
+brasenia-stream encodes frame.png.
 
 When it renders: the item on screen first, then the household's default
 resting pane, then the rest of the line-up, one at a time. An item renders
@@ -39,14 +39,17 @@ SANDBOX_RETRY_S. A refused page is shown as a notice naming the site, and is
 tried again once the sandbox is back.
 
 Pane-contract pages are laid out at 1280x720 CSS pixels and rendered at
-BRASENIA_SCALE, one page per 720 px band with content (up to 4). Link panes
+BRASENIA_SCALE, one band per 720 px with content (up to 4). A page that declares
+<meta name="brasenia-canvas" content="1920x1080"> (lentago/brasenia ADR-0019)
+is laid out at 1920x1080 per band instead, at the scale that keeps a band the
+same size in device pixels: 2x at BRASENIA_SCALE 3. Link panes
 (lentago/brasenia ADR-0016) are laid out at source.viewport with
 prefers-color-scheme set to source.theme, and their first source.screens bands
-are each fitted onto a 16:9 page. Their settings are clamped to the contract's
+are each fitted onto a full-size band. Their settings are clamped to the contract's
 ranges here too, so a bad line-up can never make the renderer spin.
 
 `brasenia-render --once URL [URL ...] [--source JSON] --out DIR` renders the
-URLs in one browser to DIR/NN-page-MM.png and exits, for testing.
+URLs in one browser to DIR/NN-band-MM.png and exits, for testing.
 """
 import argparse, base64, fcntl, io, ipaddress, json, math, os, queue, select, shutil, signal
 import socket, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request
@@ -77,7 +80,7 @@ def seconds(name, default):
 
 POLL = seconds("BRASENIA_POINTER_POLL", 1)
 LINEUP_POLL = seconds("BRASENIA_PEEK_POLL", 10)
-DWELL = seconds("BRASENIA_PAGE_DWELL", 12)
+DWELL = seconds("BRASENIA_BAND_DWELL", 12)
 REGEN = seconds("BRASENIA_REGEN_INTERVAL", 60)
 PEEK_REGEN = seconds("BRASENIA_PEEK_REGEN", 300)
 SCALE = E("BRASENIA_SCALE", "1")
@@ -85,7 +88,11 @@ if SCALE not in ("1", "2", "3", "4"):
     sys.exit(f"brasenia-render: BRASENIA_SCALE must be 1-4, got {SCALE!r}")
 SCALE = int(SCALE)
 CSS_W, CSS_H = 1280, 720                       # the pane contract
-OUT_W, OUT_H = CSS_W * SCALE, CSS_H * SCALE    # one page, device pixels
+OUT_W, OUT_H = CSS_W * SCALE, CSS_H * SCALE    # one band, device pixels
+# A page that declares this canvas is laid out at it per band (lentago/brasenia
+# ADR-0019), scaled so a band is still OUT_W x OUT_H.
+CANVAS_META = "1920x1080"
+CANVAS_W, CANVAS_H = 1920, 1080
 PEEK_SIZE = (1920, 1080)                       # the Roku UI plane's limit
 BG = (14, 22, 18)                              # the panes' background, around a fitted link page
 BG_TOLERANCE = 12                              # px difference below this counts as background
@@ -479,15 +486,23 @@ class Browser:
         return Image.open(io.BytesIO(base64.b64decode(data))).convert("RGB")
 
     def contract_pages(self, url):
-        """A pane-contract page: 1280 px wide, one page per 720 px band (1-4)."""
+        """A pane-contract page, one band per 16:9 screenful of it (1-4): 1280x720
+        CSS pixels a band, or 1920x1080 when it declares that canvas."""
         self.load(url, CSS_W, CSS_H, SCALE, "dark", 0.15, PUB_LOAD_TIMEOUT_S)
+        width, band_h, scale = CSS_W, CSS_H, SCALE
+        canvas = self.evaluate("(document.querySelector('meta[name=\"brasenia-canvas\"]') || {}).content || ''")
+        if isinstance(canvas, str) and canvas.strip().lower() == CANVAS_META:
+            width, band_h, scale = CANVAS_W, CANVAS_H, OUT_W / CANVAS_W
+            self.call("Emulation.setDeviceMetricsOverride", {"width": width, "height": band_h,
+                                                             "deviceScaleFactor": scale, "mobile": False})
+            time.sleep(0.15)
         height = self.evaluate("Math.max(document.documentElement.scrollHeight,"
                                " document.body ? document.body.scrollHeight : 0)")
-        height = height if isinstance(height, (int, float)) and math.isfinite(height) else CSS_H
-        bands = max(1, min(4, -(-int(height) // CSS_H)))
+        height = height if isinstance(height, (int, float)) and math.isfinite(height) else band_h
+        bands = max(1, min(4, -(-int(height) // band_h)))
         if bands > 1:
-            self.call("Emulation.setDeviceMetricsOverride", {"width": CSS_W, "height": CSS_H * bands,
-                                                             "deviceScaleFactor": SCALE, "mobile": False})
+            self.call("Emulation.setDeviceMetricsOverride", {"width": width, "height": band_h * bands,
+                                                             "deviceScaleFactor": scale, "mobile": False})
             time.sleep(0.15)
         shot = self.capture()
         # A page can be taller than its content (a desk edition zoomed to fit):
@@ -776,7 +791,7 @@ class Renderer:
         self.failed.pop(item.id, None)
         if outcome == "ok":
             self.refused.pop(item.id, None)
-            log(f"rendered {item.id}: {count} page(s) in {elapsed:.1f}s")
+            log(f"rendered {item.id}: {count} band(s) in {elapsed:.1f}s")
         else:
             self.refused[item.id] = (item.key, sandboxed)
             log(f"render {item.id} {outcome}; showing a notice")
@@ -964,7 +979,7 @@ class Renderer:
 
 
 def once(urls, source, out):
-    """Render URLs in one browser to OUT/NN-page-MM.png and exit: for testing
+    """Render URLs in one browser to OUT/NN-band-MM.png and exit: for testing
     (rendering several in turn also tests that each capture is its own page)."""
     worker = Worker()
     os.makedirs(out, exist_ok=True)
@@ -980,8 +995,8 @@ def once(urls, source, out):
                 status = 1
                 continue
             for i, page in enumerate(pages, 1):
-                page.save(os.path.join(out, f"{n:02d}-page-{i:02d}.png"))
-            print(f"{url}: {len(pages)} page(s) in {time.monotonic() - started:.1f}s ({worker.mode()})")
+                page.save(os.path.join(out, f"{n:02d}-band-{i:02d}.png"))
+            print(f"{url}: {len(pages)} band(s) in {time.monotonic() - started:.1f}s ({worker.mode()})")
             if worker.browser and worker.browser.blocked:
                 print("  blocked: " + ", ".join(sorted(set(worker.browser.blocked))))
     finally:

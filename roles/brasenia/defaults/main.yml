@@ -64,8 +64,9 @@ brasenia_peek_regen: 300
 # desk edition is preferred (brasenia_prefer_rendition).
 brasenia_briefing_url: http://pub.lan/viewport/briefing/pane.html
 
-# Seconds each screen stays up before rotating to the next.
-brasenia_page_dwell: 12
+# Seconds each band (one 16:9 screenful of a pane, lentago/brasenia ADR-0019)
+# stays up before rotating to the next.
+brasenia_band_dwell: 12
 # Seconds between re-renders of the page on screen when it carries no content
 # revision (the status card, or a compositor older than lentago/brasenia#101);
 # a page with a revision is rendered again as soon as it changes.
