@@ -3,8 +3,9 @@
 # brasenia — installs the wall display's runtime on LXC 118 for
 # lentago/brasenia (named lunaria until the runtime rename, #63, 2026-10-29):
 # distro ffmpeg + chromium, the renderer (brasenia-render, #194), the encoder
-# and the HLS server the office Roku plays from (#167), a pinned mediamtx (RTMP
-# live ingest, #102), and their systemd services. Credential-free: it reads
+# and the HLS server the office Roku plays from (#167), and their systemd
+# services, and it removes mediamtx, retired with RTMP live ingest (#213), from
+# a guest that still has it. Credential-free: it reads
 # http://pub.lan/ and the sites in brasenia_allowed_sites. Fresh guest only:
 # it does not retire the pre-rename lunaria-* units, so rebuild an old guest
 # instead of re-running this on it. See docs/brasenia.md.
@@ -37,59 +38,31 @@
     shell: /usr/sbin/nologin
   become: true
 
-# mediamtx writes auto-generated certs into its working directory, so the
-# install dir is owned by the service user. The version-stamp marker makes
-# upgrades idempotent: bump brasenia_mediamtx_version and the unarchive re-runs.
-- name: Ensure the mediamtx directory exists
+# RTMP live ingest is retired (#213), and mediamtx served nothing else. These
+# stop, disable and remove it on a guest built before then; a fresh guest
+# skips them. Drop them once LXC 118 has run them or been rebuilt.
+- name: Check for the retired mediamtx unit
+  ansible.builtin.stat:
+    path: /etc/systemd/system/mediamtx.service
+  register: brasenia_mediamtx_unit
+
+- name: Stop and disable the retired mediamtx
+  ansible.builtin.systemd_service:
+    name: mediamtx.service
+    state: stopped
+    enabled: false
+  become: true
+  when: brasenia_mediamtx_unit.stat.exists
+
+- name: Remove the retired mediamtx unit and install
   ansible.builtin.file:
-    path: "{{ brasenia_mediamtx_dir }}"
-    state: directory
-    owner: "{{ brasenia_user }}"
-    group: "{{ brasenia_user }}"
-    mode: "0755"
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/mediamtx.service
+    - /opt/mediamtx
   become: true
-
-- name: Download and unpack mediamtx {{ brasenia_mediamtx_version }}
-  ansible.builtin.unarchive:
-    src: "https://github.com/bluenviron/mediamtx/releases/download/{{ brasenia_mediamtx_version }}/mediamtx_{{ brasenia_mediamtx_version }}_linux_amd64.tar.gz"
-    dest: "{{ brasenia_mediamtx_dir }}"
-    remote_src: true
-    owner: "{{ brasenia_user }}"
-    group: "{{ brasenia_user }}"
-    creates: "{{ brasenia_mediamtx_dir }}/.installed-{{ brasenia_mediamtx_version }}"
-  become: true
-  notify: Restart mediamtx
-
-- name: Stamp the installed mediamtx version
-  ansible.builtin.file:
-    path: "{{ brasenia_mediamtx_dir }}/.installed-{{ brasenia_mediamtx_version }}"
-    state: touch
-    owner: "{{ brasenia_user }}"
-    group: "{{ brasenia_user }}"
-    mode: "0644"
-    modification_time: preserve
-    access_time: preserve
-  become: true
-
-- name: Warn when the RTMP live-ingest credential has not been seeded
-  ansible.builtin.debug:
-    msg: >-
-      BRASENIA_RTMP_PUBLISH_PASS is not set in the environment. This role
-      never commits credential material — source it from a host-local env
-      file (e.g. ~/.config/kalmia/brasenia-rtmp.env) before running the play;
-      see docs/brasenia.md. Until then mediamtx.yml grants no one publish
-      access to `live`, so RTMP live-ingest stays disabled (fails closed).
-  when: not brasenia_rtmp_publish_pass
-
-- name: Deploy the mediamtx config
-  ansible.builtin.template:
-    src: mediamtx.yml.j2
-    dest: "{{ brasenia_mediamtx_dir }}/mediamtx.yml"
-    owner: "{{ brasenia_user }}"
-    group: "{{ brasenia_user }}"
-    mode: "0644"
-  become: true
-  notify: Restart mediamtx
+  notify: Reload systemd
 
 - name: Deploy the brasenia scripts
   ansible.builtin.copy:
@@ -129,13 +102,11 @@
     group: root
     mode: "0644"
   loop:
-    - mediamtx.service
     - brasenia-render.service
     - brasenia-stream.service
     - brasenia-hls-serve.service
   become: true
   notify:
-    - Restart mediamtx
     - Restart brasenia-render
     - Restart brasenia-stream
     - Restart brasenia-hls-serve
@@ -147,7 +118,6 @@
     enabled: true
     state: started
   loop:
-    - mediamtx.service
     - brasenia-render.service
     - brasenia-stream.service
     - brasenia-hls-serve.service

@@ -88,11 +88,10 @@ jobs:
           registration token are seeded by hand or via the environment, e.g.
           `GH_TOKEN`). Third-party apt/dnf repos need signed-by keyrings, piped
           installers need care, and downloaded binaries should be pinned.
-          Generated service units, mediamtx auth and Caddy config must not widen
-          access.
-        - **Rendered config and services**: Jinja templates for systemd units,
-          Caddyfile and mediamtx should render valid output (watch whitespace
-          and trim_blocks effects), handlers should restart what changed, and
+          Generated service units and Caddy config must not widen access.
+        - **Rendered config and services**: Jinja templates for systemd units
+          and the Caddyfile should render valid output (watch whitespace and
+          trim_blocks effects), handlers should restart what changed, and
           paths on pub.lan (the NAS web share) should match the docs.
         - **CI and docs**: workflow changes must keep the five required checks
           (`gate`, `ansible-lint`, `shellcheck / shellcheck`,

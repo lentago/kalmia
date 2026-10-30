@@ -1,11 +1,4 @@
 ---
-- name: Restart mediamtx
-  ansible.builtin.systemd_service:
-    name: mediamtx.service
-    daemon_reload: true
-    state: restarted
-  become: true
-
 - name: Restart brasenia-render
   ansible.builtin.systemd_service:
     name: brasenia-render.service
