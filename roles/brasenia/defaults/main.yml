@@ -15,11 +15,6 @@ brasenia_home: /var/lib/brasenia
 # template defaults to UTC, which reads as a broken clock on the TV.
 brasenia_timezone: America/New_York
 
-# mediamtx now carries only the RTMP live-ingest path (#102); the display
-# stream is served by brasenia-hls-serve (#167).
-brasenia_mediamtx_version: v1.19.2
-brasenia_mediamtx_dir: /opt/mediamtx
-
 # --- The office Roku: 4K, the viewport's screen (#167) -----------------------
 # The play-room Roku (720p) was retired 2026-10-28. Its replacement is a Roku
 # Streaming Stick Plus on a 4K display in the office, and with the Chromecast
@@ -88,20 +83,3 @@ brasenia_pointer_poll: 1
 # page, the case link panes were made for (brasenia#97).
 brasenia_allowed_sites:
   - github.com
-
-# --- RTMP live-ingest (kalmia#102) -------------------------------------------
-# Generic RTMP publish path for LAN producers (first client: DJI Fly's
-# custom-RTMP live streaming; H.264/AAC remux only, no transcode). The path
-# name is protocol-shaped, not producer-shaped — adding a second producer
-# (OBS, Larix, ...) must require no mediamtx.yml changes.
-brasenia_rtmp_publish_user: live
-
-# Publish credential for the `live` path, sourced from the environment —
-# never committed, same pattern as roles/repos' GH_TOKEN. Locally, source it
-# from a host-local env file before running the play (e.g.
-# ~/.config/kalmia/brasenia-rtmp.env, alongside the existing
-# ~/.config/kalmia/proxmox.env precedent); see docs/brasenia.md. Empty by
-# default: with no credential, mediamtx.yml.j2 omits the live-publisher auth
-# entry entirely, so RTMP publish to `live` fails closed (401) rather than
-# falling open.
-brasenia_rtmp_publish_pass: "{{ lookup('env', 'BRASENIA_RTMP_PUBLISH_PASS') | default('', true) }}"

@@ -218,12 +218,9 @@ play on it.
      git clone https://github.com/lentago/kalmia /opt/kalmia
      cd /opt/kalmia && ansible-playbook -i inventory/hosts.yml brasenia.yml'
    ```
-
-   Pass `BRASENIA_RTMP_PUBLISH_PASS` into that environment to enable RTMP
-   live ingest (see below). Without it, ingest stays off, failing closed.
 3. **Verify:**
    - `pct exec 118 -- hostname` reads `brasenia`.
-   - `pct exec 118 -- systemctl is-active brasenia-render brasenia-stream brasenia-hls-serve mediamtx`.
+   - `pct exec 118 -- systemctl is-active brasenia-render brasenia-stream brasenia-hls-serve`.
    - `pct exec 118 -- id brasenia`, and `/etc/default/brasenia` exists in the
      guest.
    - The sandbox works: `pct exec 118 -- su -s /bin/sh brasenia -c 'unshare
@@ -239,9 +236,6 @@ play on it.
 
 ## Operational notes (hard-won 2026-07-20)
 
-- mediamtx ≥1.19 HLS answers with a cookie-check 302 unless the player URL
-  pre-bakes `?cookieCheck=1`. That applies to mediamtx paths (`live`) only;
-  the display stream on `brasenia-hls-serve` needs no query string.
 - The Roku Video node never retries a dead stream on its own; the sideloaded
   app carries a state-observer + 3 s Timer retry (rejoins ~1 s after the
   publisher returns). Publisher restarts on LXC 118 are therefore invisible
@@ -274,83 +268,24 @@ play on it.
   Rebuild-from-scratch is terraform apply + the provision play; nothing to
   back up.
 
-## RTMP live-ingest (`live` path — kalmia#102)
+## RTMP live ingest — retired 2026-10-29 (kalmia#213)
 
-> **Since #167** `brasenia-stream` no longer publishes to mediamtx `board`,
-> so `live`'s `fallback: /board` has nothing to fall back to, and the office
-> Roku plays the HEVC stream from `brasenia-hls-serve`, not mediamtx. The
-> notes below describe the path as built; what the live-ingest pane becomes
-> for an HEVC client is [brasenia#17](https://github.com/lentago/brasenia/issues/17)'s
-> question.
+mediamtx used to accept LAN RTMP publishers on a credentialed `live` path
+(kalmia#102), with DJI Fly as the first client. After #167 the Roku played
+`brasenia-hls-serve` instead of mediamtx, so nothing read that path. It was
+retired so that Roku stays the focus
+([decision on #213](https://github.com/lentago/kalmia/issues/213#issuecomment-6512421770)).
+mediamtx had no other job, so it went too, along with its three LAN listeners
+(`:1935` RTMP, `:8554` RTSP, `:8888` HLS), the unauthenticated `board` publish,
+and the `BRASENIA_RTMP_PUBLISH_PASS` credential. On a guest built before the
+retirement, the role stops, disables and removes it.
 
-mediamtx also accepts LAN RTMP publishers on a generic `live` path,
-remuxed through the same Roku-validated HLS leg (`hlsVariant: mpegts`) the
-`board` path already uses. Runtime half of a two-repo change; the product
-concept, ADR, and `VideoScene.xml` repoint are
-[brasenia#17](https://github.com/lentago/brasenia/issues/17). First client:
-DJI Fly's custom-RTMP live streaming (H.264/AAC, remux only — no transcode,
-no recording; the drone's SD card holds the higher-quality original).
-
-- **Generic by design.** The path is named for the protocol (`live`), not
-  the producer — adding a second producer (OBS, Larix, ...) requires no
-  `mediamtx.yml` changes, just the same publish URL with a different
-  encoder.
-- **LAN-only, credentialed.** RTMP was off (`rtmp: false`) before this;
-  turning it on makes port `:1935` reachable to the whole
-  `192.168.139.0/24` LAN (no Firewalla port-forward — never exposed beyond
-  it). A publisher needs the `live`-path credential to push video; this
-  does not weaken the LXC 118 credential-free design (brasenia ADR-0005) —
-  that rule keeps a compromised display leg from reaching *other* systems,
-  and a publish token only grants putting video on this one TV.
-- **Fallback.** The Roku points at `live` with mediamtx's (deprecated but
-  still functional in v1.19.2) `fallback: /board` — readers land on `board`
-  while no one is publishing to `live`, and rejoin `live` within the
-  existing 3s retry handler (brasenia ADR-0002) once a publisher appears.
-  If brasenia-side bench validation finds Roku's HLS client mishandles the
-  fallback redirect (see the `?cookieCheck=1` history above), the fallback
-  line is the only thing to revert — plan B is a manual v0 repoint via
-  `brasenia_pin_url` instead.
-- **`board` is unaffected.** `brasenia-stream`'s localhost RTSP push to
-  `board` keeps working unauthenticated, exactly as before; only the new
-  `live` path requires a credential.
-
-### Seeding the RTMP publish credential (manual — no ansible-vault precedent)
-
-`roles/brasenia/files/mediamtx.yml` became
-`roles/brasenia/templates/mediamtx.yml.j2`: the `live`-path publish password
-is sourced from the `BRASENIA_RTMP_PUBLISH_PASS` environment variable at
-play time (same `lookup('env', ...)` pattern as `GH_TOKEN` in the `repos`
-role) and is never committed. If the variable is unset, the rendered
-config simply grants no one publish access to `live` — RTMP live-ingest
-stays off (fails closed) rather than falling open.
-
-Every step runs **inside LXC 118** (`pct enter 118` on pve4). The inventory
-targets `localhost`, so the play provisions whatever machine runs it: run from
-a workstation or pve4 checkout, it would install the wall display there. The
-credential already lives in the guest's rendered mediamtx config, so keeping
-the env file in the guest's root home adds no exposure; a rebuild discards
-it, and the steps below seed a new one.
-
-1. Generate a random credential into a root-only env file in the guest:
-   ```bash
-   mkdir -p ~/.config/kalmia
-   umask 077
-   printf 'export BRASENIA_RTMP_PUBLISH_PASS=%s\n' "$(openssl rand -hex 20)" \
-     >> ~/.config/kalmia/brasenia-rtmp.env
-   ```
-2. Source it, then run the play from the guest's checkout:
-   ```bash
-   source ~/.config/kalmia/brasenia-rtmp.env
-   cd /opt/kalmia && ansible-playbook -i inventory/hosts.yml brasenia.yml
-   ```
-3. Give DJI Fly's custom-RTMP field the publish URL (`brasenia_rtmp_publish_user`
-   defaults to `live` and is committed — not a secret):
-   ```
-   rtmp://192.168.139.19:1935/live?user=live&pass=<the credential>
-   ```
-   Re-running the play without sourcing the env file first is safe — it
-   redeploys the config with no live-publisher credential and RTMP
-   live-ingest goes back to fails-closed until re-seeded.
+Bringing it back starts in brasenia: a new decision that supersedes ADR-0007
+and picks a route to the screen (the options comment on #213 sets out three).
+Then revert the change that closed #213 to restore the mediamtx install, its
+config and the credential seeding, and build the chosen route. One gotcha from
+the old path still applies: mediamtx ≥1.19 HLS answers with a cookie-check 302
+unless the player URL pre-bakes `?cookieCheck=1`.
 
 ## Cast receiver watchdog — retired 2026-10-28
 
