@@ -114,6 +114,22 @@ pub_viewport_fleet_interval: 60
 # to reach the bus. At most 300, half the panes' 10-minute TTL (asserted in
 # tasks/main.yml).
 pub_viewport_links_interval: 30
+# The grafana producer (#202, brasenia#98, ADR-0017) renders Grafana Cloud
+# dashboards into panes. Its Viewer service-account token (drosera#287,
+# `brasenia-viewer`) is a systemd credential loaded from
+# pub_viewport_grafana_token_file, a root-only file seeded by hand, never by
+# this role (docs/pub.md). Until it exists, ConditionPathExists skips the unit.
+pub_viewport_grafana_url: https://lentago.grafana.net
+pub_viewport_grafana_token_file: /etc/brasenia/grafana-token
+# Not secret, and read by pub_viewport_user, so it lives outside the root-only
+# credential directory that holds the tokens.
+pub_viewport_grafana_slots_file: /etc/brasenia-viewport/grafana-slots.json
+# One pane per slot; keys and defaults in brasenia producers/grafana/README.md.
+# An empty list leaves the producer running with nothing to render.
+pub_viewport_grafana_slots:
+  - pane: grafana-infra
+    uid: firewalla-infra-health
+    title: Infrastructure
 
 # --- Signal sink (kalmia#165) -----------------------------------------------
 # pub-signals takes checkbox actions from pages served here:
