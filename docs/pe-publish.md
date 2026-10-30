@@ -74,11 +74,23 @@ then exiting would only fail the job, which still runs its `if: always()`
 steps. So the hook fails closed instead: it sends SIGKILL to every process the
 `runner` user owns, which is the worker under whatever name it now has, the
 listener and the service. Nothing else runs as `runner`. The unit `svc.sh`
-writes has no `Restart=`, so the runner stays offline. GitHub lists it as
-offline, the next publish waits in the queue, and
-`journalctl -t pe-publish-job-guard -p crit` says why. To recover, teach the
-guard the new tree and re-run `pe-publish.yml`, which starts the service
-again.
+writes has no `Restart=`, so the runner stays offline and publishing stops
+until someone re-provisions it.
+
+Nothing alerts on that yet ([drosera#292](https://github.com/lentago/drosera/issues/292)).
+The signs are:
+
+- the next merge's publish run sits at *Waiting for a runner to pick up this
+  job* in the repo's Actions tab, and GitHub fails it after 24 h, the queue
+  limit for self-hosted runners,
+- the runner shows as offline
+  (`gh api repos/cpitzi/professional-endeavors/actions/runners`), and
+  `http://pub.lan/wiki/` stops changing,
+- on the container, the runner's unit is failed (`systemctl --failed`), and
+  `journalctl -t pe-publish-job-guard -p crit` gives the reason.
+
+To recover, teach the guard the new tree and re-run `pe-publish.yml`, which
+starts the service again.
 
 [`tests/pe-publish-job-guard.sh`](../tests/pe-publish-job-guard.sh) renders the
 hook and runs it under fake runner process trees, as a throwaway uid in a fresh

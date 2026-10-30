@@ -62,7 +62,14 @@ if [[ $worker -le 1 ]]; then
     # runner stays offline until someone restarts it.
     logger -p user.crit -t pe-publish-job-guard \
         "no Runner.Worker above $$; killing every {{ pe_publish_runner_user }} process, runner left offline" || true
-    pkill -KILL -U '{{ pe_publish_runner_user }}'
+    # From this unprivileged shell, kill -1 reaches every runner process but
+    # this one, and as a builtin it has no binary to go missing. Only a manual
+    # run gets here as root, where kill -1 would hit the whole container.
+    if (( EUID == 0 )); then
+        pkill -KILL -U '{{ pe_publish_runner_user }}'
+    else
+        kill -KILL -1
+    fi
     exit 1
 fi
 
