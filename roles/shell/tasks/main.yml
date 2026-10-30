@@ -55,8 +55,9 @@
 # --- CLI helpers ------------------------------------------------------------
 # The full set from the workstation-bootstrap predecessor's scripts/, which
 # symlinked them into ~/.local/bin via bootstrap/install-scripts.sh. Rendered
-# directly here — no symlink farm — and the repos-scanning pair take their
-# default directory from the same var the repos role clones into.
+# directly here — no symlink farm — and the helpers that walk the checkouts
+# (pull-all, clean-all, standing) take their default directory from the same
+# var the repos role clones into.
 # ~/.local/bin already exists and is on PATH (common role, .bashrc block).
 # Adding a helper: drop roles/shell/templates/<name>.j2 in and list it here.
 - name: Install the CLI helpers
@@ -68,4 +69,5 @@
     - pull-all
     - clean-all
     - gh-issue
+    - standing
   become: false
