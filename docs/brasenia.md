@@ -67,7 +67,8 @@ lives only there). **LXC 118 is credential-free**: its inputs are
   30 s. A render that times out, or a crashed Chromium, gets a fresh browser
   for the next render, and the browser is restarted every 6 h anyway.
 - **Bad input:** the pointer and line-up are validated. Link pane settings are
-  clamped to the contract's ranges (1–4 screens, a refresh of 10 s to a day),
+  clamped to the contract's ranges (a 240–3840 px viewport, a refresh of 10 s
+  to a day; `screens` is ignored, since a pane is one band),
   so a malformed line-up can't stop the loop or make it spin. Items that
   leave the line-up are forgotten, and their images deleted.
 
@@ -97,7 +98,7 @@ Only the first band is captured: a pane is one band (lentago/brasenia
 ADR-0020), and anything below it is not shown. Link panes (lentago/brasenia
 ADR-0016) are laid out at their `source.viewport`, with `prefers-color-scheme`
 set to `source.theme`, and their first band is fitted onto a full-size band;
-`source.screens` is treated as 1.
+`source.screens` is ignored.
 
 **Which sites.** The gate stops anyone on the LAN who can add a link pane
 from pointing the wall at an arbitrary URL. Sites in `brasenia_allowed_sites`

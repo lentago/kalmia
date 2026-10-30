@@ -89,19 +89,20 @@ if SCALE not in ("1", "2", "3", "4"):
 SCALE = int(SCALE)
 CSS_W, CSS_H = 1280, 720                       # the pane contract
 OUT_W, OUT_H = CSS_W * SCALE, CSS_H * SCALE    # one band, device pixels
-# A page that declares this canvas is laid out at it per band (lentago/brasenia
-# ADR-0019), scaled so a band is still OUT_W x OUT_H.
+# A page that declares this canvas is laid out at it (lentago/brasenia
+# ADR-0019), scaled so its band is still OUT_W x OUT_H.
 CANVAS_META = "1920x1080"
 CANVAS_W, CANVAS_H = 1920, 1080
 PEEK_SIZE = (1920, 1080)                       # the Roku UI plane's limit
 BG = (14, 22, 18)                              # the panes' background, around a fitted link page
-BG_TOLERANCE = 12                              # px difference below this counts as background
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 # Link pane settings (lentago/brasenia ADR-0016), clamped to the contract here.
 THEMES = ("dark", "light")
 VIEWPORT_RANGE = (240, 3840)
 REFRESH_RANGE = (10, 86400)
-SOURCE_DEFAULTS = {"theme": "dark", "screens": 1, "viewport": [1280, 720], "refresh_s": 60}
+# No "screens": a pane is one band (lentago/brasenia ADR-0020), so a link pane
+# shows the first band of its page, whatever its source says.
+SOURCE_DEFAULTS = {"theme": "dark", "viewport": [1280, 720], "refresh_s": 60}
 RETRY_S = 30            # before rendering a failed item again
 BACKGROUND_GAP_S = 2    # between off-screen renders, so the encoder keeps its CPU
 STALE_S = 30            # an unreadable pointer is logged after this long
@@ -512,9 +513,8 @@ class Browser:
                                      session=False)["sessionId"]
             self.setup(self.session, link=True)
             width, height = source["viewport"]
-            screens = source["screens"]
             dpr = min(OUT_W / width, OUT_H / height)
-            self.load(url, width, height * screens, dpr, source["theme"], 1.5, LINK_LOAD_TIMEOUT_S)
+            self.load(url, width, height, dpr, source["theme"], 1.5, LINK_LOAD_TIMEOUT_S)
             shot = self.capture()
         finally:
             self.session = persistent
@@ -523,14 +523,10 @@ class Browser:
                 self.call("Target.disposeBrowserContext", {"browserContextId": context}, session=False)
             except RenderError as exc:
                 log(f"could not dispose a link render's context: {exc}")
-        band_w, band_h = round(width * dpr), round(height * dpr)
-        pages = []
-        for i in range(screens):
-            band = shot.crop((0, i * band_h, min(shot.width, band_w), min(shot.height, (i + 1) * band_h)))
-            page = Image.new("RGB", (OUT_W, OUT_H), BG)
-            page.paste(band, ((OUT_W - band.width) // 2, (OUT_H - band.height) // 2))
-            pages.append(page)
-        return pages
+        band = shot.crop((0, 0, min(shot.width, round(width * dpr)), min(shot.height, round(height * dpr))))
+        page = Image.new("RGB", (OUT_W, OUT_H), BG)
+        page.paste(band, ((OUT_W - band.width) // 2, (OUT_H - band.height) // 2))
+        return [page]
 
 
 def notice_page(title, detail):
@@ -557,8 +553,6 @@ def clean_source(source):
     out = dict(SOURCE_DEFAULTS)
     if source.get("theme") in THEMES:
         out["theme"] = source["theme"]
-    # A pane is one band (lentago/brasenia ADR-0020): screens stays 1 whatever
-    # the line-up says.
     vp = source.get("viewport")
     if (isinstance(vp, list) and len(vp) == 2
             and all(isinstance(v, int) and not isinstance(v, bool) for v in vp)):
