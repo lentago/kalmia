@@ -3,7 +3,7 @@
 # Drive side is written by the claude.ai "Morning brief" routine (trig_01HjHNJSnSL5kTumQBvS9xTQ);
 # newest dated file becomes index.html so http://pub.lan/brief/ always shows the latest.
 # The routine also uploads a TV edition (morning-brief-tv-YYYY-MM-DD.html) for the
-# wall display (brasenia, then lunaria); the newest of those becomes tv.html. TV files must
+# wall display (brasenia, named lunaria until kalmia#63); the newest of those becomes tv.html. TV files must
 # be excluded from the index.html pick: in LC_ALL=C, "tv-" sorts after any date, so
 # an unfiltered glob would publish the TV edition to http://pub.lan/brief/.
 set -euo pipefail
