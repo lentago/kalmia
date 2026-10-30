@@ -492,10 +492,10 @@ class Browser:
         width, band_h, scale = CSS_W, CSS_H, SCALE
         canvas = self.evaluate("(document.querySelector('meta[name=\"brasenia-canvas\"]') || {}).content || ''")
         if isinstance(canvas, str) and canvas.strip().lower() == CANVAS_META:
+            # Load it again at its own canvas rather than resizing: an inline
+            # script that lays the page out at load time must see 1920 px.
             width, band_h, scale = CANVAS_W, CANVAS_H, OUT_W / CANVAS_W
-            self.call("Emulation.setDeviceMetricsOverride", {"width": width, "height": band_h,
-                                                             "deviceScaleFactor": scale, "mobile": False})
-            time.sleep(0.15)
+            self.load(url, width, band_h, scale, "dark", 0.15, PUB_LOAD_TIMEOUT_S)
         height = self.evaluate("Math.max(document.documentElement.scrollHeight,"
                                " document.body ? document.body.scrollHeight : 0)")
         height = height if isinstance(height, (int, float)) and math.isfinite(height) else band_h
