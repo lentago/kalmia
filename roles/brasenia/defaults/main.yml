@@ -26,12 +26,11 @@ brasenia_timezone: America/New_York
 # follows the pointer.
 brasenia_pin_url: ""
 # When the pointer names a pane's pane.html and the pane also offers this
-# sibling rendition, render the rendition. detail.html is the Family Brief's
-# desk edition (lentago/brasenia#56): a 1920x1080 layout with every decision
-# and the to-do list, which zooms to fit the 1280x720 viewport and lands on
-# 3840x2160 at an effective 2x. Panes without one show pane.html. Empty
-# always renders pane.html.
-brasenia_prefer_rendition: detail.html
+# sibling rendition, render the rendition instead. Empty (the default) always
+# renders pane.html: the Family Brief's detail.html desk editions are below
+# lentago/brasenia ADR-0019's 30 px floor, and the shared stream must not show
+# them (#217).
+brasenia_prefer_rendition: ""
 # Device pixels per CSS pixel. Pages keep the 1280x720 pane contract; 3 renders
 # them at 3840x2160 for a 4K display (1 = the old 720p stream).
 brasenia_scale: 3
@@ -55,13 +54,9 @@ brasenia_peek_poll: 10
 brasenia_peek_regen: 300
 
 # The briefing slot (pointer fallback "briefing", or no compositor): the
-# Family Brief (lentago/brasenia#76). Rendered like a pane, so its detail.html
-# desk edition is preferred (brasenia_prefer_rendition).
+# Family Brief (lentago/brasenia#76), rendered like a pane.
 brasenia_briefing_url: http://pub.lan/viewport/briefing/pane.html
 
-# Seconds each band (one 16:9 screenful of a pane, lentago/brasenia ADR-0019)
-# stays up before rotating to the next.
-brasenia_band_dwell: 12
 # Seconds between re-renders of the page on screen when it carries no content
 # revision (the status card, or a compositor older than lentago/brasenia#101);
 # a page with a revision is rendered again as soon as it changes.
