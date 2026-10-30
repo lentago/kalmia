@@ -13,7 +13,7 @@ wall panes, so merges reach pub.lan without anyone opening a session.
 | Provisioned by | `pe-publish.yml` + the `pe_publish` role |
 | Runner | `/opt/actions-runner`, user `runner` (in `webdrop`, gid 1000), systemd service from `svc.sh` |
 | Labels | `self-hosted`, `Linux`, `X64`, `pe-publish` |
-| Job guard | `/usr/local/bin/pe-publish-job-guard.sh`, the job-started hook (a script the runner runs before any of a job's steps): only `publish.yml` on `main` runs (see below) |
+| Job guard | `/usr/local/bin/pe-publish-job-guard.sh`, the job-started hook (a script the runner runs before any of a job's steps): only `publish.yml` on `main`, started by a push or a dispatch, runs (see below) |
 
 It is deliberately not LXC 115 `gha-runner`. That runner holds this repo's
 `PROXMOX_VE_API_TOKEN` and runs the kalmia and claytonia applies, so a personal
@@ -31,17 +31,24 @@ guard is editable by the branch.
 
 `ACTIONS_RUNNER_HOOK_JOB_STARTED` in `/opt/actions-runner/.env` points at the
 root-owned `/usr/local/bin/pe-publish-job-guard.sh`. It lets a job through
-only when all three are exact matches:
+only when all four match:
 
 | Variable | Must be |
 |---|---|
 | `GITHUB_REPOSITORY` | `cpitzi/professional-endeavors` |
 | `GITHUB_REF` | `refs/heads/main` |
 | `GITHUB_WORKFLOW_REF` | `cpitzi/professional-endeavors/.github/workflows/publish.yml@refs/heads/main` |
+| `GITHUB_EVENT_NAME` | `push` or `workflow_dispatch` |
 
 The values come from the job's `github` context, which the server builds. The
 runner starts the hook with an empty environment plus that context, so a
 workflow's `env:` can't spoof them.
+
+`publish.yml` runs only on a push to `main` and an input-free dispatch. Any
+other event that runs `main`'s copy of the workflow, such as
+`pull_request_target`, `schedule` or `workflow_run`, carries the same ref and
+workflow ref as a push to `main`, so only the event name tells them apart
+([#206](https://github.com/lentago/kalmia/issues/206)).
 
 A refusal has to stop the job, not just fail it. The hook is the first entry
 in the job's step queue. A non-zero exit only marks the job failed, and the
@@ -51,12 +58,45 @@ add `if: always()`. So on refusal the hook:
 1. writes an `::error` annotation and a `pe-publish-job-guard` journal line,
 2. sends SIGTERM to its `Runner.Worker`. The worker shuts down, skips every
    remaining step (post steps included) without evaluating its condition, and
-   fails the job,
-3. sends SIGKILL to the worker if it hasn't been cancelled within 30 s.
+   fails the job. On its way down it cancels the hook as well: SIGINT, then
+   SIGTERM 7.5 s later (the hook ignores both), then SIGKILL 2.5 s after that,
+3. sends SIGKILL to the worker if the hook is still running 30 s later, which
+   means the worker isn't shutting down.
 
 In the run, a refused job fails on the **Set up runner** step with
-`Refused <workflow_ref> (ref <ref>)`, and every later step is skipped. The
-runner service stays up for the next job.
+`Refused <workflow_ref> (ref <ref>, event <event>)`, and every later step is
+skipped. The runner service stays up for the next job.
+
+**No `Runner.Worker` found.** The hook finds its worker by walking up its
+parent processes to the one named `Runner.Worker`. A runner release that
+renames the worker or reshapes the tree would leave the walk empty-handed, and
+then exiting would only fail the job, which still runs its `if: always()`
+steps. So the hook fails closed instead: it sends SIGKILL to every process the
+`runner` user owns, which is the worker under whatever name it now has, the
+listener and the service. Nothing else runs as `runner`. The unit `svc.sh`
+writes has no `Restart=`, so the runner stays offline and publishing stops
+until someone re-provisions it.
+
+Nothing alerts on that yet ([drosera#292](https://github.com/lentago/drosera/issues/292)).
+The signs are:
+
+- the next merge's publish run sits at *Waiting for a runner to pick up this
+  job* in the repo's Actions tab, and GitHub fails it after 24 h, the queue
+  limit for self-hosted runners,
+- the runner shows as offline
+  (`gh api repos/cpitzi/professional-endeavors/actions/runners`), and
+  `http://pub.lan/wiki/` stops changing,
+- on the container, the runner's unit is failed (`systemctl --failed`), and
+  `journalctl -t pe-publish-job-guard -p crit` gives the reason.
+
+To recover, teach the guard the new tree and re-run `pe-publish.yml`, which
+starts the service again.
+
+[`tests/pe-publish-job-guard.sh`](../tests/pe-publish-job-guard.sh) renders the
+hook and runs it under fake runner process trees, as a throwaway uid in a fresh
+PID namespace: allowed jobs, every kind of refusal, and a tree with no
+`Runner.Worker`. CI runs it on every PR that touches the role
+(`.github/workflows/pe-publish-guard.yml`).
 
 **Residual gap:** a job cancelled after *Set up job* finishes but before the
 hook's first line runs (a window of milliseconds) still runs its

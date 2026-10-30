@@ -165,6 +165,10 @@ Five checks are merge-blocking (marked **required** below); see Workflow.
 - **Terraform Lint** (`.github/workflows/tf-lint.yml`): `terraform fmt -check`,
   `validate` and `tflint` via the shared workflow, on every PR. **required**
   (`tf-lint / tf-lint`)
+- **pe-publish guard** (`.github/workflows/pe-publish-guard.yml`): runs the
+  `pe_publish` job-started hook under fake runner process trees
+  (`tests/pe-publish-job-guard.sh`). Path-filtered to the role, so never
+  required.
 - **Claude** workflows: `@claude` responder + (manual) PR review. Not required.
 
 ## Workflow

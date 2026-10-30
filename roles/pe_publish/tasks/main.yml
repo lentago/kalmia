@@ -19,6 +19,9 @@
       - ca-certificates
       # The pane renderer uses zoneinfo America/New_York.
       - tzdata
+      # pkill, for the job guard's fallback when it is run by hand as root
+      # (#206).
+      - procps
       # The agent's .NET runtime needs these (its installdependencies.sh list
       # for Debian 12).
       - libicu72

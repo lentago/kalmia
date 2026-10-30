@@ -9,6 +9,8 @@
 #
 #   {{ pe_publish_repo }}/{{ pe_publish_allowed_workflow }}@{{ pe_publish_allowed_ref }}
 #
+# started by one of: {{ pe_publish_allowed_events | join(', ') }} (#206).
+#
 # The GITHUB_* values come from the job's github context, which the server
 # builds; a workflow's env: never reaches this hook.
 #
@@ -25,15 +27,23 @@ set -uo pipefail
 
 allowed='{{ pe_publish_repo }}/{{ pe_publish_allowed_workflow }}@{{ pe_publish_allowed_ref }}'
 
-if [[ ${GITHUB_REPOSITORY:-} == '{{ pe_publish_repo }}' &&
+# Every other event that runs main's copy of the workflow (pull_request_target,
+# schedule, workflow_run, ...) passes the three checks below unchanged.
+case ${GITHUB_EVENT_NAME:-} in
+    {{ pe_publish_allowed_events | map('quote') | join('|') }}) event_allowed=true ;;
+    *) event_allowed=false ;;
+esac
+
+if [[ $event_allowed == true &&
+      ${GITHUB_REPOSITORY:-} == '{{ pe_publish_repo }}' &&
       ${GITHUB_REF:-} == '{{ pe_publish_allowed_ref }}' &&
       ${GITHUB_WORKFLOW_REF:-} == "$allowed" ]]; then
-    echo "pe-publish-job-guard: allowed $allowed"
+    echo "pe-publish-job-guard: allowed $allowed on $GITHUB_EVENT_NAME"
     exit 0
 fi
 
 # Branch and file names reach the log and an annotation; keep them printable.
-got="${GITHUB_WORKFLOW_REF:-unset} (ref ${GITHUB_REF:-unset})"
+got="${GITHUB_WORKFLOW_REF:-unset} (ref ${GITHUB_REF:-unset}, event ${GITHUB_EVENT_NAME:-unset})"
 got=${got//[^[:print:]]/?}
 logger -t pe-publish-job-guard "refused: $got" || true
 echo "::error title=pe-publish runner guard::Refused $got. This runner runs only $allowed."
@@ -45,13 +55,32 @@ while [[ $worker -gt 1 && $(cat "/proc/$worker/comm" 2>/dev/null) != Runner.Work
     worker=${worker:-1}
 done
 if [[ $worker -le 1 ]]; then
-    logger -t pe-publish-job-guard "no Runner.Worker above $$; job failed, not stopped" || true
+    # No Runner.Worker above this hook means a runner release has changed the
+    # process tree. Exiting here would only fail the job, so stop everything
+    # the runner user runs instead: the worker under whatever name it has now,
+    # the listener and the service. svc.sh's unit has no Restart=, so the
+    # runner stays offline until someone restarts it.
+    logger -p user.crit -t pe-publish-job-guard \
+        "no Runner.Worker above $$; killing every {{ pe_publish_runner_user }} process, runner left offline" || true
+    # From this unprivileged shell, kill -1 reaches every runner process but
+    # this one, and as a builtin it has no binary to go missing. Only a manual
+    # run gets here as root, where kill -1 would hit the whole container.
+    if (( EUID == 0 )); then
+        pkill -KILL -U '{{ pe_publish_runner_user }}'
+    else
+        kill -KILL -1
+    fi
     exit 1
 fi
 
 kill -TERM "$worker"
-# A worker that is shutting down kills this step within about 10s. Still
-# here after 30s means it isn't, so stop it outright.
+# The worker then cancels this step: SIGINT, SIGTERM 7.5s later, and SIGKILL
+# to this shell 2.5s after that. The trap ignores the first two, so a worker
+# that is shutting down ends this hook about 10s from now and the kill below
+# never runs. The sleep inherits the ignored INT and TERM (an ignored signal
+# stays ignored across exec), and the SIGKILL reaches only this shell, so the
+# sleep runs out its 30s on its own afterwards. Still here after 30s means
+# the worker isn't shutting down, so stop it outright.
 sleep 30
 kill -KILL "$worker" 2>/dev/null || true
 exit 1

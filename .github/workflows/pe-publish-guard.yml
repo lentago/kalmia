@@ -1,0 +1,39 @@
+# ============================================================================
+# pe-publish guard — runs roles/pe_publish's job-started hook under fake
+# runner process trees (tests/pe-publish-job-guard.sh, #206): every refusal
+# must stop the job, including when the hook finds no Runner.Worker.
+# Path-filtered, so it must never become a required check: a required check
+# whose workflow never triggers holds every other PR at "Expected".
+# ============================================================================
+name: pe-publish guard
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+    paths:
+      - "roles/pe_publish/**"
+      - "tests/pe-publish-job-guard.sh"
+      - ".github/workflows/pe-publish-guard.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  guard-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Ansible
+        run: pip install ansible-core
+
+      # Renders the guard, then runs the cases as root (sudo) in a fresh PID
+      # namespace.
+      - name: Run the guard under fake runner trees
+        run: tests/pe-publish-job-guard.sh

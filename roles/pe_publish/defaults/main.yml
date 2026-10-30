@@ -25,6 +25,9 @@ pe_publish_runner_sha256: baebf204307bac6193480852732f0aba2ae97b6c5597c244f4d555
 # change it. The runner picks the hook's shell from its .sh extension.
 pe_publish_allowed_workflow: .github/workflows/publish.yml
 pe_publish_allowed_ref: refs/heads/main
+# publish.yml's triggers (#206). Any other event that runs main's copy of the
+# workflow, pull_request_target or schedule say, would match the three above.
+pe_publish_allowed_events: [push, workflow_dispatch]
 pe_publish_job_guard: /usr/local/bin/pe-publish-job-guard.sh
 
 # The share is CIFS forced to uid/gid 101000 (container 1000), mode 0770, so
