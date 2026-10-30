@@ -2,10 +2,11 @@
 {% raw -%}
 #!/usr/bin/env bash
 # standing — fire up and tend a standing interactive Claude Code session in each
-# Lentago repo, on screen: one tmux session ("lentago") with one window
-# ("standing") of tiled panes, one pane per repo, each running
-# `claude --name <repo>-standing` in that repo's checkout. `standing up` also
-# opens a maximized terminal attached to it, so nothing runs hidden.
+# Lentago repo, on screen: one tmux session ("lentago") whose windows
+# standing-1, standing-2, … each hold up to 8 tiled panes, one pane per repo,
+# each running `claude --name <repo>-standing` in that repo's checkout. Every
+# window gets its own maximized terminal (via tmux grouped sessions), so
+# nothing runs hidden — drag each terminal to its own monitor.
 #
 # Org model (see ~/repos/lentago/CLAUDE.md): the session at ~/repos/lentago is
 # the Engineering Director and runs `standing up --director <its-name>`; each
@@ -15,62 +16,74 @@
 #
 # Usage:
 #   standing                       same as `standing status`
-#   standing up [repo ...]         start sessions (default set below) — idempotent:
-#                                  running panes are left alone, dead ones respawned;
-#                                  opens a terminal if none is attached yet
-#   standing up --all              every git clone under the repos dir, minus EXCLUDE
+#   standing up [repo ...]         start sessions (default: every repo, in ORDER below) —
+#                                  idempotent: running panes are left alone, dead ones
+#                                  respawned; opens a terminal for each window lacking one
 #   standing up --director NAME    tell each EM which session is its Director (NAME from
 #                                  the "This session is …" line of ListAgents)
-#   standing up --no-open ...      don't open a terminal window
+#   standing up --no-open ...      don't open terminal windows
 #   standing up --no-prompt ...    start claude at an empty prompt (no kickoff turn)
 #   standing up --prompt 'text'    custom kickoff prompt
 #   standing up kalmia -- --model opus   anything after `--` is passed to claude
 #   standing down [repo ...]       send /exit, wait, then kill the pane(s);
-#                                  with no repos: everything, then the tmux session
-#   standing status                one line per pane: repo, state, pid, size, session name
+#                                  with no repos: everything, then the tmux sessions
+#   standing status                per window: repo, state, pid, size, session name
 #                                  (state "trust?" = waiting at Claude's folder-trust dialog)
-#   standing trust                 accept the folder-trust dialog in every pane waiting at it
-#                                  (your call to run — these are your repos; Claude won't run it for you)
-#   standing open [--new]          open a maximized terminal attached to the session
+#   standing trust [repo ...] [--yes]  list the panes waiting at the folder-trust dialog and,
+#                                  after a y/N prompt (or --yes), accept it in each — your
+#                                  call to run; these are your repos and Claude won't run it for you
+#   standing open                  open a maximized terminal for every window that has none
 #   standing attach [repo]         attach in *this* terminal (or switch-client inside tmux)
-#   standing tile                  re-apply the tiled layout
-#   standing repos [--all]         print the repo set `up` would use
+#   standing tile                  re-apply the tiled layout to every window
+#   standing repos                 print the repo set `up` would use, in window order
 #
-# In the terminal: click a pane to focus it (mouse is on); prefix+z (Ctrl-b z)
+# In a terminal: click a pane to focus it (mouse is on); prefix+z (Ctrl-b z)
 # zooms one pane to full size and back; the repo name sits on each pane border.
+# GNOME places new windows on the active monitor — Super+Shift+Arrow moves one.
 #
 # Environment:
 #   STANDING_REPOS_DIR     where the clones live   (default: ~/repos/lentago)
 #   STANDING_TMUX_SESSION  tmux session name       (default: lentago)
+#   STANDING_PER_WINDOW    panes per window        (default: 8)
 #   STANDING_NAME_SUFFIX   claude --name suffix    (default: standing → "kalmia-standing")
 #   STANDING_TERMINAL      terminal for `open`     (default: first of ghostty, ptyxis, alacritty)
-#   STANDING_FONT_SIZE     font size for that window only (ghostty/alacritty; default: 8;
+#   STANDING_FONT_SIZE     font size for those windows only (ghostty/alacritty; default: 8;
 #                          set it empty to use your terminal's own default)
 #   STANDING_EXIT_WAIT     seconds `down` waits after /exit before killing (default: 20)
 #
 # Notes:
 #   * First launch in a repo Claude has never opened shows the folder-trust dialog
-#     and waits there — click that pane and accept it once.
+#     and waits there — `standing status` shows it as "trust?"; `standing trust` accepts.
 #   * Panes keep remain-on-exit, so a crashed claude leaves its last screen
 #     readable ("[dead]" on the border); `standing up` respawns it in place.
 #   * Inherited CLAUDE* env vars are stripped from the children, so this can be
 #     run from inside another Claude session without tripping nested-session guards.
+#   * Window N is viewed through tmux session "lentago" (N=1) or "lentago-vN" (N>1),
+#     all one session group sharing the windows; `down` with no repos removes them all.
 #   * ANSIBLE MANAGED — kalmia roles/shell (like clean-all/pull-all). Local edits
 #     are overwritten on the next run; change roles/shell/templates/standing.j2 instead.
 set -euo pipefail
 
 REPOS_DIR="${STANDING_REPOS_DIR:-{% endraw %}{{ repos_dir }}/lentago{% raw %}}"
 TMUX_SESSION="${STANDING_TMUX_SESSION:-lentago}"
+PER_WINDOW="${STANDING_PER_WINDOW:-8}"
 NAME_SUFFIX="${STANDING_NAME_SUFFIX:-standing}"
 EXIT_WAIT="${STANDING_EXIT_WAIT:-20}"
-WINDOW="standing"
-# Size the window has while no terminal is attached (so splits always fit);
+WIN_PREFIX="standing"
+# Size a window has while no terminal is attached (so splits always fit);
 # it follows the attached terminal's size afterwards.
 DEF_W=320; DEF_H=100
 
-# The test set: five of the most active product repos.
-DEFAULT_REPOS=(claytonia drosera kalmia brasenia dotgithub)
-# Never started by --all: archived on GitHub, or a template nobody works in.
+# Order repos come up in — and therefore how they group into windows of
+# PER_WINDOW: platform first, then products/guides/sites, then the uvularia
+# family. A repo not listed here comes after these, alphabetically.
+ORDER=(
+    claytonia drosera kalmia brasenia dotgithub betula solidago shared-workflows
+    asclepias lupinus epigaea mitchella monarda osmunda site-lentago-dev site-icecreamtofightwith-com
+    site-pondviewlane-com uvularia uvularia-records-template uvularia-rules-template
+    uvularia-site-template uvularia-demo-records uvularia-demo-ask-rules uvularia-demo-site
+)
+# Never started: archived on GitHub, or a template nobody works in.
 EXCLUDE=(coderabbit office-presence site-pitzilabs-dev workstation-bootstrap repo-template)
 
 # Kickoff turn for each pane. %DIRECTOR% is replaced with the --director sentence (or nothing).
@@ -96,51 +109,71 @@ scrub_env() {
     while IFS= read -r v; do unset "$v"; done < <(compgen -v | grep -E '^CLAUDE' || true)
 }
 
-WT="=$TMUX_SESSION:=$WINDOW"          # exact-match window target
 has_session() { tmux has-session -t "=$TMUX_SESSION" 2>/dev/null; }
-has_window()  { tmux list-windows -t "=$TMUX_SESSION" -F '#{window_name}' 2>/dev/null | grep -qxF -- "$WINDOW"; }
 
-# Pane id (e.g. %5) of the pane tagged with this repo, or empty.
-pane_for() {
-    has_window || return 0
-    tmux list-panes -t "$WT" -F $'#{pane_id}\t#{@repo}' 2>/dev/null \
-        | awk -F'\t' -v r="$1" '$2 == r { print $1; exit }'
+# Standing windows, in numeric order (standing-1, standing-2, …).
+std_windows() {
+    has_session || return 0
+    tmux list-windows -t "=$TMUX_SESSION" -F '#{window_name}' 2>/dev/null \
+        | grep -E "^${WIN_PREFIX}-[0-9]+$" | sort -t- -k2,2n || true
 }
-pane_dead() { [[ "$(tmux display-message -p -t "$1" '#{pane_dead}' 2>/dev/null)" == 1 ]]; }
-# Claude's first-run folder-trust dialog is on screen (options "No, exit" /
-# "Yes, I trust this folder"; the cursor starts on No).
-at_trust_prompt() { tmux capture-pane -p -t "$1" 2>/dev/null | grep -qF 'Yes, I trust this folder'; }
-trust_cursor_on_yes() { tmux capture-pane -p -t "$1" 2>/dev/null | grep -qE '❯ *Yes, I trust this folder'; }
+win_t()     { printf '=%s:=%s' "$TMUX_SESSION" "$1"; }              # exact window target
+win_num()   { printf '%s' "${1##*-}"; }
+win_panes() { tmux list-panes -t "$(win_t "$1")" -F '#{pane_id}' 2>/dev/null | wc -l; }
+# The grouped session through which window N is viewed (N=1 is the base session).
+view_for()  { local n; n=$(win_num "$1"); (( n == 1 )) && printf '%s' "$TMUX_SESSION" || printf '%s-v%s' "$TMUX_SESSION" "$n"; }
+view_sessions() { tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -E "^${TMUX_SESSION}(-v[0-9]+)?$" || true; }
+clients_of() { tmux list-clients -t "=$1" 2>/dev/null | wc -l; }
+
+# window<TAB>pane_id<TAB>repo for every pane in every standing window.
+all_panes() {
+    has_session || return 0
+    tmux list-panes -s -t "=$TMUX_SESSION" -F $'#{window_name}\t#{pane_id}\t#{@repo}' 2>/dev/null \
+        | awk -F'\t' -v p="^${WIN_PREFIX}-[0-9]+$" '$1 ~ p' || true
+}
+pane_for()    { all_panes | awk -F'\t' -v r="$1" '$3 == r { print $2; exit }'; }
+window_of()   { all_panes | awk -F'\t' -v id="$1" '$2 == id { print $1; exit }'; }
+pane_dead()   { [[ "$(tmux display-message -p -t "$1" '#{pane_dead}' 2>/dev/null)" == 1 ]]; }
 pane_exists() { tmux display-message -p -t "$1" '#{pane_id}' >/dev/null 2>&1; }
+# Claude's first-run folder-trust dialog is on screen: both options as whole
+# lines plus the confirm hint, so a pane merely quoting the sentence doesn't match.
+at_trust_prompt() {
+    local screen
+    screen=$(tmux capture-pane -p -t "$1" 2>/dev/null) || return 1
+    grep -qE '^ *(❯ +)?No, exit *$' <<<"$screen"         && grep -qE '^ *(❯ +)?Yes, I trust this folder *$' <<<"$screen"         && grep -qF 'Enter to confirm' <<<"$screen"
+}
+trust_cursor_on_yes() { tmux capture-pane -p -t "$1" 2>/dev/null | grep -qE '^ *❯ +Yes, I trust this folder *$'; }
 
 in_exclude() { local r; for r in "${EXCLUDE[@]}"; do [[ "$r" == "$1" ]] && return 0; done; return 1; }
 
+# Every git clone under REPOS_DIR minus EXCLUDE, in ORDER (unknowns last, sorted).
 all_repos() {
-    local d n
+    local -A have=()
+    local d n r
     for d in "$REPOS_DIR"/*/; do
         [[ -d "$d/.git" ]] || continue
         n=$(basename "$d")
-        in_exclude "$n" || printf '%s\n' "$n"
+        in_exclude "$n" || have[$n]=1
     done
+    for r in "${ORDER[@]}"; do
+        [[ -n "${have[$r]:-}" ]] || continue
+        printf '%s\n' "$r"; unset "have[$r]"
+    done
+    (( ${#have[@]} == 0 )) || printf '%s\n' "${!have[@]}" | sort
 }
 
-# Populate REPOS from args: --all, explicit names, or the default set.
+# Populate REPOS from args: explicit names, or everything.
 resolve_repos() {
-    local all=0 r
+    local r
     REPOS=()
     for r in "$@"; do
         case "$r" in
-            --all) all=1 ;;
+            --all) ;;                      # accepted for old habits; it is the default
             -*)    die "unknown option: $r" ;;
             *)     REPOS+=("$r") ;;
         esac
     done
-    if (( all )); then
-        (( ${#REPOS[@]} == 0 )) || die "--all cannot be combined with repo names"
-        mapfile -t REPOS < <(all_repos)
-    elif (( ${#REPOS[@]} == 0 )); then
-        REPOS=("${DEFAULT_REPOS[@]}")
-    fi
+    (( ${#REPOS[@]} )) || mapfile -t REPOS < <(all_repos)
     for r in "${REPOS[@]}"; do
         [[ -d "$REPOS_DIR/$r/.git" ]] || die "$REPOS_DIR/$r is not a git checkout"
     done
@@ -158,37 +191,83 @@ claude_argv() {
     printf '%s\0' "${cmd[@]}"
 }
 
-# Create the pane for a repo (creating the session/window as needed); prints its id.
+# Create the pane for a repo in the first window with room (creating the
+# session or a new window as needed); prints its id.
 spawn_pane() {
     local repo=$1 dir=$2; shift 2
-    local id
+    local id w target="" last n
     if ! has_session; then
-        id=$(tmux new-session -d -P -F '#{pane_id}' -s "$TMUX_SESSION" -n "$WINDOW" \
+        id=$(tmux new-session -d -P -F '#{pane_id}' -s "$TMUX_SESSION" -n "$WIN_PREFIX-1" \
                 -x "$DEF_W" -y "$DEF_H" -c "$dir" -- "$@")
-    elif ! has_window; then
-        id=$(tmux new-window -d -P -F '#{pane_id}' -t "=$TMUX_SESSION:" -n "$WINDOW" -c "$dir" -- "$@")
     else
-        id=$(tmux split-window -d -P -F '#{pane_id}' -t "$WT" -c "$dir" -- "$@")
+        for w in $(std_windows); do
+            if (( $(win_panes "$w") < PER_WINDOW )); then target=$w; break; fi
+        done
+        if [[ -n "$target" ]]; then
+            id=$(tmux split-window -d -P -F '#{pane_id}' -t "$(win_t "$target")" -c "$dir" -- "$@")
+        else
+            last=$(std_windows | tail -n1)
+            n=1; [[ -n "$last" ]] && n=$(( $(win_num "$last") + 1 ))
+            id=$(tmux new-window -d -P -F '#{pane_id}' -t "=$TMUX_SESSION:" -n "$WIN_PREFIX-$n" -c "$dir" -- "$@")
+        fi
     fi
     tmux set-option -p -t "$id" @repo "$repo"
     printf '%s' "$id"
 }
 
-# Idempotent session/window settings: labelled borders, dead panes kept, mouse.
+# Idempotent settings on every standing window and view session: labelled
+# borders, dead panes kept, mouse, size that follows the attached terminal.
 apply_options() {
-    has_window || return 0
-    tmux set-option -t "$TMUX_SESSION:" default-size "${DEF_W}x${DEF_H}"
-    tmux set-option -t "$TMUX_SESSION:" mouse on
-    tmux set-option -w -t "$WT" window-size latest
-    tmux set-option -w -t "$WT" automatic-rename off
-    tmux set-option -w -t "$WT" remain-on-exit on
-    tmux set-option -w -t "$WT" pane-border-status top
-    tmux set-option -w -t "$WT" pane-border-format ' #{@repo}#{?pane_dead, [dead],} '
-    tmux select-layout -t "$WT" tiled >/dev/null
+    local w s
+    for s in $(view_sessions); do
+        tmux set-option -t "$s:" default-size "${DEF_W}x${DEF_H}"
+        tmux set-option -t "$s:" mouse on
+    done
+    for w in $(std_windows); do
+        tmux set-option -w -t "$(win_t "$w")" window-size latest
+        tmux set-option -w -t "$(win_t "$w")" automatic-rename off
+        tmux set-option -w -t "$(win_t "$w")" remain-on-exit on
+        tmux set-option -w -t "$(win_t "$w")" pane-border-status top
+        tmux set-option -w -t "$(win_t "$w")" pane-border-format ' #{@repo}#{?pane_dead, [dead],} '
+        tmux select-layout -t "$(win_t "$w")" tiled >/dev/null
+    done
 }
 
-clients() { tmux list-clients -t "=$TMUX_SESSION" 2>/dev/null | wc -l; }
 have_display() { [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; }
+
+pick_terminal() {
+    local t
+    TERM_BIN="${STANDING_TERMINAL:-}"
+    [[ -n "$TERM_BIN" ]] && return 0
+    for t in ghostty ptyxis alacritty; do
+        command -v "$t" >/dev/null 2>&1 && { TERM_BIN=$t; return 0; }
+    done
+    die "no terminal emulator found (ghostty, ptyxis, alacritty) — set STANDING_TERMINAL"
+}
+
+# Open a maximized terminal attached to a view session, titled after its window.
+launch_terminal() {
+    local view=$1 title=$2 fs="${STANDING_FONT_SIZE-8}"
+    local -a attach=(tmux attach-session -t "=$view") cmd
+    case "$TERM_BIN" in
+        ghostty)   cmd=(ghostty --maximize=true --title="$title" ${fs:+--font-size="$fs"} -e "${attach[@]}") ;;
+        ptyxis)    cmd=(ptyxis --new-window --maximize --title "$title" -- "${attach[@]}") ;;
+        alacritty) cmd=(alacritty --title "$title" -o window.startup_mode=Maximized ${fs:+-o font.size="$fs"} -e "${attach[@]}") ;;
+        *)         cmd=("$TERM_BIN" -e "${attach[@]}") ;;
+    esac
+    setsid -f "${cmd[@]}" >/dev/null 2>&1
+}
+
+# Remove view sessions whose window no longer exists (closes their terminals).
+prune_views() {
+    local s n
+    for s in $(view_sessions); do
+        [[ "$s" == "$TMUX_SESSION" ]] && continue
+        n=${s##*-v}
+        tmux list-windows -t "=$TMUX_SESSION" -F '#{window_name}' 2>/dev/null | grep -qxF "$WIN_PREFIX-$n" \
+            || tmux kill-session -t "=$s" 2>/dev/null || true
+    done
+}
 
 # ------------------------------------------------------------- commands ----
 
@@ -235,48 +314,51 @@ cmd_up() {
                 kept=$((kept + 1))
             fi
         else
-            spawn_pane "$repo" "$dir" "${cmd[@]}" >/dev/null
-            ok "$repo started  ${c_dim}(claude --name $repo-$NAME_SUFFIX)${c_off}"
+            id=$(spawn_pane "$repo" "$dir" "${cmd[@]}")
+            ok "$repo started in $(window_of "$id")  ${c_dim}(claude --name $repo-$NAME_SUFFIX)${c_off}"
             started=$((started + 1))
         fi
         apply_options
     done
     say ""
-    say "Up: $started started, $respawned respawned, $kept already running"
-    if (( open )) && have_display && (( $(clients) == 0 )); then
+    say "Up: $started started, $respawned respawned, $kept already running, $(std_windows | wc -l) window(s)"
+    if (( open )) && have_display; then
         cmd_open
-    elif (( $(clients) == 0 )); then
-        say "No terminal attached — 'standing open' or 'standing attach' to look in"
+    else
+        say "Windows without a terminal: 'standing open' or 'standing attach' to look in"
     fi
 }
 
 cmd_status() {
     need tmux
-    if ! has_session || ! has_window; then
+    if ! has_session || [[ -z "$(std_windows)" ]]; then
         say "tmux session '$TMUX_SESSION' is not running — 'standing up' to start it"
         return 0
     fi
-    local id repo dead pid cmdname size state
-    printf '%-24s %-9s %-8s %-9s %s\n' REPO STATE PID SIZE SESSION
-    while IFS=$'\t' read -r id repo dead pid cmdname size; do
-        [[ -n "$repo" ]] || repo="${c_dim}(untagged $id)${c_off}"
-        if [[ "$dead" == 1 ]]; then
-            state="${c_err}dead${c_off}"
-        elif [[ "$cmdname" == claude* || "$cmdname" == node* ]] && at_trust_prompt "$id"; then
-            state="${c_warn}trust?${c_off}"
-        elif [[ "$cmdname" == claude* || "$cmdname" == node* ]]; then
-            state="${c_ok}running${c_off}"
+    local w view n id repo dead pid cmdname size state
+    for w in $(std_windows); do
+        view=$(view_for "$w"); n=$(clients_of "$view")
+        if (( n == 0 )); then
+            say "${c_warn}── $w — no terminal attached ('standing open')${c_off}"
         else
-            state="${c_warn}$cmdname${c_off}"
+            say "${c_dim}── $w — shown in $n terminal(s)${c_off}"
         fi
-        printf '%-24b %-20b %-8s %-9s %s\n' "$repo" "$state" "$pid" "$size" "$repo-$NAME_SUFFIX"
-    done < <(tmux list-panes -t "$WT" -F $'#{pane_id}\t#{@repo}\t#{pane_dead}\t#{pane_pid}\t#{pane_current_command}\t#{pane_width}x#{pane_height}')
-    local n; n=$(clients)
-    if (( n == 0 )); then
-        say "${c_dim}No terminal attached — 'standing open' to show them${c_off}"
-    else
-        say "${c_dim}Shown in $n attached terminal(s)${c_off}"
-    fi
+        printf '%-30s %-9s %-8s %-9s %s\n' REPO STATE PID SIZE SESSION
+        while IFS=$'\t' read -r id repo dead pid cmdname size; do
+            [[ -n "$repo" ]] || repo="(untagged $id)"
+            if [[ "$dead" == 1 ]]; then
+                state="${c_err}dead${c_off}"
+            elif [[ "$cmdname" == claude* || "$cmdname" == node* ]] && at_trust_prompt "$id"; then
+                state="${c_warn}trust?${c_off}"
+            elif [[ "$cmdname" == claude* || "$cmdname" == node* ]]; then
+                state="${c_ok}running${c_off}"
+            else
+                state="${c_warn}$cmdname${c_off}"
+            fi
+            printf '%-30s %-20b %-8s %-9s %s\n' "$repo" "$state" "$pid" "$size" "$repo-$NAME_SUFFIX"
+        done < <(tmux list-panes -t "$(win_t "$w")" -F $'#{pane_id}\t#{@repo}\t#{pane_dead}\t#{pane_pid}\t#{pane_current_command}\t#{pane_width}x#{pane_height}')
+        say ""
+    done
 }
 
 cmd_down() {
@@ -288,12 +370,13 @@ cmd_down() {
         targets=("$@")
     else
         whole=1
-        mapfile -t targets < <(tmux list-panes -t "$WT" -F '#{@repo}' 2>/dev/null | grep -v '^$' || true)
+        mapfile -t targets < <(all_panes | awk -F'\t' '$3 != "" { print $3 }')
     fi
-    local repo id i
+    local repo id w i
     for repo in "${targets[@]}"; do
         id=$(pane_for "$repo")
         [[ -n "$id" ]] || { warn "$repo: no such pane"; continue; }
+        w=$(window_of "$id")
         if ! pane_dead "$id"; then
             # Escape clears any dialog or half-typed input, then a clean /exit.
             tmux send-keys -t "$id" Escape
@@ -310,12 +393,19 @@ cmd_down() {
         fi
         pane_exists "$id" && tmux kill-pane -t "$id"
         ok "$repo down"
+        if (( ! whole )) && tmux list-windows -t "=$TMUX_SESSION" -F '#{window_name}' 2>/dev/null | grep -qxF "$w"; then
+            tmux select-layout -t "$(win_t "$w")" tiled >/dev/null
+        fi
     done
     if (( whole )); then
+        local s
+        for s in $(view_sessions); do
+            [[ "$s" == "$TMUX_SESSION" ]] || tmux kill-session -t "=$s" 2>/dev/null || true
+        done
         has_session && tmux kill-session -t "=$TMUX_SESSION"
         ok "tmux session '$TMUX_SESSION' closed"
-    elif has_window; then
-        tmux select-layout -t "$WT" tiled >/dev/null
+    else
+        prune_views
     fi
 }
 
@@ -323,39 +413,36 @@ cmd_open() {
     need tmux
     has_session || die "tmux session '$TMUX_SESSION' is not running — 'standing up' first"
     have_display || die "no display — use 'standing attach' from a terminal instead"
-    local n; n=$(clients)
-    if (( n > 0 )) && [[ "${1:-}" != "--new" ]]; then
-        say "Already shown in $n attached terminal(s) — 'standing open --new' for another"
-        return 0
-    fi
-    local term="${STANDING_TERMINAL:-}" t
-    if [[ -z "$term" ]]; then
-        for t in ghostty ptyxis alacritty; do
-            command -v "$t" >/dev/null 2>&1 && { term=$t; break; }
-        done
-    fi
-    [[ -n "$term" ]] || die "no terminal emulator found (ghostty, ptyxis, alacritty) — set STANDING_TERMINAL"
-    local -a attach=(tmux attach-session -t "=$TMUX_SESSION") cmd
-    local fs="${STANDING_FONT_SIZE-8}"
-    case "$term" in
-        ghostty)   cmd=(ghostty --maximize=true --title=standing ${fs:+--font-size="$fs"} -e "${attach[@]}") ;;
-        ptyxis)    cmd=(ptyxis --new-window --maximize --title standing -- "${attach[@]}") ;;
-        alacritty) cmd=(alacritty --title standing -o window.startup_mode=Maximized ${fs:+-o font.size="$fs"} -e "${attach[@]}") ;;
-        *)         cmd=("$term" -e "${attach[@]}") ;;
-    esac
+    pick_terminal
     scrub_env
-    setsid -f "${cmd[@]}" >/dev/null 2>&1
-    ok "opened $term attached to '$TMUX_SESSION'"
-    # Re-tile once the new client's size has been picked up.
-    ( sleep 2; tmux select-layout -t "$WT" tiled >/dev/null 2>&1 ) &
+    local w view opened=0
+    for w in $(std_windows); do
+        view=$(view_for "$w")
+        if ! tmux has-session -t "=$view" 2>/dev/null; then
+            # A grouped session: same windows as the base, its own current window.
+            tmux new-session -d -t "$TMUX_SESSION" -s "$view"
+        fi
+        tmux select-window -t "=$view:=$w"
+        if (( $(clients_of "$view") == 0 )); then
+            launch_terminal "$view" "$w"
+            ok "opened $TERM_BIN for $w"
+            opened=$((opened + 1))
+        fi
+    done
+    apply_options
+    (( opened )) || say "Every window already has a terminal"
+    # Re-tile once the new clients' sizes have been picked up.
+    ( sleep 2; for w in $(std_windows); do tmux select-layout -t "$(win_t "$w")" tiled >/dev/null 2>&1; done ) &
 }
 
 cmd_attach() {
     need tmux
     has_session || die "tmux session '$TMUX_SESSION' is not running — 'standing up' first"
     if (( $# )); then
-        local id; id=$(pane_for "$1")
+        local id w; id=$(pane_for "$1")
         [[ -n "$id" ]] || die "$1: no such pane"
+        w=$(window_of "$id")
+        tmux select-window -t "$(win_t "$w")"
         tmux select-pane -t "$id"
     fi
     if [[ -n "${TMUX:-}" ]]; then
@@ -367,29 +454,63 @@ cmd_attach() {
 
 cmd_trust() {
     need tmux
-    has_window || die "no '$WINDOW' window in session '$TMUX_SESSION'"
-    local id repo n=0
-    while IFS=$'\t' read -r id repo; do
+    [[ -n "$(std_windows)" ]] || die "no standing windows in session '$TMUX_SESSION'"
+    local yes=0 a w id repo i n=0
+    local -a only=() w_ids=() w_repos=() w_wins=()
+    for a in "$@"; do
+        case "$a" in
+            --yes|-y) yes=1 ;;
+            -*)       die "unknown option: $a" ;;
+            *)        only+=("$a") ;;
+        esac
+    done
+    while IFS=$'\t' read -r w id repo; do
+        if (( ${#only[@]} )); then
+            local hit=0; for a in "${only[@]}"; do [[ "$a" == "$repo" ]] && hit=1; done
+            (( hit )) || continue
+        fi
         at_trust_prompt "$id" || continue
-        # Move the cursor onto "Yes" unless it is already there, then confirm.
-        trust_cursor_on_yes "$id" || { tmux send-keys -t "$id" Down; sleep 0.3; }
+        w_ids+=("$id"); w_repos+=("$repo"); w_wins+=("$w")
+    done < <(all_panes)
+    if (( ${#w_ids[@]} == 0 )); then
+        say "No pane is waiting at the folder-trust dialog"
+        return 0
+    fi
+    say "Waiting at the folder-trust dialog:"
+    for i in "${!w_ids[@]}"; do say "  ${w_repos[$i]}  ${c_dim}(${w_wins[$i]})${c_off}"; done
+    if (( ! yes )); then
+        [[ -t 0 ]] || die "not a terminal — pass --yes to accept without the prompt"
+        read -r -p "Accept folder trust in these ${#w_ids[@]} pane(s)? [y/N] " a
+        [[ "$a" =~ ^[Yy] ]] || { say "Nothing accepted"; return 0; }
+    fi
+    for i in "${!w_ids[@]}"; do
+        id=${w_ids[$i]}; repo=${w_repos[$i]}; w=${w_wins[$i]}
+        at_trust_prompt "$id" || { warn "$repo ($w): dialog gone, skipped"; continue; }
+        # Move the cursor onto "Yes" unless it is already there, let the dialog
+        # redraw, and only confirm once the cursor is verifiably on Yes — a Down
+        # that arrives before the dialog reads keys echoes as text instead.
+        trust_cursor_on_yes "$id" || { tmux send-keys -t "$id" Down; sleep 0.6; }
         if trust_cursor_on_yes "$id"; then
             tmux send-keys -t "$id" Enter
-            ok "$repo: accepted folder trust"
+            sleep 0.6
+            if pane_dead "$id"; then
+                warn "$repo ($w): claude exited instead of accepting — 'standing up' respawns it"
+            else
+                ok "$repo ($w): accepted folder trust"
+                n=$((n + 1))
+            fi
         else
-            warn "$repo: could not put the cursor on Yes — click the pane and accept by hand"
-            continue
+            warn "$repo ($w): cursor is not on Yes — click the pane and accept by hand"
         fi
-        n=$((n + 1))
-    done < <(tmux list-panes -t "$WT" -F $'#{pane_id}\t#{@repo}')
+    done
     say "Accepted in $n pane(s)"
 }
 
 cmd_tile() {
     need tmux
-    has_window || die "no '$WINDOW' window in session '$TMUX_SESSION'"
+    [[ -n "$(std_windows)" ]] || die "no standing windows in session '$TMUX_SESSION'"
     apply_options
-    ok "tiled $(tmux list-panes -t "$WT" | wc -l) panes"
+    ok "tiled $(all_panes | wc -l) panes across $(std_windows | wc -l) window(s)"
 }
 
 cmd_repos() {
