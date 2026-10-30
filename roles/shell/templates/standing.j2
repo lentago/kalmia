@@ -52,8 +52,8 @@
 #     readable ("[dead]" on the border); `standing up` respawns it in place.
 #   * Inherited CLAUDE* env vars are stripped from the children, so this can be
 #     run from inside another Claude session without tripping nested-session guards.
-#   * Durable home for this script is kalmia roles/shell (like clean-all/pull-all);
-#     this copy is the hand-installed test version.
+#   * ANSIBLE MANAGED — kalmia roles/shell (like clean-all/pull-all). Local edits
+#     are overwritten on the next run; change roles/shell/templates/standing.j2 instead.
 set -euo pipefail
 
 REPOS_DIR="${STANDING_REPOS_DIR:-{% endraw %}{{ repos_dir }}/lentago{% raw %}}"
