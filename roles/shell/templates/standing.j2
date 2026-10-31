@@ -563,7 +563,7 @@ cmd_down() {
         graceful_exit "$id" "$repo" || true
         # The window goes with its last pane: close its terminal first, so it
         # never flashes another EM's window on the way out.
-        if (( ! whole )) && (( $(win_panes "$w") <= 1 )); then close_view "$w"; fi
+        if (( $(win_panes "$w") <= 1 )); then close_view "$w"; fi
         pane_exists "$id" && tmux kill-pane -t "$id"
         ok "$repo down"
         if (( ! whole )) && tmux list-windows -t "=$TMUX_SESSION" -F '#{window_name}' 2>/dev/null | grep -qxF "$w"; then
