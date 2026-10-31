@@ -236,7 +236,7 @@ table below — `docker`, `code`, the CLI utilities — should all be on your
 | `power` | TLP power management, ThinkPad charge thresholds, fwupd (opt-in) |
 | `editors` | VS Code (+ extensions), Claude Code |
 | `cli_tools` | jq, yq, bat, fd, ripgrep, fzf, tmux, direnv, Starship, … |
-| `shell` | marker-managed `.bashrc` block + Starship config + the `pull-all` / `clean-all` / `gh-issue` / `standing` helpers + the Lentago Director's `/em` skill |
+| `shell` | marker-managed `.bashrc` block + Starship config + the `pull-all` / `clean-all` / `gh-issue` / `standing` / `director` helpers + the Lentago Director's `/em` skill |
 | `repos` | GitHub CLI + clone your personal and org repos into `~/repos/<owner>/<name>` (on by default) |
 
 ## Status

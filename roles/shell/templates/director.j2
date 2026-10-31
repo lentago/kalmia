@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# director — start or resume the standing Engineering Director and attach to it.
+#
+# The Director is `claude --name lentago-director --continue` in ~/repos/lentago,
+# in its own tmux session "lentago-director" on the same tmux server as the EMs.
+# Running this again attaches without starting a second Claude; after /exit it
+# respawns the pane. Same as `standing director`; flags pass through:
+#
+#   director                 create or resume, then attach (switch-client inside tmux)
+#   director --open          open a maximized terminal on it instead of attaching here
+#   director --fresh         start a new conversation instead of --continue
+#   director -- ARGS         extra claude arguments (only when claude starts)
+#
+# `standing show|hide director` opens or closes its terminal, `standing down
+# director` ends it; `standing --help` has the rest.
+#
+# ANSIBLE MANAGED — kalmia roles/shell (installed beside `standing`). Local edits
+# are overwritten on the next run; change roles/shell/templates/director.j2 instead.
+set -euo pipefail
+
+exec "$(dirname "$(readlink -f "$0")")/standing" director "$@"
