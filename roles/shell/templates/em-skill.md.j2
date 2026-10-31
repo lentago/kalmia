@@ -1,0 +1,61 @@
+---
+name: em
+description: Director-side handling of a repo's standing Engineering Manager — start it on demand in its own terminal window, show or hide that window, dispatch to it, report. Use whenever dispatching to a <repo>-standing session, when Chris says show/open/hide/close an EM or asks which EMs are up, and before any `standing` command.
+---
+
+<!-- ANSIBLE MANAGED — kalmia roles/shell/templates/em-skill.md.j2, installed with
+     `standing`. Local edits are overwritten on the next run; change the template. -->
+
+# /em — a standing EM, on demand, in its own window
+
+The model (Chris, 2026-10-31): each Engineering Manager is `claude --name <repo>-standing`
+in one tmux pane, one per repo, shown in its own maximized Ghostty titled
+`<repo> — standing EM`. The Director starts an EM the first time it needs one, never all
+at init, opens its window so Chris can watch the work alongside the Director's, and Chris
+closes windows at will to tidy his workspace: closing a terminal only detaches a tmux
+client, the session keeps running. Canon: `~/repos/lentago/CLAUDE.md` § Director init and
+§ Dispatch protocol.
+
+## Forms
+
+| Invocation | Does |
+|---|---|
+| `/em status` | which EMs are up (`ListAgents` + `standing status`), which have a window |
+| `/em <repo>` | ensure the EM is up, open its window |
+| `/em show <repo>` | open its window (idempotent) |
+| `/em hide <repo>` | close its window(s); the session keeps running |
+| `/em <repo> <ask…>` | ensure up, open window, dispatch the ask, report in one line |
+| `/em down <repo>` | end the EM with `standing down <repo>`; only when Chris asked or its work is closed and he agreed |
+
+## Procedure
+
+1. **Status.** `ListAgents`: is `<repo>-standing` listed? `standing status` gives one row
+   per EM: state, pid, and in TERM how many terminals show it (`none` = no window).
+2. **Start if absent, one at a time** (two concurrent starts can race, kalmia#247):
+
+   ```
+   standing up <repo> --director <your session name>
+   ```
+
+   `up` opens a terminal for the EM it starts, and only for that one. Then check
+   `ListAgents` every 10 s, up to 60 s, until the name appears. If `standing status`
+   shows `trust?`, stop and tell Chris: accepting the folder-trust dialog is his
+   (`standing trust`).
+3. **Show** an EM that was already up: `standing show <repo>`. It opens one terminal,
+   or says the EM is already shown and opens nothing. Never `standing open`: it reopens
+   every EM's window, including ones Chris closed.
+4. **Dispatch** per the protocol: `SendMessage` to `<repo>-standing` with
+   `notify_when_idle: true`; first line is the ask in one sentence; carry the issue number
+   (file it first), the deliverable, what is out of scope, any judgment already decided.
+   One ask per message.
+5. **Report** to Chris in one line: started or already up, window opened, what was
+   dispatched. Then carry on; the EM's reply and the idle notice arrive on their own.
+6. **Hide** on request: `standing hide <repo>` closes its terminal(s); the EM keeps
+   running and `standing show <repo>` brings the window back.
+
+## Don'ts
+
+- No bare `standing up` (it starts every repo) and no parallel `standing up`.
+- No polling `ListAgents` for a reply; wait for the EM's message or the idle notice.
+- If the classifier blocks `standing up` or `trust`, route it to Chris, never to an EM.
+- Don't edit inside a repo that has a live EM; hand off (`~/.claude/CLAUDE.md`).

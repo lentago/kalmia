@@ -71,3 +71,29 @@
     - gh-issue
     - standing
   become: false
+
+# --- The Director's /em skill ----------------------------------------------------
+# The procedure the Engineering Director (the Claude session whose cwd is the
+# Lentago fleet root) follows to start, show, hide and dispatch to standing EMs.
+# It drives `standing`, so the two ship together and stay versioned here. Claude
+# Code loads it as a project skill from <fleet root>/.claude/skills/em/.
+- name: Ensure the Director's /em skill directory exists
+  ansible.builtin.file:
+    path: "{{ repos_dir }}/lentago/.claude/skills/em"
+    state: directory
+    mode: "0755"
+  become: false
+
+- name: Install the Director's /em skill
+  ansible.builtin.template:
+    src: em-skill.md.j2
+    dest: "{{ repos_dir }}/lentago/.claude/skills/em/SKILL.md"
+    mode: "0644"
+  become: false
+
+# em-window.sh was the hand-placed interim helper for `standing show|hide`.
+- name: Retire the interim em-window.sh helper
+  ansible.builtin.file:
+    path: "{{ repos_dir }}/lentago/.claude/skills/em/em-window.sh"
+    state: absent
+  become: false
