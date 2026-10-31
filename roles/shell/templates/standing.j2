@@ -23,8 +23,9 @@
 #   standing                       same as `standing status`
 #   standing up REPO [REPO ...]    start these EMs, a window and a terminal each —
 #                                  idempotent: a running EM is left alone, a dead one is
-#                                  respawned in place, and only a window lacking a
-#                                  terminal gets one; other EMs are not touched
+#                                  respawned in place; a terminal opens only for an EM
+#                                  this run starts or respawns, so one closed on purpose
+#                                  stays closed (`open` fills them); others are not touched
 #   standing up                    with no repos: every repo, in ORDER below (explicit use only)
 #   standing up REPO --director NAME  tell the EM which session is its Director (NAME from
 #                                  the "This session is …" line of ListAgents); remembered
@@ -46,7 +47,8 @@
 #   standing trust [repo ...] [--yes]  list the EMs waiting at the folder-trust dialog and,
 #                                  after a y/N prompt (or --yes), accept it in each — your
 #                                  call to run; these are your repos and Claude won't run it for you
-#   standing open                  open a maximized terminal for every EM window that has none
+#   standing open                  open a maximized terminal for every EM window that has none,
+#                                  including ones closed on purpose
 #   standing attach [repo]         attach in *this* terminal (or switch-client inside tmux) to
 #                                  the base session, which holds every EM window
 #   standing tile                  re-apply the tiled layout (matters only with STANDING_PER_WINDOW > 1)
@@ -415,7 +417,8 @@ cmd_up() {
     resolve_repos "${SEL[@]}"
     scrub_env
 
-    local repo dir id w started=0 respawned=0 kept=0
+    local repo dir id w where started=0 respawned=0 kept=0
+    local -a want=()   # windows of the EMs this run starts or respawns: the only ones it opens
     for repo in "${REPOS[@]}"; do
         dir="$REPOS_DIR/$repo"
         local -a cmd=()
@@ -426,6 +429,7 @@ cmd_up() {
         if [[ -n "$id" ]]; then
             if pane_dead "$id"; then
                 tmux respawn-pane -k -t "$id" -c "$dir" -- "${cmd[@]}"
+                want+=("$(window_of "$id")")
                 ok "$repo respawned"
                 respawned=$((respawned + 1))
             else
@@ -434,9 +438,9 @@ cmd_up() {
             fi
         else
             id=$(spawn_pane "$repo" "$dir" "${cmd[@]}")
-            w=$(window_of "$id")
-            if [[ "$w" == "$(win_name "$repo")" ]]; then w="its own window"; else w="window $w"; fi
-            ok "$repo started in $w  ${c_dim}(claude --name $repo-$NAME_SUFFIX${MODEL:+ --model $MODEL})${c_off}"
+            w=$(window_of "$id"); want+=("$w")
+            if [[ "$w" == "$(win_name "$repo")" ]]; then where="its own window"; else where="window $w"; fi
+            ok "$repo started in $where  ${c_dim}(claude --name $repo-$NAME_SUFFIX${MODEL:+ --model $MODEL})${c_off}"
             started=$((started + 1))
         fi
         apply_options
@@ -444,14 +448,20 @@ cmd_up() {
     if (( NO_DIRECTOR )); then forget_director; elif [[ -n "$DIRECTOR" ]]; then remember_director "$DIRECTOR"; fi
     say ""
     say "Up: $started started, $respawned respawned, $kept already running, $(std_windows | wc -l) window(s)${DIRECTOR:+, Director $DIRECTOR}"
-    if (( OPEN )) && have_display; then
-        cmd_open
-    else
-        local w lacking=0
-        for w in $(std_windows); do (( $(clients_of "$(view_for "$w")") == 0 )) && lacking=$((lacking + 1)); done
-        if (( lacking )); then
-            say "$lacking window(s) without a terminal: 'standing open' or 'standing attach' to look in"
-        fi
+    # Terminals only for what this run started: a window whose terminal someone
+    # closed on purpose stays closed until an explicit `standing open`.
+    local -A asked=()
+    if (( OPEN )) && have_display && (( ${#want[@]} )); then
+        open_terminals "${want[@]}"
+        for w in "${want[@]}"; do asked[$w]=1; done
+    fi
+    local lacking=0
+    for w in $(std_windows); do
+        [[ -n "${asked[$w]:-}" ]] && continue
+        if (( $(clients_of "$(view_for "$w")") == 0 )); then lacking=$((lacking + 1)); fi
+    done
+    if (( lacking )); then
+        say "$lacking window(s) without a terminal, left as they are: 'standing open' opens them, 'standing attach' looks in"
     fi
 }
 
@@ -572,25 +582,34 @@ cmd_down() {
     fi
 }
 
-cmd_open() {
+cmd_open() { open_terminals; }
+
+# Open a maximized terminal for each named window that has none: every standing
+# window when none are named (`standing open`); `up` names only the windows of
+# the EMs it just started or respawned.
+open_terminals() {
     need tmux
     has_session || die "tmux session '$TMUX_SESSION' is not running — 'standing up' first"
-    local w view opened=0
-    local -a missing=()
+    local w view all=0
+    local -a wins=("$@") missing=()
+    local -A seen=()
     prune_views
+    if (( ${#wins[@]} == 0 )); then all=1; mapfile -t wins < <(std_windows); fi
     # Views first (cheap, no display needed), then decide whether a terminal is even wanted.
-    for w in $(std_windows); do
+    for w in "${wins[@]}"; do
+        [[ -z "${seen[$w]:-}" ]] || continue   # two EMs started into one grid window
+        seen[$w]=1
         view=$(view_for "$w")
         if ! tmux has-session -t "=$view" 2>/dev/null; then
             # A grouped session: same windows as the base, its own current window.
             tmux new-session -d -t "$TMUX_SESSION" -s "$view"
         fi
         tmux select-window -t "=$view:=$w"
-        (( $(clients_of "$view") == 0 )) && missing+=("$w")
+        if (( $(clients_of "$view") == 0 )); then missing+=("$w"); fi
     done
     apply_options
     if (( ${#missing[@]} == 0 )); then
-        say "Every window already has a terminal"
+        if (( all )); then say "Every window already has a terminal"; else say "Already in a terminal: ${!seen[*]}"; fi
         return 0
     fi
     have_display || die "no display — use 'standing attach' from a terminal instead"
@@ -599,7 +618,6 @@ cmd_open() {
     for w in "${missing[@]}"; do
         launch_terminal "$(view_for "$w")" "$w"
         ok "opened $TERM_BIN for $w"
-        opened=$((opened + 1))
     done
     # Re-tile grid windows once the new clients' sizes have been picked up
     # (a window of one pane has nothing to tile).
