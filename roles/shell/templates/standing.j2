@@ -6,8 +6,10 @@
 # of tmux session "lentago", named after its repo and holding one pane that
 # runs `claude --name <repo>-standing` in that repo's checkout. Each window is
 # viewed through its own grouped tmux session ("lentago-<repo>") with its own
-# terminal, titled after the repo at the terminal's normal font size, so a
-# human finds a session by name in the window switcher and nothing runs hidden.
+# terminal, titled "<repo> — standing EM" at the terminal's normal font size, so
+# a human finds a session by name in the window switcher and nothing runs hidden.
+# Closing a terminal (or `standing hide <repo>`) only detaches a tmux client: the
+# EM keeps running, and `standing show <repo>` brings its terminal back.
 #
 # Org model (see ~/repos/lentago/CLAUDE.md): the session at ~/repos/lentago is
 # the Engineering Director; each standing session is that repo's Engineering
@@ -47,8 +49,13 @@
 #   standing trust [repo ...] [--yes]  list the EMs waiting at the folder-trust dialog and,
 #                                  after a y/N prompt (or --yes), accept it in each — your
 #                                  call to run; these are your repos and Claude won't run it for you
+#   standing show REPO             open one maximized terminal on that EM's window, titled
+#                                  "REPO — standing EM"; if a terminal already shows it, says
+#                                  so and opens nothing
+#   standing hide REPO             close that EM's terminal(s); its pane and claude keep running
+#                                  (in a grid window, that terminal shows its neighbours too)
 #   standing open                  open a maximized terminal for every EM window that has none,
-#                                  including ones closed on purpose
+#                                  including ones closed on purpose (`show REPO` opens just one)
 #   standing attach [repo]         attach in *this* terminal (or switch-client inside tmux) to
 #                                  the base session, which holds every EM window
 #   standing tile                  re-apply the tiled layout (matters only with STANDING_PER_WINDOW > 1)
@@ -78,12 +85,13 @@
 #     readable ("[dead]" on the border); `standing up` respawns it in place.
 #   * Inherited CLAUDE* env vars are stripped from the children, so this can be
 #     run from inside another Claude session without tripping nested-session guards.
-#   * The base session "lentago" holds every EM window and remembers the Director;
-#     window <repo> is viewed through "lentago-<repo>", one session group sharing
-#     the windows. `down` with no repos removes them all.
+#   * The base session "lentago" holds every EM window and remembers the Director,
+#     and is never itself a view: window <repo> is viewed through "lentago-<repo>",
+#     one session group sharing the windows. `down` with no repos removes them all.
 #   * Windows standing-1, standing-2, … (the earlier tiled grid, or STANDING_PER_WINDOW
-#     > 1) are still listed, restarted and downed; they are viewed through "lentago"
-#     (N=1) and "lentago-vN" (N>1) as before.
+#     > 1) are still listed, restarted and downed; window N is viewed through
+#     "lentago-vN". (Before kalmia#249, window 1 was viewed through the base session;
+#     a terminal still attached there is not counted as showing it.)
 #   * ANSIBLE MANAGED — kalmia roles/shell (like clean-all/pull-all). Local edits
 #     are overwritten on the next run; change roles/shell/templates/standing.j2 instead.
 set -euo pipefail
@@ -161,11 +169,11 @@ win_t()     { printf '=%s:=%s' "$TMUX_SESSION" "$1"; }              # exact wind
 win_num()   { printf '%s' "${1##*-}"; }
 win_panes() { tmux list-panes -t "$(win_t "$1")" -F '#{pane_id}' 2>/dev/null | wc -l; }
 # The grouped session through which a window is viewed: "lentago-<repo>" for a
-# repo's own window; for grid window N, the base session (N=1) or "lentago-vN".
+# repo's own window, "lentago-vN" for grid window N. Never the base session, so
+# a `standing attach` client is never mistaken for an EM's terminal.
 view_for() {
     if is_grid "$1"; then
-        local n; n=$(win_num "$1")
-        (( n == 1 )) && printf '%s' "$TMUX_SESSION" || printf '%s-v%s' "$TMUX_SESSION" "$n"
+        printf '%s-v%s' "$TMUX_SESSION" "$(win_num "$1")"
     else
         printf '%s-%s' "$TMUX_SESSION" "$1"
     fi
@@ -182,7 +190,9 @@ view_sessions() {
     tmux list-sessions -F "#{session_name}${US}#{session_group}" 2>/dev/null \
         | awk -F"$US" -v s="$TMUX_SESSION" '$1 == s || $2 == s { print $1 }' || true
 }
-clients_of() { tmux list-clients -t "=$1" 2>/dev/null | wc -l; }
+# Terminals attached to a session; 0 when the session doesn't exist yet (an EM
+# started with --no-open has no view), which under pipefail must not fail.
+clients_of() { { tmux list-clients -t "=$1" 2>/dev/null || true; } | wc -l; }
 
 # window US pane_id US repo for every pane in every standing window.
 all_panes() {
@@ -368,7 +378,17 @@ pick_terminal() {
     die "no terminal emulator found (ghostty, ptyxis, alacritty) — set STANDING_TERMINAL"
 }
 
-# Open a maximized terminal attached to a view session, titled after its window,
+# A terminal's title: "<repo> — standing EM" for a window holding one EM (its
+# own window, or a one-pane grid window from before #248), the window name for
+# a grid window holding several.
+term_title() {
+    local repo
+    if (( $(win_panes "$1") > 1 )); then printf '%s' "$1"; return 0; fi
+    repo=$(tmux display-message -p -t "$(win_t "$1")" '#{@repo}' 2>/dev/null || true)
+    printf '%s — standing EM' "${repo:-$1}"
+}
+
+# Open a maximized terminal attached to a view session, with the given title,
 # at the terminal's own font size unless STANDING_FONT_SIZE says otherwise.
 launch_terminal() {
     local view=$1 title=$2 fs="${STANDING_FONT_SIZE:-}"
@@ -395,16 +415,9 @@ prune_views() {
     done
 }
 
-# Close the terminal showing a window that is about to go: kill its view
-# session, or for grid window 1 (viewed through the base session, which must
-# stay) detach the base session's clients.
+# Close the terminal showing a window that is about to go: kill its view session.
 close_view() {
-    local view; view=$(view_for "$1")
-    if [[ "$view" == "$TMUX_SESSION" ]]; then
-        tmux detach-client -s "=$TMUX_SESSION" 2>/dev/null || true
-    else
-        tmux kill-session -t "=$view" 2>/dev/null || true
-    fi
+    tmux kill-session -t "=$(view_for "$1")" 2>/dev/null || true
 }
 
 # ------------------------------------------------------------- commands ----
@@ -616,7 +629,7 @@ open_terminals() {
     pick_terminal
     scrub_env
     for w in "${missing[@]}"; do
-        launch_terminal "$(view_for "$w")" "$w"
+        launch_terminal "$(view_for "$w")" "$(term_title "$w")"
         ok "opened $TERM_BIN for $w"
     done
     # Re-tile grid windows once the new clients' sizes have been picked up
@@ -624,6 +637,41 @@ open_terminals() {
     if [[ -n "$(grid_windows)" ]]; then
         ( sleep 2; for w in $(grid_windows); do tmux select-layout -t "$(win_t "$w")" tiled >/dev/null 2>&1; done ) &
     fi
+}
+
+# One EM's terminal: open it unless a terminal already shows that EM's window.
+cmd_show() {
+    need tmux
+    if (( $# != 1 )) || [[ "$1" == -* ]]; then die "usage: standing show <repo>"; fi
+    local repo=$1 id w n
+    id=$(pane_for "$repo")
+    [[ -n "$id" ]] || die "$repo has no standing EM — 'standing up $repo' starts one, terminal included"
+    w=$(window_of "$id")
+    n=$(clients_of "$(view_for "$w")")
+    if (( n )); then
+        say "$repo is already shown in $n terminal(s)"
+        return 0
+    fi
+    tmux select-pane -t "$id"   # in a grid window, focus this EM's pane
+    open_terminals "$w"
+}
+
+# Close one EM's terminal(s) by detaching every client of its view session; the
+# pane and its claude keep running, and `standing show <repo>` brings one back.
+cmd_hide() {
+    need tmux
+    if (( $# != 1 )) || [[ "$1" == -* ]]; then die "usage: standing hide <repo>"; fi
+    local repo=$1 id view n
+    id=$(pane_for "$repo")
+    [[ -n "$id" ]] || die "$repo has no standing EM ('standing status' lists them)"
+    view=$(view_for "$(window_of "$id")")
+    n=$(clients_of "$view")
+    if (( n == 0 )); then
+        say "$repo has no terminal open; its session keeps running"
+        return 0
+    fi
+    tmux detach-client -s "=$view"
+    ok "closed $n terminal(s) for $repo; its session keeps running"
 }
 
 cmd_attach() {
@@ -731,7 +779,9 @@ main() {
         restart)        cmd_restart "$@" ;;
         down|stop)      cmd_down "$@" ;;
         status|ls)      cmd_status "$@" ;;
-        open|show)      cmd_open "$@" ;;
+        open)           cmd_open "$@" ;;
+        show)           cmd_show "$@" ;;
+        hide)           cmd_hide "$@" ;;
         attach|a)       cmd_attach "$@" ;;
         tile)           cmd_tile "$@" ;;
         trust)          cmd_trust "$@" ;;
