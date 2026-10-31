@@ -37,6 +37,8 @@ client, the session keeps running. Canon: `~/repos/lentago/CLAUDE.md` § Directo
    standing up <repo> --director <your session name>
    ```
 
+   While the tmux session `lentago-director` exists (Chris starts it with `director`),
+   `--director` defaults to `lentago-director`; pass it when you run under any other name.
    `up` opens a terminal for the EM it starts, and only for that one. Then check
    `ListAgents` every 10 s, up to 60 s, until the name appears. If `standing status`
    shows `trust?`, stop and tell Chris: accepting the folder-trust dialog is his

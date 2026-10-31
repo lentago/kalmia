@@ -15,9 +15,15 @@
 # the Engineering Director; each standing session is that repo's Engineering
 # Manager (EM), on Opus by default, free to spawn subagents of its own choice;
 # Chris is Product Owner, CTO and CEO. EMs start on demand: the Director runs
-# `standing up <repo> --director <its-name>` the first time a dispatch needs
-# that EM, never for every repo at init, so a normal day grows from zero EMs
-# to the handful it dispatches to.
+# `standing up <repo>` the first time a dispatch needs that EM, never for every
+# repo at init, so a normal day grows from zero EMs to the handful it dispatches to.
+#
+# The Director lives on the same tmux server, in its own tmux session
+# "lentago-director": one window "director" in ~/repos/lentago running
+# `claude --name lentago-director --continue`, so it survives a closed terminal,
+# keeps a stable name for the EMs to report to, and resumes its conversation.
+# `standing director` (or the `director` command) creates or resumes it and
+# attaches. While that session exists, `standing up` points new EMs at it.
 #
 # Dependencies: tmux (>= 3.2), claude, coreutils; ghostty/ptyxis/alacritty for `open`
 #
@@ -31,7 +37,9 @@
 #   standing up                    with no repos: every repo, in ORDER below (explicit use only)
 #   standing up REPO --director NAME  tell the EM which session is its Director (NAME from
 #                                  the "This session is …" line of ListAgents); remembered
-#                                  for later up/restart calls — `--no-director` forgets it
+#                                  for later up/restart calls — `--no-director` forgets it.
+#                                  With no --director, the EM reports to lentago-director
+#                                  while that tmux session exists, else to the remembered one
 #   standing up --no-open ...      don't open terminal windows
 #   standing up --no-prompt ...    start claude at an empty prompt (no kickoff turn)
 #   standing up --prompt 'text'    custom kickoff prompt
@@ -39,13 +47,19 @@
 #   standing restart [repo ...] [same flags as up]
 #                                  /exit each pane and start a FRESH session in it (new model,
 #                                  prompt, director); the EM's conversation and any in-flight
-#                                  work are gone. Windows and terminals stay put. The Director
-#                                  from the last --director is remembered on the tmux session,
-#                                  so a bare `standing restart` keeps it.
+#                                  work are gone. Windows and terminals stay put. A bare
+#                                  `standing restart` keeps the Director: lentago-director
+#                                  while that session exists, else the one remembered from
+#                                  the last --director.
 #   standing down [repo ...]       send /exit, wait, then kill the EM's pane, window and
-#                                  terminal; with no repos: every EM, then the tmux sessions
-#   standing status                one row per EM: repo, state, terminal, pid, size, session
-#                                  name (state "trust?" = waiting at Claude's folder-trust dialog)
+#                                  terminal; with no repos: every EM, then the EMs' tmux
+#                                  sessions — never the Director's
+#   standing down director         /exit the Director, then end its tmux session and terminals.
+#                                  The remembered Director name is kept: EMs started meanwhile
+#                                  still report to lentago-director, which `director` brings back
+#   standing status                the Director's row, then one row per EM: repo, state,
+#                                  terminal, pid, size, session name (state "trust?" = waiting
+#                                  at Claude's folder-trust dialog)
 #   standing trust [repo ...] [--yes]  list the EMs waiting at the folder-trust dialog and,
 #                                  after a y/N prompt (or --yes), accept it in each — your
 #                                  call to run; these are your repos and Claude won't run it for you
@@ -54,10 +68,21 @@
 #                                  so and opens nothing
 #   standing hide REPO             close that EM's terminal(s); its pane and claude keep running
 #                                  (in a grid window, that terminal shows its neighbours too)
+#   standing director [--open] [--fresh] [-- claude args]
+#                                  create the Director's tmux session or, if its claude has
+#                                  exited, respawn it in place; then attach this terminal
+#                                  (switch-client inside tmux). A running Director is left
+#                                  alone, never started twice. --open: instead of attaching,
+#                                  open a maximized terminal titled "lentago — Engineering
+#                                  Director" unless one already shows it. --fresh: start a new
+#                                  conversation instead of --continue (only when it starts or
+#                                  respawns claude). The `director` command is this.
+#   standing show|hide director    open or close the Director's terminal, as for an EM
 #   standing open                  open a maximized terminal for every EM window that has none,
 #                                  including ones closed on purpose (`show REPO` opens just one)
 #   standing attach [repo]         attach in *this* terminal (or switch-client inside tmux) to
 #                                  the base session, which holds every EM window
+#                                  (`attach director` attaches to the Director's session)
 #   standing tile                  re-apply the tiled layout (matters only with STANDING_PER_WINDOW > 1)
 #   standing repos                 print the repo set a bare `up` would use, in ORDER
 #
@@ -68,6 +93,8 @@
 # Environment:
 #   STANDING_REPOS_DIR     where the clones live   (default: ~/repos/lentago)
 #   STANDING_TMUX_SESSION  tmux session name       (default: lentago)
+#   STANDING_DIRECTOR_NAME the Director's tmux session and claude --name
+#                                                  (default: lentago-director)
 #   STANDING_PER_WINDOW    EMs per window          (default: 1 — a window and terminal each;
 #                          N > 1 packs N tiled panes into windows standing-1, standing-2, …)
 #   STANDING_MODEL         model every EM starts on (default: claude-opus-5-5; set it
@@ -88,6 +115,8 @@
 #   * The base session "lentago" holds every EM window and remembers the Director,
 #     and is never itself a view: window <repo> is viewed through "lentago-<repo>",
 #     one session group sharing the windows. `down` with no repos removes them all.
+#   * "lentago-director" is not in that group, so nothing aimed at the EMs touches
+#     it; its pane keeps remain-on-exit too, and `standing director` respawns it.
 #   * Windows standing-1, standing-2, … (the earlier tiled grid, or STANDING_PER_WINDOW
 #     > 1) are still listed, restarted and downed; window N is viewed through
 #     "lentago-vN". (Before kalmia#249, window 1 was viewed through the base session;
@@ -98,6 +127,9 @@ set -euo pipefail
 
 REPOS_DIR="${STANDING_REPOS_DIR:-{% endraw %}{{ repos_dir }}/lentago{% raw %}}"
 TMUX_SESSION="${STANDING_TMUX_SESSION:-lentago}"
+DIRECTOR_NAME="${STANDING_DIRECTOR_NAME:-lentago-director}"
+DIRECTOR_WIN=director
+DIRECTOR_TITLE="lentago — Engineering Director"
 PER_WINDOW="${STANDING_PER_WINDOW:-1}"
 MODEL="${STANDING_MODEL-claude-opus-5-5}"
 NAME_SUFFIX="${STANDING_NAME_SUFFIX:-standing}"
@@ -274,14 +306,29 @@ parse_launch_flags() {
             *)            SEL+=("$1"); shift ;;
         esac
     done
+    local s
+    for s in "${SEL[@]}"; do
+        [[ "$s" != director ]] || die "the Director is started with 'standing director' (the 'director' command), not as an EM"
+    done
     if (( NO_DIRECTOR )); then
         DIRECTOR=""
     elif [[ -z "$DIRECTOR" ]]; then
-        DIRECTOR=$(recall_director)
+        # The tmux-hosted Director, while it exists, outranks a remembered name:
+        # that is how EMs started after the switch stop pointing at an old session.
+        if director_up; then DIRECTOR=$DIRECTOR_NAME; else DIRECTOR=$(recall_director); fi
     fi
     local dsent=""
     [[ -n "$DIRECTOR" ]] && dsent=${DIRECTOR_SENTENCE//%NAME%/$DIRECTOR}
     PROMPT=${PROMPT//%DIRECTOR%/$dsent}
+}
+
+# `env -u VAR …` for every CLAUDE* variable in the tmux server's global
+# environment (it may predate this script). Prints NUL-separated.
+env_prefix() {
+    local v
+    printf '%s\0' env
+    while IFS= read -r v; do printf '%s\0' -u "$v"; done \
+        < <(tmux show-environment -g 2>/dev/null | grep -oE '^CLAUDE[A-Za-z0-9_]*' || true)
 }
 
 # Build the argv that runs claude in a pane: CLAUDE* stripped from the tmux
@@ -290,10 +337,9 @@ parse_launch_flags() {
 # Prints NUL-separated.
 claude_argv() {
     local repo=$1; shift
-    local -a cmd=(env)
-    local v a has_model=0
-    while IFS= read -r v; do cmd+=(-u "$v"); done \
-        < <(tmux show-environment -g 2>/dev/null | grep -oE '^CLAUDE[A-Za-z0-9_]*' || true)
+    local -a cmd=()
+    local a has_model=0
+    mapfile -d '' cmd < <(env_prefix)
     cmd+=("$CLI_BIN" --name "$repo-$NAME_SUFFIX")
     for a in "${EXTRA[@]}"; do [[ "$a" == --model || "$a" == --model=* ]] && has_model=1; done
     [[ -n "$MODEL" && $has_model == 0 ]] && cmd+=(--model "$MODEL")
@@ -420,7 +466,152 @@ close_view() {
     tmux kill-session -t "=$(view_for "$1")" 2>/dev/null || true
 }
 
+# Pad a coloured string to N visible columns; printf's widths count bytes, codes included.
+vpad() {
+    local plain=$1 c
+    for c in "$c_ok" "$c_warn" "$c_err" "$c_dim" "$c_off"; do plain=${plain//"$c"/}; done
+    printf '%s%*s' "$1" $(( $2 > ${#plain} ? $2 - ${#plain} : 0 )) ''
+}
+
+# A pane's state for `status`: dead, trust? (at the folder-trust dialog), running,
+# or whatever else it runs. Args: pane id, pane_dead, pane_current_command.
+pane_state() {
+    if [[ "$2" == 1 ]]; then
+        printf '%s' "${c_err}dead${c_off}"
+    elif [[ "$3" == claude* || "$3" == node* ]] && at_trust_prompt "$1"; then
+        printf '%s' "${c_warn}trust?${c_off}"
+    elif [[ "$3" == claude* || "$3" == node* ]]; then
+        printf '%s' "${c_ok}running${c_off}"
+    else
+        printf '%s' "${c_warn}$3${c_off}"
+    fi
+}
+
+# --------------------------------------------------------------- director ----
+# The Director's own tmux session: not grouped with the EMs' base session, so
+# view_sessions(), `down` and `open` never see it. Its terminal attaches to the
+# session itself; there is no view.
+
+director_up()   { tmux has-session -t "=$DIRECTOR_NAME" 2>/dev/null; }
+director_pane() { { tmux list-panes -s -t "=$DIRECTOR_NAME" -F '#{pane_id}' 2>/dev/null || true; } | head -n1; }
+
+# claude for the Director: CLAUDE* stripped, its standing name, resuming the
+# latest conversation in REPOS_DIR unless FRESH, then the caller's extras.
+director_argv() {
+    local -a cmd=()
+    mapfile -d '' cmd < <(env_prefix)
+    cmd+=("$CLI_BIN" --name "$DIRECTOR_NAME")
+    (( FRESH )) || cmd+=(--continue)
+    cmd+=("${EXTRA[@]}")
+    printf '%s\0' "${cmd[@]}"
+}
+
+# Create the Director's session, or respawn its pane if claude has exited;
+# a live one is left alone. Sets D_STATE to started, respawned or running.
+ensure_director() {
+    local id
+    local -a cmd=()
+    mapfile -d '' cmd < <(director_argv)
+    (( ${#cmd[@]} >= 3 )) || die "internal: could not build the claude command for the Director"
+    if ! director_up; then
+        # remain-on-exit in the same command sequence, so a claude that exits at
+        # once (nothing to --continue, say) leaves its screen instead of the session vanishing.
+        tmux new-session -d -s "$DIRECTOR_NAME" -n "$DIRECTOR_WIN" -x "$DEF_W" -y "$DEF_H" \
+            -c "$REPOS_DIR" -- "${cmd[@]}" \; set-option -w -t "=$DIRECTOR_NAME:" remain-on-exit on
+        D_STATE=started
+    else
+        id=$(director_pane)
+        if [[ -n "$id" ]] && pane_dead "$id"; then
+            tmux respawn-pane -k -t "$id" -c "$REPOS_DIR" -- "${cmd[@]}"
+            D_STATE=respawned
+        else
+            D_STATE=running
+        fi
+    fi
+    tmux set-option -t "=$DIRECTOR_NAME:" default-size "${DEF_W}x${DEF_H}"
+    tmux set-option -t "=$DIRECTOR_NAME:" mouse on
+    tmux set-option -w -t "=$DIRECTOR_NAME:" window-size latest
+    tmux set-option -w -t "=$DIRECTOR_NAME:" automatic-rename off
+    tmux set-option -w -t "=$DIRECTOR_NAME:" remain-on-exit on
+}
+
+# Open a maximized terminal on the Director unless one already shows it.
+show_director() {
+    director_up || die "the Director is not running — 'director' starts it ('director --open' in its own window)"
+    local n
+    n=$(clients_of "$DIRECTOR_NAME")
+    if (( n )); then
+        say "the Director is already shown in $n terminal(s)"
+        return 0
+    fi
+    have_display || die "no display — run 'director' in a terminal instead"
+    pick_terminal
+    scrub_env
+    launch_terminal "$DIRECTOR_NAME" "$DIRECTOR_TITLE"
+    ok "opened $TERM_BIN for the Director"
+}
+
+# Detach every terminal from the Director's session; its claude keeps running.
+hide_director() {
+    director_up || die "the Director is not running"
+    local n
+    n=$(clients_of "$DIRECTOR_NAME")
+    if (( n == 0 )); then
+        say "the Director has no terminal open; its session keeps running"
+        return 0
+    fi
+    tmux detach-client -s "=$DIRECTOR_NAME"
+    ok "closed $n terminal(s) for the Director; its session keeps running"
+}
+
+# /exit the Director's claude, then end its session (and so its terminals).
+down_director() {
+    director_up || { say "the Director is not running"; return 0; }
+    local id
+    id=$(director_pane)
+    if [[ -n "$id" ]]; then graceful_exit "$id" "the Director" || true; fi
+    tmux kill-session -t "=$DIRECTOR_NAME" 2>/dev/null || true
+    ok "the Director is down (tmux session '$DIRECTOR_NAME' closed)"
+}
+
+# Attach this terminal to the Director (switch-client inside tmux).
+attach_director() {
+    if [[ -n "${TMUX:-}" ]]; then
+        tmux switch-client -t "=$DIRECTOR_NAME"
+    elif [[ -t 0 && -t 1 ]]; then
+        exec tmux attach-session -t "=$DIRECTOR_NAME"
+    else
+        say "Not attaching: this is not a terminal. 'director' from a terminal attaches; 'director --open' opens one."
+    fi
+}
+
 # ------------------------------------------------------------- commands ----
+
+cmd_director() {
+    need tmux; need claude
+    CLI_BIN=$(command -v claude)
+    local open=0
+    FRESH=0; EXTRA=()
+    while (( $# )); do
+        case "$1" in
+            --open)         open=1; shift ;;
+            --fresh)        FRESH=1; shift ;;
+            -h|--help)      usage; return 0 ;;
+            --)             shift; EXTRA=("$@"); break ;;
+            *)              die "unknown option for director: $1 (try --help)" ;;
+        esac
+    done
+    [[ -d "$REPOS_DIR" ]] || die "$REPOS_DIR does not exist"
+    scrub_env
+    ensure_director
+    case "$D_STATE" in
+        started)   ok "the Director started  ${c_dim}(claude --name $DIRECTOR_NAME$( (( FRESH )) || printf ' --continue') in $REPOS_DIR)${c_off}" ;;
+        respawned) ok "the Director respawned  ${c_dim}(its claude had exited)${c_off}" ;;
+        running)   say "${c_dim}  · the Director is already running${c_off}"
+                   (( FRESH == 0 && ${#EXTRA[@]} == 0 )) || warn "--fresh and claude args apply only when claude starts; /exit it first" ;;
+    esac
+    if (( open )); then show_director; else attach_director; fi
+}
 
 cmd_up() {
     need tmux; need claude
@@ -508,50 +699,64 @@ cmd_restart() {
     say "Restarted $n pane(s) in place as fresh sessions${DIRECTOR:+, Director $DIRECTOR}"
 }
 
-# One row per EM, in window order. TERM is how many terminals show the EM's
-# window ("none" — 'standing open' fixes it); WINDOW appears only while some EM
+# The Director's row first, then one row per EM in window order. TERM is how
+# many terminals show the session ("none" — 'standing open' fixes it for an EM,
+# 'standing show director' for the Director); WINDOW appears only while some EM
 # sits in a window not named after it (a grid window standing-N).
 cmd_status() {
     need tmux
-    if ! has_session || [[ -z "$(std_windows)" ]]; then
-        say "tmux session '$TMUX_SESSION' is not running — 'standing up <repo>' starts an EM"
-        return 0
-    fi
-    local w n term id repo dead pid cmdname size state i show_win=0 lacking=0
+    local w n term id repo dead pid cmdname size i show_win=0 lacking=0 ems=1
+    local d_state d_term="-" d_pid="-" d_size="-"
     local -a r_repo=() r_state=() r_term=() r_win=() r_pid=() r_size=()
-    for w in $(std_windows); do
-        n=$(clients_of "$(view_for "$w")")
-        if (( n == 0 )); then term=none; lacking=$((lacking + 1)); else term=$n; fi
-        while IFS="$US" read -r id repo dead pid cmdname size; do
-            [[ -n "$repo" ]] || repo="(untagged $id)"
-            if [[ "$dead" == 1 ]]; then
-                state="${c_err}dead${c_off}"
-            elif [[ "$cmdname" == claude* || "$cmdname" == node* ]] && at_trust_prompt "$id"; then
-                state="${c_warn}trust?${c_off}"
-            elif [[ "$cmdname" == claude* || "$cmdname" == node* ]]; then
-                state="${c_ok}running${c_off}"
-            else
-                state="${c_warn}$cmdname${c_off}"
-            fi
-            [[ "$w" == "$(win_name "$repo")" ]] || show_win=1
-            r_repo+=("$repo"); r_state+=("$state"); r_term+=("$term"); r_win+=("$w"); r_pid+=("$pid"); r_size+=("$size")
-        done < <(tmux list-panes -t "$(win_t "$w")" -F "#{pane_id}${US}#{@repo}${US}#{pane_dead}${US}#{pane_pid}${US}#{pane_current_command}${US}#{pane_width}x#{pane_height}")
-    done
+    if director_up; then
+        n=$(clients_of "$DIRECTOR_NAME")
+        if (( n == 0 )); then d_term=none; else d_term=$n; fi
+        id=""
+        IFS="$US" read -r id dead d_pid cmdname d_size < <({ tmux list-panes -s -t "=$DIRECTOR_NAME" \
+            -F "#{pane_id}${US}#{pane_dead}${US}#{pane_pid}${US}#{pane_current_command}${US}#{pane_width}x#{pane_height}" \
+            2>/dev/null || true; } | head -n1) || true
+        if [[ -n "$id" ]]; then d_state=$(pane_state "$id" "$dead" "$cmdname"); else d_state="${c_warn}gone${c_off}"; fi
+    else
+        d_state="${c_dim}down${c_off}"
+    fi
+    if ! has_session || [[ -z "$(std_windows)" ]]; then ems=0; fi
+    if (( ems )); then
+        for w in $(std_windows); do
+            n=$(clients_of "$(view_for "$w")")
+            if (( n == 0 )); then term=none; lacking=$((lacking + 1)); else term=$n; fi
+            while IFS="$US" read -r id repo dead pid cmdname size; do
+                [[ -n "$repo" ]] || repo="(untagged $id)"
+                [[ "$w" == "$(win_name "$repo")" ]] || show_win=1
+                r_repo+=("$repo"); r_state+=("$(pane_state "$id" "$dead" "$cmdname")"); r_term+=("$term")
+                r_win+=("$w"); r_pid+=("$pid"); r_size+=("$size")
+            done < <(tmux list-panes -t "$(win_t "$w")" -F "#{pane_id}${US}#{@repo}${US}#{pane_dead}${US}#{pane_pid}${US}#{pane_current_command}${US}#{pane_width}x#{pane_height}")
+        done
+    fi
+    # The state is pre-padded by visible width (vpad): printf would count its colour codes.
     if (( show_win )); then
         printf '%-30s %-9s %-5s %-12s %-8s %-9s %s\n' REPO STATE TERM WINDOW PID SIZE SESSION
+        printf '%-30s %s %-5s %-12s %-8s %-9s %s\n' "(director)" "$(vpad "$d_state" 9)" "$d_term" "-" "$d_pid" "$d_size" "$DIRECTOR_NAME"
     else
         printf '%-30s %-9s %-5s %-8s %-9s %s\n' REPO STATE TERM PID SIZE SESSION
+        printf '%-30s %s %-5s %-8s %-9s %s\n' "(director)" "$(vpad "$d_state" 9)" "$d_term" "$d_pid" "$d_size" "$DIRECTOR_NAME"
     fi
     for i in "${!r_repo[@]}"; do
-        # %-20b: the state carries 11 bytes of colour codes, so it pads to 9 visible.
         if (( show_win )); then
-            printf '%-30s %-20b %-5s %-12s %-8s %-9s %s\n' "${r_repo[$i]}" "${r_state[$i]}" "${r_term[$i]}" \
+            printf '%-30s %s %-5s %-12s %-8s %-9s %s\n' "${r_repo[$i]}" "$(vpad "${r_state[$i]}" 9)" "${r_term[$i]}" \
                 "${r_win[$i]}" "${r_pid[$i]}" "${r_size[$i]}" "${r_repo[$i]}-$NAME_SUFFIX"
         else
-            printf '%-30s %-20b %-5s %-8s %-9s %s\n' "${r_repo[$i]}" "${r_state[$i]}" "${r_term[$i]}" \
+            printf '%-30s %s %-5s %-8s %-9s %s\n' "${r_repo[$i]}" "$(vpad "${r_state[$i]}" 9)" "${r_term[$i]}" \
                 "${r_pid[$i]}" "${r_size[$i]}" "${r_repo[$i]}-$NAME_SUFFIX"
         fi
     done
+    if (( ! ems )); then
+        say "No EMs: tmux session '$TMUX_SESSION' is not running — 'standing up <repo>' starts one"
+    fi
+    if ! director_up; then
+        say "${c_dim}The Director is not in tmux — 'director' starts or resumes it${c_off}"
+    elif [[ "$d_state" == *trust\?* ]]; then
+        say "${c_warn}The Director waits at the folder-trust dialog — 'director' attaches you to answer it${c_off}"
+    fi
     if (( lacking )); then
         say "${c_warn}$lacking window(s) without a terminal — 'standing open' opens them${c_off}"
     fi
@@ -559,12 +764,18 @@ cmd_status() {
 
 cmd_down() {
     need tmux
-    has_session || { say "tmux session '$TMUX_SESSION' is not running"; return 0; }
     local -a targets=()
-    local whole=0
-    if (( $# )); then
-        targets=("$@")
-    else
+    local a whole=0 dir=0
+    # "director" is the Director's session, never an EM; only naming it ends it.
+    for a in "$@"; do
+        if [[ "$a" == director ]]; then dir=1; else targets+=("$a"); fi
+    done
+    if (( dir )); then
+        down_director
+        (( ${#targets[@]} )) || return 0
+    fi
+    has_session || { say "tmux session '$TMUX_SESSION' is not running"; return 0; }
+    if (( ${#targets[@]} == 0 )); then
         whole=1
         mapfile -t targets < <(all_panes | awk -F"$US" '$3 != "" { print $3 }')
     fi
@@ -590,6 +801,7 @@ cmd_down() {
         done
         has_session && tmux kill-session -t "=$TMUX_SESSION"
         ok "tmux session '$TMUX_SESSION' closed"
+        if director_up; then say "${c_dim}  · the Director keeps running ('standing down director' ends it)${c_off}"; fi
     else
         prune_views
     fi
@@ -642,7 +854,8 @@ open_terminals() {
 # One EM's terminal: open it unless a terminal already shows that EM's window.
 cmd_show() {
     need tmux
-    if (( $# != 1 )) || [[ "$1" == -* ]]; then die "usage: standing show <repo>"; fi
+    if (( $# != 1 )) || [[ "$1" == -* ]]; then die "usage: standing show <repo>|director"; fi
+    if [[ "$1" == director ]]; then show_director; return; fi
     local repo=$1 id w n
     id=$(pane_for "$repo")
     [[ -n "$id" ]] || die "$repo has no standing EM — 'standing up $repo' starts one, terminal included"
@@ -660,7 +873,8 @@ cmd_show() {
 # pane and its claude keep running, and `standing show <repo>` brings one back.
 cmd_hide() {
     need tmux
-    if (( $# != 1 )) || [[ "$1" == -* ]]; then die "usage: standing hide <repo>"; fi
+    if (( $# != 1 )) || [[ "$1" == -* ]]; then die "usage: standing hide <repo>|director"; fi
+    if [[ "$1" == director ]]; then hide_director; return; fi
     local repo=$1 id view n
     id=$(pane_for "$repo")
     [[ -n "$id" ]] || die "$repo has no standing EM ('standing status' lists them)"
@@ -676,6 +890,11 @@ cmd_hide() {
 
 cmd_attach() {
     need tmux
+    if [[ "${1:-}" == director ]]; then
+        director_up || die "the Director is not running — 'director' starts it"
+        attach_director
+        return
+    fi
     has_session || die "tmux session '$TMUX_SESSION' is not running — 'standing up' first"
     if (( $# )); then
         local id w; id=$(pane_for "$1")
@@ -776,6 +995,7 @@ main() {
     (( $# )) && shift
     case "$sub" in
         up)             cmd_up "$@" ;;
+        director)       cmd_director "$@" ;;
         restart)        cmd_restart "$@" ;;
         down|stop)      cmd_down "$@" ;;
         status|ls)      cmd_status "$@" ;;

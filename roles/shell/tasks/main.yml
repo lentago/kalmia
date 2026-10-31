@@ -70,6 +70,7 @@
     - clean-all
     - gh-issue
     - standing
+    - director
   become: false
 
 # --- The Director's /em skill ----------------------------------------------------
