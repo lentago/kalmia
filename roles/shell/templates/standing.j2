@@ -54,7 +54,9 @@
 #   standing down [repo ...]       send /exit, wait, then kill the EM's pane, window and
 #                                  terminal; with no repos: every EM, then the EMs' tmux
 #                                  sessions — never the Director's
-#   standing down director         /exit the Director, then end its tmux session and terminals
+#   standing down director         /exit the Director, then end its tmux session and terminals.
+#                                  The remembered Director name is kept: EMs started meanwhile
+#                                  still report to lentago-director, which `director` brings back
 #   standing status                the Director's row, then one row per EM: repo, state,
 #                                  terminal, pid, size, session name (state "trust?" = waiting
 #                                  at Claude's folder-trust dialog)
@@ -752,6 +754,8 @@ cmd_status() {
     fi
     if ! director_up; then
         say "${c_dim}The Director is not in tmux — 'director' starts or resumes it${c_off}"
+    elif [[ "$d_state" == *trust\?* ]]; then
+        say "${c_warn}The Director waits at the folder-trust dialog — 'director' attaches you to answer it${c_off}"
     fi
     if (( lacking )); then
         say "${c_warn}$lacking window(s) without a terminal — 'standing open' opens them${c_off}"
