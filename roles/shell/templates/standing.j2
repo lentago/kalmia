@@ -148,8 +148,13 @@ std_windows() {
 grid_windows() { std_windows | grep -E "^${WIN_PREFIX}-[0-9]+$" | sort -t- -k2,2n || true; }
 is_grid()   { [[ "$1" =~ ^${WIN_PREFIX}-[0-9]+$ ]]; }
 # A repo's own window is named after it; tmux reads '.' and ':' in a target as
-# separators, so those become '_'.
-win_name()  { printf '%s' "${1//[.:]/_}"; }
+# separators, so those become '_'. A repo named like a grid window (standing-N)
+# or its view (vN, as in "lentago-vN") gets a leading '_', so neither collides.
+win_name() {
+    local n=${1//[.:]/_}
+    [[ "$n" =~ ^(v|${WIN_PREFIX}-)[0-9]+$ ]] && n="_$n"
+    printf '%s' "$n"
+}
 win_t()     { printf '=%s:=%s' "$TMUX_SESSION" "$1"; }              # exact window target
 win_num()   { printf '%s' "${1##*-}"; }
 win_panes() { tmux list-panes -t "$(win_t "$1")" -F '#{pane_id}' 2>/dev/null | wc -l; }
