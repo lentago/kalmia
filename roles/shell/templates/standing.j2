@@ -1,26 +1,32 @@
-{# Body is a verbatim copy of the script wrapped in raw: it contains `${#x[@]}` nine times, which Jinja would read as a comment opener. Only the REPOS_DIR default is templated. Keep `-%}` on the raw tag or the shebang lands on line 2. #}
+{# Body is a verbatim copy of the script wrapped in raw: it uses `${#x[@]}` (array length) throughout, which Jinja would read as a comment opener. Only the REPOS_DIR default is templated. Keep `-%}` on the raw tag or the shebang lands on line 2. #}
 {% raw -%}
 #!/usr/bin/env bash
-# standing — fire up and tend a standing interactive Claude Code session in each
-# Lentago repo, on screen: one tmux session ("lentago") whose windows
-# standing-1, standing-2, … each hold up to 8 tiled panes, one pane per repo,
-# each running `claude --name <repo>-standing` in that repo's checkout. Every
-# window gets its own maximized terminal (via tmux grouped sessions), so
-# nothing runs hidden — drag each terminal to its own monitor.
+# standing — start and tend a standing interactive Claude Code session in a
+# Lentago repo, each in its own maximized terminal. Every session is one window
+# of tmux session "lentago", named after its repo and holding one pane that
+# runs `claude --name <repo>-standing` in that repo's checkout. Each window is
+# viewed through its own grouped tmux session ("lentago-<repo>") with its own
+# terminal, titled after the repo at the terminal's normal font size, so a
+# human finds a session by name in the window switcher and nothing runs hidden.
 #
 # Org model (see ~/repos/lentago/CLAUDE.md): the session at ~/repos/lentago is
-# the Engineering Director and runs `standing up --director <its-name>`; each
-# pane is that repo's Engineering Manager, on Opus by default, free to spawn
-# subagents of its own choice; Chris is Product Owner, CTO and CEO.
+# the Engineering Director; each standing session is that repo's Engineering
+# Manager (EM), on Opus by default, free to spawn subagents of its own choice;
+# Chris is Product Owner, CTO and CEO. EMs start on demand: the Director runs
+# `standing up <repo> --director <its-name>` the first time a dispatch needs
+# that EM, never for every repo at init, so a normal day grows from zero EMs
+# to the handful it dispatches to.
 #
 # Dependencies: tmux (>= 3.2), claude, coreutils; ghostty/ptyxis/alacritty for `open`
 #
 # Usage:
 #   standing                       same as `standing status`
-#   standing up [repo ...]         start sessions (default: every repo, in ORDER below) —
-#                                  idempotent: running panes are left alone, dead ones
-#                                  respawned; opens a terminal for each window lacking one
-#   standing up --director NAME    tell each EM which session is its Director (NAME from
+#   standing up REPO [REPO ...]    start these EMs, a window and a terminal each —
+#                                  idempotent: a running EM is left alone, a dead one is
+#                                  respawned in place, and only a window lacking a
+#                                  terminal gets one; other EMs are not touched
+#   standing up                    with no repos: every repo, in ORDER below (explicit use only)
+#   standing up REPO --director NAME  tell the EM which session is its Director (NAME from
 #                                  the "This session is …" line of ListAgents); remembered
 #                                  for later up/restart calls — `--no-director` forgets it
 #   standing up --no-open ...      don't open terminal windows
@@ -33,32 +39,34 @@
 #                                  work are gone. Windows and terminals stay put. The Director
 #                                  from the last --director is remembered on the tmux session,
 #                                  so a bare `standing restart` keeps it.
-#   standing down [repo ...]       send /exit, wait, then kill the pane(s);
-#                                  with no repos: everything, then the tmux sessions
-#   standing status                per window: repo, state, pid, size, session name
-#                                  (state "trust?" = waiting at Claude's folder-trust dialog)
-#   standing trust [repo ...] [--yes]  list the panes waiting at the folder-trust dialog and,
+#   standing down [repo ...]       send /exit, wait, then kill the EM's pane, window and
+#                                  terminal; with no repos: every EM, then the tmux sessions
+#   standing status                one row per EM: repo, state, terminal, pid, size, session
+#                                  name (state "trust?" = waiting at Claude's folder-trust dialog)
+#   standing trust [repo ...] [--yes]  list the EMs waiting at the folder-trust dialog and,
 #                                  after a y/N prompt (or --yes), accept it in each — your
 #                                  call to run; these are your repos and Claude won't run it for you
-#   standing open                  open a maximized terminal for every window that has none
-#   standing attach [repo]         attach in *this* terminal (or switch-client inside tmux)
-#   standing tile                  re-apply the tiled layout to every window
-#   standing repos                 print the repo set `up` would use, in window order
+#   standing open                  open a maximized terminal for every EM window that has none
+#   standing attach [repo]         attach in *this* terminal (or switch-client inside tmux) to
+#                                  the base session, which holds every EM window
+#   standing tile                  re-apply the tiled layout (matters only with STANDING_PER_WINDOW > 1)
+#   standing repos                 print the repo set a bare `up` would use, in ORDER
 #
-# In a terminal: click a pane to focus it (mouse is on); prefix+z (Ctrl-b z)
-# zooms one pane to full size and back; the repo name sits on each pane border.
+# Each terminal shows one EM; the tmux status line lists every EM window. To look
+# across them from one terminal, `standing attach` and pick with prefix+w (Ctrl-b w).
 # GNOME places new windows on the active monitor — Super+Shift+Arrow moves one.
 #
 # Environment:
 #   STANDING_REPOS_DIR     where the clones live   (default: ~/repos/lentago)
 #   STANDING_TMUX_SESSION  tmux session name       (default: lentago)
-#   STANDING_PER_WINDOW    panes per window        (default: 8)
+#   STANDING_PER_WINDOW    EMs per window          (default: 1 — a window and terminal each;
+#                          N > 1 packs N tiled panes into windows standing-1, standing-2, …)
 #   STANDING_MODEL         model every EM starts on (default: claude-opus-5-5; set it
 #                          empty for Claude's own default; `-- --model X` overrides per run)
 #   STANDING_NAME_SUFFIX   claude --name suffix    (default: standing → "kalmia-standing")
 #   STANDING_TERMINAL      terminal for `open`     (default: first of ghostty, ptyxis, alacritty)
-#   STANDING_FONT_SIZE     font size for those windows only (ghostty/alacritty; default: 8;
-#                          set it empty to use your terminal's own default)
+#   STANDING_FONT_SIZE     font size for those terminals only (ghostty/alacritty; default:
+#                          unset, i.e. the terminal's own size)
 #   STANDING_EXIT_WAIT     seconds `down`/`restart` wait after /exit before killing (default: 20)
 #
 # Notes:
@@ -68,19 +76,23 @@
 #     readable ("[dead]" on the border); `standing up` respawns it in place.
 #   * Inherited CLAUDE* env vars are stripped from the children, so this can be
 #     run from inside another Claude session without tripping nested-session guards.
-#   * Window N is viewed through tmux session "lentago" (N=1) or "lentago-vN" (N>1),
-#     all one session group sharing the windows; `down` with no repos removes them all.
+#   * The base session "lentago" holds every EM window and remembers the Director;
+#     window <repo> is viewed through "lentago-<repo>", one session group sharing
+#     the windows. `down` with no repos removes them all.
+#   * Windows standing-1, standing-2, … (the earlier tiled grid, or STANDING_PER_WINDOW
+#     > 1) are still listed, restarted and downed; they are viewed through "lentago"
+#     (N=1) and "lentago-vN" (N>1) as before.
 #   * ANSIBLE MANAGED — kalmia roles/shell (like clean-all/pull-all). Local edits
 #     are overwritten on the next run; change roles/shell/templates/standing.j2 instead.
 set -euo pipefail
 
 REPOS_DIR="${STANDING_REPOS_DIR:-{% endraw %}{{ repos_dir }}/lentago{% raw %}}"
 TMUX_SESSION="${STANDING_TMUX_SESSION:-lentago}"
-PER_WINDOW="${STANDING_PER_WINDOW:-8}"
+PER_WINDOW="${STANDING_PER_WINDOW:-1}"
 MODEL="${STANDING_MODEL-claude-opus-5-5}"
 NAME_SUFFIX="${STANDING_NAME_SUFFIX:-standing}"
 EXIT_WAIT="${STANDING_EXIT_WAIT:-20}"
-WIN_PREFIX="standing"
+WIN_PREFIX="standing"   # grid windows: standing-1, standing-2, … (PER_WINDOW > 1, or older runs)
 # Size a window has while no terminal is attached (so splits always fit);
 # it follows the attached terminal's size afterwards.
 DEF_W=320; DEF_H=100
@@ -88,9 +100,9 @@ DEF_W=320; DEF_H=100
 # a field is empty (an untagged pane), shifting columns; this never does.
 US=$'\x1f'
 
-# Order repos come up in — and therefore how they group into windows of
-# PER_WINDOW: platform first, then products/guides/sites, then the uvularia
-# family. A repo not listed here comes after these, alphabetically.
+# Order a bare `standing up` starts repos in (and, with PER_WINDOW > 1, how they
+# group into windows): platform first, then products/guides/sites, then the
+# uvularia family. A repo not listed here comes after these, alphabetically.
 ORDER=(
     claytonia drosera kalmia brasenia dotgithub betula solidago shared-workflows
     asclepias lupinus epigaea mitchella monarda osmunda site-lentago-dev site-icecreamtofightwith-com
@@ -125,25 +137,51 @@ scrub_env() {
 
 has_session() { tmux has-session -t "=$TMUX_SESSION" 2>/dev/null; }
 
-# Standing windows, in numeric order (standing-1, standing-2, …).
+# Standing windows, in window order: every window this script made (tagged
+# @standing) plus grid windows standing-N from runs before the tag existed.
 std_windows() {
     has_session || return 0
-    tmux list-windows -t "=$TMUX_SESSION" -F '#{window_name}' 2>/dev/null \
-        | grep -E "^${WIN_PREFIX}-[0-9]+$" | sort -t- -k2,2n || true
+    tmux list-windows -t "=$TMUX_SESSION" -F "#{window_name}${US}#{@standing}" 2>/dev/null \
+        | awk -F"$US" -v p="^${WIN_PREFIX}-[0-9]+$" '$2 == 1 || $1 ~ p { print $1 }' || true
 }
+# The grid windows among them (standing-1, standing-2, …), in numeric order.
+grid_windows() { std_windows | grep -E "^${WIN_PREFIX}-[0-9]+$" | sort -t- -k2,2n || true; }
+is_grid()   { [[ "$1" =~ ^${WIN_PREFIX}-[0-9]+$ ]]; }
+# A repo's own window is named after it; tmux reads '.' and ':' in a target as
+# separators, so those become '_'.
+win_name()  { printf '%s' "${1//[.:]/_}"; }
 win_t()     { printf '=%s:=%s' "$TMUX_SESSION" "$1"; }              # exact window target
 win_num()   { printf '%s' "${1##*-}"; }
 win_panes() { tmux list-panes -t "$(win_t "$1")" -F '#{pane_id}' 2>/dev/null | wc -l; }
-# The grouped session through which window N is viewed (N=1 is the base session).
-view_for()  { local n; n=$(win_num "$1"); (( n == 1 )) && printf '%s' "$TMUX_SESSION" || printf '%s-v%s' "$TMUX_SESSION" "$n"; }
-view_sessions() { tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -E "^${TMUX_SESSION}(-v[0-9]+)?$" || true; }
+# The grouped session through which a window is viewed: "lentago-<repo>" for a
+# repo's own window; for grid window N, the base session (N=1) or "lentago-vN".
+view_for() {
+    if is_grid "$1"; then
+        local n; n=$(win_num "$1")
+        (( n == 1 )) && printf '%s' "$TMUX_SESSION" || printf '%s-v%s' "$TMUX_SESSION" "$n"
+    else
+        printf '%s-%s' "$TMUX_SESSION" "$1"
+    fi
+}
+# The inverse, from a view session's name; empty for the base session.
+view_window() {
+    [[ "$1" == "$TMUX_SESSION"-* ]] || return 0
+    local rest=${1#"$TMUX_SESSION"-}
+    if [[ "$rest" =~ ^v([0-9]+)$ ]]; then printf '%s-%s' "$WIN_PREFIX" "${BASH_REMATCH[1]}"; else printf '%s' "$rest"; fi
+}
+# The base session and every session grouped with it. Matched on the group, not
+# on a name prefix, so another standing session ("lentago-test") is never caught.
+view_sessions() {
+    tmux list-sessions -F "#{session_name}${US}#{session_group}" 2>/dev/null \
+        | awk -F"$US" -v s="$TMUX_SESSION" '$1 == s || $2 == s { print $1 }' || true
+}
 clients_of() { tmux list-clients -t "=$1" 2>/dev/null | wc -l; }
 
 # window US pane_id US repo for every pane in every standing window.
 all_panes() {
     has_session || return 0
-    tmux list-panes -s -t "=$TMUX_SESSION" -F "#{window_name}${US}#{pane_id}${US}#{@repo}" 2>/dev/null \
-        | awk -F"$US" -v p="^${WIN_PREFIX}-[0-9]+$" '$1 ~ p' || true
+    tmux list-panes -s -t "=$TMUX_SESSION" -F "#{window_name}${US}#{pane_id}${US}#{@repo}${US}#{@standing}" 2>/dev/null \
+        | awk -F"$US" -v OFS="$US" -v p="^${WIN_PREFIX}-[0-9]+$" '$4 == 1 || $1 ~ p { print $1, $2, $3 }' || true
 }
 pane_for()    { all_panes | awk -F"$US" -v r="$1" '$3 == r { print $2; exit }'; }
 window_of()   { all_panes | awk -F"$US" -v id="$1" '$2 == id { print $1; exit }'; }
@@ -247,26 +285,31 @@ claude_argv() {
     printf '%s\0' "${cmd[@]}"
 }
 
-# Create the pane for a repo in the first window with room (creating the
-# session or a new window as needed); prints its id.
+# Create the pane for a repo (creating the session as needed); prints its id.
+# PER_WINDOW 1: a new window named after the repo. PER_WINDOW > 1: the first
+# grid window with room, else the next grid window standing-N.
 spawn_pane() {
     local repo=$1 dir=$2; shift 2
-    local id w target="" last n
-    if ! has_session; then
-        id=$(tmux new-session -d -P -F '#{pane_id}' -s "$TMUX_SESSION" -n "$WIN_PREFIX-1" \
-                -x "$DEF_W" -y "$DEF_H" -c "$dir" -- "$@")
+    local id w name target="" last n
+    if (( PER_WINDOW == 1 )); then
+        name=$(win_name "$repo")
     else
-        for w in $(std_windows); do
+        for w in $(grid_windows); do
             if (( $(win_panes "$w") < PER_WINDOW )); then target=$w; break; fi
         done
-        if [[ -n "$target" ]]; then
-            id=$(tmux split-window -d -P -F '#{pane_id}' -t "$(win_t "$target")" -c "$dir" -- "$@")
-        else
-            last=$(std_windows | tail -n1)
-            n=1; [[ -n "$last" ]] && n=$(( $(win_num "$last") + 1 ))
-            id=$(tmux new-window -d -P -F '#{pane_id}' -t "=$TMUX_SESSION:" -n "$WIN_PREFIX-$n" -c "$dir" -- "$@")
-        fi
+        last=$(grid_windows | tail -n1)
+        n=1; [[ -n "$last" ]] && n=$(( $(win_num "$last") + 1 ))
+        name="$WIN_PREFIX-$n"
     fi
+    if [[ -n "$target" ]]; then
+        id=$(tmux split-window -d -P -F '#{pane_id}' -t "$(win_t "$target")" -c "$dir" -- "$@")
+    elif ! has_session; then
+        id=$(tmux new-session -d -P -F '#{pane_id}' -s "$TMUX_SESSION" -n "$name" \
+                -x "$DEF_W" -y "$DEF_H" -c "$dir" -- "$@")
+    else
+        id=$(tmux new-window -d -P -F '#{pane_id}' -t "=$TMUX_SESSION:" -n "$name" -c "$dir" -- "$@")
+    fi
+    tmux set-option -w -t "$id" @standing 1
     tmux set-option -p -t "$id" @repo "$repo"
     printf '%s' "$id"
 }
@@ -318,9 +361,10 @@ pick_terminal() {
     die "no terminal emulator found (ghostty, ptyxis, alacritty) — set STANDING_TERMINAL"
 }
 
-# Open a maximized terminal attached to a view session, titled after its window.
+# Open a maximized terminal attached to a view session, titled after its window,
+# at the terminal's own font size unless STANDING_FONT_SIZE says otherwise.
 launch_terminal() {
-    local view=$1 title=$2 fs="${STANDING_FONT_SIZE-8}"
+    local view=$1 title=$2 fs="${STANDING_FONT_SIZE:-}"
     local -a attach=(tmux attach-session -t "=$view") cmd
     case "$TERM_BIN" in
         ghostty)   cmd=(ghostty --maximize=true --title="$title" ${fs:+--font-size="$fs"} -e "${attach[@]}") ;;
@@ -331,27 +375,42 @@ launch_terminal() {
     setsid -f "${cmd[@]}" >/dev/null 2>&1
 }
 
-# Remove view sessions whose window no longer exists (closes their terminals).
+# Remove view sessions whose window no longer exists (closes their terminals) —
+# left behind when a pane was closed by hand, say, and now showing another EM.
 prune_views() {
-    local s n
+    local s w
+    local -a wins=()
+    mapfile -t wins < <(tmux list-windows -t "=$TMUX_SESSION" -F '#{window_name}' 2>/dev/null || true)
     for s in $(view_sessions); do
-        [[ "$s" == "$TMUX_SESSION" ]] && continue
-        n=${s##*-v}
-        tmux list-windows -t "=$TMUX_SESSION" -F '#{window_name}' 2>/dev/null | grep -qxF "$WIN_PREFIX-$n" \
-            || tmux kill-session -t "=$s" 2>/dev/null || true
+        w=$(view_window "$s")
+        [[ -n "$w" ]] || continue
+        printf '%s\n' "${wins[@]}" | grep -qxF -- "$w" || tmux kill-session -t "=$s" 2>/dev/null || true
     done
+}
+
+# Close the terminal showing a window that is about to go: kill its view
+# session, or for grid window 1 (viewed through the base session, which must
+# stay) detach the base session's clients.
+close_view() {
+    local view; view=$(view_for "$1")
+    if [[ "$view" == "$TMUX_SESSION" ]]; then
+        tmux detach-client -s "=$TMUX_SESSION" 2>/dev/null || true
+    else
+        tmux kill-session -t "=$view" 2>/dev/null || true
+    fi
 }
 
 # ------------------------------------------------------------- commands ----
 
 cmd_up() {
     need tmux; need claude
+    [[ "$PER_WINDOW" =~ ^[1-9][0-9]*$ ]] || die "STANDING_PER_WINDOW must be a positive integer, not '$PER_WINDOW'"
     CLI_BIN=$(command -v claude)
     parse_launch_flags "$@"
     resolve_repos "${SEL[@]}"
     scrub_env
 
-    local repo dir id started=0 respawned=0 kept=0
+    local repo dir id w started=0 respawned=0 kept=0
     for repo in "${REPOS[@]}"; do
         dir="$REPOS_DIR/$repo"
         local -a cmd=()
@@ -370,7 +429,9 @@ cmd_up() {
             fi
         else
             id=$(spawn_pane "$repo" "$dir" "${cmd[@]}")
-            ok "$repo started in $(window_of "$id")  ${c_dim}(claude --name $repo-$NAME_SUFFIX${MODEL:+ --model $MODEL})${c_off}"
+            w=$(window_of "$id")
+            if [[ "$w" == "$(win_name "$repo")" ]]; then w="its own window"; else w="window $w"; fi
+            ok "$repo started in $w  ${c_dim}(claude --name $repo-$NAME_SUFFIX${MODEL:+ --model $MODEL})${c_off}"
             started=$((started + 1))
         fi
         apply_options
@@ -419,21 +480,20 @@ cmd_restart() {
     say "Restarted $n pane(s) in place as fresh sessions${DIRECTOR:+, Director $DIRECTOR}"
 }
 
+# One row per EM, in window order. TERM is how many terminals show the EM's
+# window ("none" — 'standing open' fixes it); WINDOW appears only while some EM
+# sits in a window not named after it (a grid window standing-N).
 cmd_status() {
     need tmux
     if ! has_session || [[ -z "$(std_windows)" ]]; then
-        say "tmux session '$TMUX_SESSION' is not running — 'standing up' to start it"
+        say "tmux session '$TMUX_SESSION' is not running — 'standing up <repo>' starts an EM"
         return 0
     fi
-    local w view n id repo dead pid cmdname size state
+    local w n term id repo dead pid cmdname size state i show_win=0 lacking=0
+    local -a r_repo=() r_state=() r_term=() r_win=() r_pid=() r_size=()
     for w in $(std_windows); do
-        view=$(view_for "$w"); n=$(clients_of "$view")
-        if (( n == 0 )); then
-            say "${c_warn}── $w — no terminal attached ('standing open')${c_off}"
-        else
-            say "${c_dim}── $w — shown in $n terminal(s)${c_off}"
-        fi
-        printf '%-30s %-9s %-8s %-9s %s\n' REPO STATE PID SIZE SESSION
+        n=$(clients_of "$(view_for "$w")")
+        if (( n == 0 )); then term=none; lacking=$((lacking + 1)); else term=$n; fi
         while IFS="$US" read -r id repo dead pid cmdname size; do
             [[ -n "$repo" ]] || repo="(untagged $id)"
             if [[ "$dead" == 1 ]]; then
@@ -445,10 +505,28 @@ cmd_status() {
             else
                 state="${c_warn}$cmdname${c_off}"
             fi
-            printf '%-30s %-20b %-8s %-9s %s\n' "$repo" "$state" "$pid" "$size" "$repo-$NAME_SUFFIX"
+            [[ "$w" == "$(win_name "$repo")" ]] || show_win=1
+            r_repo+=("$repo"); r_state+=("$state"); r_term+=("$term"); r_win+=("$w"); r_pid+=("$pid"); r_size+=("$size")
         done < <(tmux list-panes -t "$(win_t "$w")" -F "#{pane_id}${US}#{@repo}${US}#{pane_dead}${US}#{pane_pid}${US}#{pane_current_command}${US}#{pane_width}x#{pane_height}")
-        say ""
     done
+    if (( show_win )); then
+        printf '%-30s %-9s %-5s %-12s %-8s %-9s %s\n' REPO STATE TERM WINDOW PID SIZE SESSION
+    else
+        printf '%-30s %-9s %-5s %-8s %-9s %s\n' REPO STATE TERM PID SIZE SESSION
+    fi
+    for i in "${!r_repo[@]}"; do
+        # %-20b: the state carries 11 bytes of colour codes, so it pads to 9 visible.
+        if (( show_win )); then
+            printf '%-30s %-20b %-5s %-12s %-8s %-9s %s\n' "${r_repo[$i]}" "${r_state[$i]}" "${r_term[$i]}" \
+                "${r_win[$i]}" "${r_pid[$i]}" "${r_size[$i]}" "${r_repo[$i]}-$NAME_SUFFIX"
+        else
+            printf '%-30s %-20b %-5s %-8s %-9s %s\n' "${r_repo[$i]}" "${r_state[$i]}" "${r_term[$i]}" \
+                "${r_pid[$i]}" "${r_size[$i]}" "${r_repo[$i]}-$NAME_SUFFIX"
+        fi
+    done
+    if (( lacking )); then
+        say "${c_warn}$lacking window(s) without a terminal — 'standing open' opens them${c_off}"
+    fi
 }
 
 cmd_down() {
@@ -468,6 +546,9 @@ cmd_down() {
         [[ -n "$id" ]] || { warn "$repo: no such pane"; continue; }
         w=$(window_of "$id")
         graceful_exit "$id" "$repo" || true
+        # The window goes with its last pane: close its terminal first, so it
+        # never flashes another EM's window on the way out.
+        if (( ! whole )) && (( $(win_panes "$w") <= 1 )); then close_view "$w"; fi
         pane_exists "$id" && tmux kill-pane -t "$id"
         ok "$repo down"
         if (( ! whole )) && tmux list-windows -t "=$TMUX_SESSION" -F '#{window_name}' 2>/dev/null | grep -qxF "$w"; then
@@ -491,6 +572,7 @@ cmd_open() {
     has_session || die "tmux session '$TMUX_SESSION' is not running — 'standing up' first"
     local w view opened=0
     local -a missing=()
+    prune_views
     # Views first (cheap, no display needed), then decide whether a terminal is even wanted.
     for w in $(std_windows); do
         view=$(view_for "$w")
@@ -514,8 +596,11 @@ cmd_open() {
         ok "opened $TERM_BIN for $w"
         opened=$((opened + 1))
     done
-    # Re-tile once the new clients' sizes have been picked up.
-    ( sleep 2; for w in $(std_windows); do tmux select-layout -t "$(win_t "$w")" tiled >/dev/null 2>&1; done ) &
+    # Re-tile grid windows once the new clients' sizes have been picked up
+    # (a window of one pane has nothing to tile).
+    if [[ -n "$(grid_windows)" ]]; then
+        ( sleep 2; for w in $(grid_windows); do tmux select-layout -t "$(win_t "$w")" tiled >/dev/null 2>&1; done ) &
+    fi
 }
 
 cmd_attach() {
@@ -538,7 +623,7 @@ cmd_attach() {
 cmd_trust() {
     need tmux
     [[ -n "$(std_windows)" ]] || die "no standing windows in session '$TMUX_SESSION'"
-    local yes=0 a w id repo i n=0
+    local yes=0 a w id repo lbl i n=0
     local -a only=() w_ids=() w_repos=() w_wins=()
     for a in "$@"; do
         case "$a" in
@@ -560,7 +645,11 @@ cmd_trust() {
         return 0
     fi
     say "Waiting at the folder-trust dialog:"
-    for i in "${!w_ids[@]}"; do say "  ${w_repos[$i]}  ${c_dim}(${w_wins[$i]})${c_off}"; done
+    for i in "${!w_ids[@]}"; do
+        w=${w_wins[$i]}
+        if [[ "$w" == "$(win_name "${w_repos[$i]}")" ]]; then w=""; else w="  ${c_dim}($w)${c_off}"; fi
+        say "  ${w_repos[$i]}$w"
+    done
     if (( ! yes )); then
         [[ -t 0 ]] || die "not a terminal — pass --yes to accept without the prompt"
         read -r -p "Accept folder trust in these ${#w_ids[@]} pane(s)? [y/N] " a
@@ -568,7 +657,8 @@ cmd_trust() {
     fi
     for i in "${!w_ids[@]}"; do
         id=${w_ids[$i]}; repo=${w_repos[$i]}; w=${w_wins[$i]}
-        at_trust_prompt "$id" || { warn "$repo ($w): dialog gone, skipped"; continue; }
+        lbl=$repo; [[ "$w" == "$(win_name "$repo")" ]] || lbl+=" ($w)"
+        at_trust_prompt "$id" || { warn "$lbl: dialog gone, skipped"; continue; }
         # Move the cursor onto "Yes" unless it is already there, let the dialog
         # redraw, and only confirm once the cursor is verifiably on Yes — a Down
         # that arrives before the dialog reads keys echoes as text instead.
@@ -582,15 +672,15 @@ cmd_trust() {
                 at_trust_prompt "$id" || break
             done
             if pane_dead "$id"; then
-                warn "$repo ($w): claude exited instead of accepting — 'standing up' respawns it"
+                warn "$lbl: claude exited instead of accepting — 'standing up' respawns it"
             elif at_trust_prompt "$id"; then
-                warn "$repo ($w): the dialog is still showing — click the pane and accept by hand"
+                warn "$lbl: the dialog is still showing — click the pane and accept by hand"
             else
-                ok "$repo ($w): accepted folder trust"
+                ok "$lbl: accepted folder trust"
                 n=$((n + 1))
             fi
         else
-            warn "$repo ($w): cursor is not on Yes — click the pane and accept by hand"
+            warn "$lbl: cursor is not on Yes — click the pane and accept by hand"
         fi
     done
     say "Accepted in $n pane(s)"
