@@ -85,12 +85,13 @@
 #     readable ("[dead]" on the border); `standing up` respawns it in place.
 #   * Inherited CLAUDE* env vars are stripped from the children, so this can be
 #     run from inside another Claude session without tripping nested-session guards.
-#   * The base session "lentago" holds every EM window and remembers the Director;
-#     window <repo> is viewed through "lentago-<repo>", one session group sharing
-#     the windows. `down` with no repos removes them all.
+#   * The base session "lentago" holds every EM window and remembers the Director,
+#     and is never itself a view: window <repo> is viewed through "lentago-<repo>",
+#     one session group sharing the windows. `down` with no repos removes them all.
 #   * Windows standing-1, standing-2, … (the earlier tiled grid, or STANDING_PER_WINDOW
-#     > 1) are still listed, restarted and downed; they are viewed through "lentago"
-#     (N=1) and "lentago-vN" (N>1) as before.
+#     > 1) are still listed, restarted and downed; window N is viewed through
+#     "lentago-vN". (Before kalmia#249, window 1 was viewed through the base session;
+#     a terminal still attached there is not counted as showing it.)
 #   * ANSIBLE MANAGED — kalmia roles/shell (like clean-all/pull-all). Local edits
 #     are overwritten on the next run; change roles/shell/templates/standing.j2 instead.
 set -euo pipefail
@@ -168,11 +169,11 @@ win_t()     { printf '=%s:=%s' "$TMUX_SESSION" "$1"; }              # exact wind
 win_num()   { printf '%s' "${1##*-}"; }
 win_panes() { tmux list-panes -t "$(win_t "$1")" -F '#{pane_id}' 2>/dev/null | wc -l; }
 # The grouped session through which a window is viewed: "lentago-<repo>" for a
-# repo's own window; for grid window N, the base session (N=1) or "lentago-vN".
+# repo's own window, "lentago-vN" for grid window N. Never the base session, so
+# a `standing attach` client is never mistaken for an EM's terminal.
 view_for() {
     if is_grid "$1"; then
-        local n; n=$(win_num "$1")
-        (( n == 1 )) && printf '%s' "$TMUX_SESSION" || printf '%s-v%s' "$TMUX_SESSION" "$n"
+        printf '%s-v%s' "$TMUX_SESSION" "$(win_num "$1")"
     else
         printf '%s-%s' "$TMUX_SESSION" "$1"
     fi
@@ -377,11 +378,12 @@ pick_terminal() {
     die "no terminal emulator found (ghostty, ptyxis, alacritty) — set STANDING_TERMINAL"
 }
 
-# A terminal's title: "<repo> — standing EM" for an EM's own window, the window
-# name for a grid window, which holds several.
+# A terminal's title: "<repo> — standing EM" for a window holding one EM (its
+# own window, or a one-pane grid window from before #248), the window name for
+# a grid window holding several.
 term_title() {
     local repo
-    if is_grid "$1"; then printf '%s' "$1"; return 0; fi
+    if (( $(win_panes "$1") > 1 )); then printf '%s' "$1"; return 0; fi
     repo=$(tmux display-message -p -t "$(win_t "$1")" '#{@repo}' 2>/dev/null || true)
     printf '%s — standing EM' "${repo:-$1}"
 }
@@ -413,16 +415,9 @@ prune_views() {
     done
 }
 
-# Close the terminal showing a window that is about to go: kill its view
-# session, or for grid window 1 (viewed through the base session, which must
-# stay) detach the base session's clients.
+# Close the terminal showing a window that is about to go: kill its view session.
 close_view() {
-    local view; view=$(view_for "$1")
-    if [[ "$view" == "$TMUX_SESSION" ]]; then
-        tmux detach-client -s "=$TMUX_SESSION" 2>/dev/null || true
-    else
-        tmux kill-session -t "=$view" 2>/dev/null || true
-    fi
+    tmux kill-session -t "=$(view_for "$1")" 2>/dev/null || true
 }
 
 # ------------------------------------------------------------- commands ----
@@ -652,12 +647,12 @@ cmd_show() {
     id=$(pane_for "$repo")
     [[ -n "$id" ]] || die "$repo has no standing EM — 'standing up $repo' starts one, terminal included"
     w=$(window_of "$id")
-    tmux select-pane -t "$id"   # in a grid window, focus this EM's pane
     n=$(clients_of "$(view_for "$w")")
     if (( n )); then
         say "$repo is already shown in $n terminal(s)"
         return 0
     fi
+    tmux select-pane -t "$id"   # in a grid window, focus this EM's pane
     open_terminals "$w"
 }
 
