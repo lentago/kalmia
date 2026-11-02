@@ -11,6 +11,7 @@
     - brasenia-family-brief.service
     - brasenia-home.service
     - brasenia-fleet.service
+    - brasenia-prs.service
     - brasenia-links.service
     - brasenia-grafana.service
   become: true
