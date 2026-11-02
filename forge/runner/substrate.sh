@@ -4,7 +4,8 @@
 #
 # This is the image's CONTRACT: the one-time host setup that claytonia's gitops
 # loop does NOT manage — packages, the `claude` service user, Claude Code, the
-# gh CLI, secret PLACEHOLDERS, and first-boot de-templating. The runner
+# gh CLI, Node 22, the Gemini and Codex CLIs, secret PLACEHOLDERS, and first-boot
+# de-templating. The runner
 # software itself (bin/, systemd units, cron, runner.env) is claytonia's and is
 # layered on top by its own gitops/install.sh — this script never copies it.
 #
@@ -79,6 +80,61 @@ if [ "$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || true)" != 2
   apt-get update -qq && apt-get install -y -qq nodejs >/dev/null
 fi
 node --version
+
+# Peer worker runtimes (kalmia#255, lentago/claytonia#166): every worker carries
+# every CLI, so the poller never matches capabilities. Binaries only. Their
+# per-user config (~/.gemini/settings.json, ~/.codex/config.toml) is claytonia's
+# to deploy, and their credentials (gemini.env, codex.env) go on by hand
+# (claytonia ADR-0010), so the image has neither, nor a placeholder for them.
+# Both install system-wide at fixed paths, so the adapters and cr-update can call
+# them by absolute path (claytonia#163). The version checks run with a throwaway
+# HOME: `gemini --version` writes ~/.gemini, and that state must not be baked.
+# GEMINI_CLI_VERSION / CODEX_VERSION pin a release; the default is the latest.
+GEMINI_CLI_VERSION="${GEMINI_CLI_VERSION:-latest}"
+CODEX_VERSION="${CODEX_VERSION:-latest}"
+
+echo ">>> [substrate] Gemini CLI (npm, system-wide on Node 22)"
+# --prefix /usr (NodeSource's own global prefix) pins the path in the contract:
+# /usr/bin/gemini, modules under /usr/lib/node_modules.
+if [ "$GEMINI_CLI_VERSION" = latest ] || [ "$(HOME="$(mktemp -d)" /usr/bin/gemini --version 2>/dev/null || true)" != "$GEMINI_CLI_VERSION" ]; then
+  npm install -g --prefix /usr --no-fund --no-audit --no-update-notifier --loglevel=error \
+    "@google/gemini-cli@${GEMINI_CLI_VERSION}" >/dev/null
+fi
+GEMINI_V="$(HOME="$(mktemp -d)" /usr/bin/gemini --version)"
+echo "GEMINI_OK ${GEMINI_V}"
+
+echo ">>> [substrate] Codex CLI (release package, system-wide)"
+# The codex-package asset is the layout the standalone installer lays down: the
+# CLI plus its exec server and the bwrap its Linux sandbox uses. It unpacks to
+# /opt/codex/<version>, /opt/codex/current points at it, and /usr/local/bin/codex
+# links through. The tarball has to match the sha256 digest GitHub publishes
+# for the asset, or the build stops.
+CODEX_ASSET=codex-package-x86_64-unknown-linux-musl.tar.gz
+if [ "$CODEX_VERSION" = latest ]; then
+  CODEX_API=https://api.github.com/repos/openai/codex/releases/latest
+else
+  CODEX_API="https://api.github.com/repos/openai/codex/releases/tags/rust-v${CODEX_VERSION#rust-v}"
+fi
+CODEX_REL="$(curl -fsSL -H 'Accept: application/vnd.github+json' "$CODEX_API")"
+CODEX_VER="$(jq -r '.tag_name | sub("^rust-v"; "")' <<<"$CODEX_REL")"
+CODEX_URL="$(jq -r --arg n "$CODEX_ASSET" '.assets[] | select(.name == $n) | .browser_download_url' <<<"$CODEX_REL")"
+CODEX_SHA="$(jq -r --arg n "$CODEX_ASSET" '.assets[] | select(.name == $n) | .digest // empty | sub("^sha256:"; "")' <<<"$CODEX_REL")"
+[ -n "$CODEX_VER" ] && [ -n "$CODEX_URL" ] && [ -n "$CODEX_SHA" ] \
+  || { echo "codex release ${CODEX_VERSION}: no ${CODEX_ASSET} with a sha256 digest" >&2; exit 1; }
+if [ ! -x "/opt/codex/${CODEX_VER}/bin/codex" ]; then
+  CODEX_TMP="$(mktemp -d)"
+  curl -fsSL -o "${CODEX_TMP}/${CODEX_ASSET}" "$CODEX_URL"
+  echo "${CODEX_SHA}  ${CODEX_TMP}/${CODEX_ASSET}" | sha256sum -c --quiet
+  rm -rf "/opt/codex/${CODEX_VER}.partial"
+  install -d -m 755 "/opt/codex/${CODEX_VER}.partial"
+  tar --no-same-owner -xzf "${CODEX_TMP}/${CODEX_ASSET}" -C "/opt/codex/${CODEX_VER}.partial"
+  mv "/opt/codex/${CODEX_VER}.partial" "/opt/codex/${CODEX_VER}"
+  rm -rf "$CODEX_TMP"
+fi
+ln -sfn "$CODEX_VER" /opt/codex/current
+ln -sfn /opt/codex/current/bin/codex /usr/local/bin/codex
+CODEX_V="$(HOME="$(mktemp -d)" /usr/local/bin/codex --version 2>/dev/null)"
+echo "CODEX_OK ${CODEX_V} (${CODEX_ASSET} sha256:${CODEX_SHA})"
 
 echo ">>> [substrate] runner dirs"
 mkdir -p /opt/claude-runner/bin /opt/claude-runner/etc /etc/claude-runner

@@ -27,8 +27,8 @@ A runner image is built in two layers, each with a single owner, so the forge
 never duplicates — and therefore never drifts from — the runner software:
 
 1. **Substrate (kalmia-authored).** The OS-level contract: base packages, the
-   `claude` service user, Claude Code, the gh CLI, empty secret placeholders,
-   and first-boot de-templating. It is `runner/substrate.sh`. This *is* what the
+   `claude` service user, Claude Code, the gh CLI, Node 22, the Gemini and
+   Codex CLIs, empty secret placeholders, and first-boot de-templating. It is `runner/substrate.sh`. This *is* what the
    image guarantees, so kalmia owns it; it was derived once from claytonia
    `provision/01`+`03` and is deliberately scoped to only what the runtime does
    **not** manage.

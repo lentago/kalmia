@@ -12,7 +12,8 @@
 # portable recipe is substrate.sh + claytonia's own gitops/install.sh; only this
 # per-target wrapper is LXC/Proxmox-specific. Two layers go into the image:
 #   1. substrate  — kalmia's OS contract (packages, claude user, Claude Code, gh,
-#                   secret placeholders, first-boot de-templating).
+#                   Node 22, the Gemini and Codex CLIs, secret placeholders,
+#                   first-boot de-templating).
 #   2. software   — claytonia@REF's gitops loop, installed + force-deployed once,
 #                   so the image ships claytonia's real runner and self-updates.
 # Neither secrets nor NAS runtime state are ever baked.
@@ -34,6 +35,8 @@ DISK_GB="${DISK_GB:-12}"
 OUT_STORAGE="${OUT_STORAGE:-neptune}"         # publish target (must allow vztmpl)
 OUT_CACHE="${OUT_CACHE:-/mnt/pve/neptune/template/cache}"
 RETAIN="${RETAIN:-3}"                         # keep this many claytonia-runner-v* templates
+GEMINI_CLI_VERSION="${GEMINI_CLI_VERSION:-latest}"  # npm @google/gemini-cli version to bake
+CODEX_VERSION="${CODEX_VERSION:-latest}"            # openai/codex release to bake (e.g. 0.166.0)
 NAME="claytonia-runner-${VERSION}"
 OUT="${OUT_CACHE}/${NAME}.tar.zst"
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -101,7 +104,9 @@ done
 
 # ---- 2. substrate layer (kalmia) --------------------------------------------
 say "apply substrate.sh"
-pct exec "$BUILD_VMID" -- bash -s < "$SUBSTRATE"
+pct exec "$BUILD_VMID" -- env \
+  GEMINI_CLI_VERSION="$GEMINI_CLI_VERSION" CODEX_VERSION="$CODEX_VERSION" \
+  bash -s < "$SUBSTRATE"
 
 # ---- 3. software layer (claytonia gitops — referenced, not copied) ----------
 say "install claytonia software layer @ ${CLAYTONIA_REF}"
@@ -206,6 +211,12 @@ if [ "$VERIFY" = 1 ]; then
         && echo "OK   gitops + pollers enabled" || { echo "ERR  timers not enabled"; rc=1; }
       [ "$(node -p "process.versions.node.split(\".\")[0]" 2>/dev/null)" = 22 ] \
         && echo "OK   node 22" || { echo "ERR  node is not 22 ($(node --version 2>&1))"; rc=1; }
+      v=$(su - claude -c "/usr/bin/gemini --version" 2>/dev/null) \
+        && echo "OK   Gemini CLI $v" || { echo "ERR  Gemini CLI"; rc=1; }
+      v=$(su - claude -c "/usr/local/bin/codex --version" 2>/dev/null) && test -x /opt/codex/current/codex-resources/bwrap \
+        && echo "OK   Codex CLI $v (+ bwrap)" || { echo "ERR  Codex CLI"; rc=1; }
+      [ ! -e /etc/claude-runner/gemini.env ] && [ ! -e /etc/claude-runner/codex.env ] \
+        && echo "OK   no Gemini/Codex credentials" || { echo "ERR  Gemini/Codex credential file BAKED"; rc=1; }
       [ -d /opt/claytonia ] && [ ! -e /opt/bullpen ] \
         && echo "OK   /opt/claytonia, no /opt/bullpen" || { echo "ERR  checkout path (want /opt/claytonia, no /opt/bullpen)"; rc=1; }
       grep -q "OAUTH_TOKEN=." /etc/claude-runner/token.env 2>/dev/null \
