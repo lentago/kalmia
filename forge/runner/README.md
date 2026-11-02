@@ -1,5 +1,8 @@
 # `claytonia-runner` image
 
+*Co-authored with Claude Code, which wrote the forge and this contract with
+Chris.*
+
 A versioned LXC template a bullpen worker is cut from. It replaces the hand-run
 `provision/01–05` bootstrap in [claytonia](https://github.com/lentago/claytonia):
 a new worker becomes `pct create` from this template + first-boot secrets +
@@ -108,8 +111,8 @@ mount + pool membership, inject secrets. First boot the gitops loop takes over;
 
 ## Versioning
 
-`vN` tracks the substrate (OS/Claude Code/gh/package baseline). v2 renamed the
-gitops loop to `claytonia-gitops` (claytonia#65); v3 adds the Gemini and Codex
-CLIs (kalmia#255). Rebuild — a new `vN` — when the substrate should move: a
-base-image bump, a new baked package, a Claude Code pinning change. You do **not** rebuild for runner-software changes;
-those ship through claytonia's gitops loop with no new image.
+`vN` tracks the substrate (OS/Claude Code/gh/package baseline); v3 adds the
+Gemini and Codex CLIs (kalmia#255). Rebuild — a new `vN` — when the substrate
+should move: a base-image bump, a new baked package, a Claude Code pinning
+change. You do **not** rebuild for runner-software changes; those ship through
+claytonia's gitops loop with no new image.
