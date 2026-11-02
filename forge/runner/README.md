@@ -15,8 +15,11 @@ storage `neptune`, LAN-wide).
 
 **Substrate** — kalmia-authored, versioned by the image (`substrate.sh`):
 
-- Debian 12 base + runner packages (`git jq ripgrep inotify-tools curl
-  openssh-server tini cron python3 sudo less`).
+- Debian 12 base + runner packages (`curl ca-certificates git jq ripgrep
+  inotify-tools sudo python3 less openssh-server openssh-client tini cron rsync
+  shellcheck uuid-runtime`), the same list `substrate.sh` installs. `uuidgen`
+  (from `uuid-runtime`) is what `run-job` mints session ids with
+  (lentago/claytonia#179).
 - A `claude` service user (passwordless sudo) with an operator **public** SSH
   key authorized.
 - **Claude Code** (native installer) at `/home/claude/.local/bin/claude`.
