@@ -20,8 +20,11 @@ storage `neptune`, LAN-wide).
   shellcheck uuid-runtime`), the same list `substrate.sh` installs. `uuidgen`
   (from `uuid-runtime`) is what `run-job` mints session ids with
   (lentago/claytonia#179).
-- A `claude` service user (passwordless sudo) with an operator **public** SSH
-  key authorized.
+- A `claude` service user with an operator **public** SSH key authorized. Its
+  only sudo rule, from v4, is `NOPASSWD: /opt/claude-runner/bin/gh-token`, the
+  GitHub App token broker (lentago/claytonia#177, kalmia#264). The agent gets no
+  root, and claytonia's `bin/cr-harden` re-asserts the rule on every worker
+  each minute. v3 and earlier shipped blanket passwordless sudo.
 - **Claude Code** (native installer) at `/home/claude/.local/bin/claude`.
 - The **gh CLI** (from GitHub's apt repo).
 - **Node 22 LTS**, system-wide from NodeSource's 22.x apt channel (pinned over
@@ -115,7 +118,8 @@ mount + pool membership, inject secrets. First boot the gitops loop takes over;
 ## Versioning
 
 `vN` tracks the substrate (OS/Claude Code/gh/package baseline); v3 adds the
-Gemini and Codex CLIs (kalmia#255). Rebuild — a new `vN` — when the substrate
+Gemini and Codex CLIs (kalmia#255), and v4 narrows the `claude` user's sudo to
+the token broker (kalmia#264). Rebuild — a new `vN` — when the substrate
 should move: a base-image bump, a new baked package, a Claude Code pinning
 change. You do **not** rebuild for runner-software changes; those ship through
 claytonia's gitops loop with no new image.
