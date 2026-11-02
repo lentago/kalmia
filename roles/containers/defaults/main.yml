@@ -8,3 +8,7 @@ docker_dnf_repo_url: "https://download.docker.com/linux/fedora"
 # release's codename (e.g. "resolute" for 26.04) has no dists/ directory
 # upstream yet, fall back to this codename instead.
 docker_apt_repo_codename_fallback: "noble"
+
+# sha256 of Docker's apt key, the same file at linux/ubuntu/gpg and
+# linux/debian/gpg (computed; kalmia#259). A rotation fails the run loudly.
+docker_gpg_key_sha256: "1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570"

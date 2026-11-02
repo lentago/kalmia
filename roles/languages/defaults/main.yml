@@ -1,3 +1,8 @@
 ---
 go_version: "1.23.6"
+# sha256 from: go.dev/dl/?mode=json, the linux-amd64 tarball (kalmia#259).
+# Bump it with go_version, here and in group_vars/all.yml.
+go_sha256: "9379441ea310de000f33a4dc767bd966e72ab2826270e038e78b2c53c2e7802d"
 nvm_version: "v0.40.1"
+# sha256 of nvm's install.sh at nvm_version (computed; nvm publishes none).
+nvm_install_sha256: "abdb525ee9f5b48b34d8ed9fc67c6013fb0f659712e401ecd88ab989b3af8f53"

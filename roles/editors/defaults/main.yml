@@ -3,3 +3,14 @@ install_vscode: true
 install_claude_code: true
 vscode_extensions: []
 vscode_font: "Droid Sans Mono"
+
+# --- Pinned download (kalmia#259) -------------------------------------------
+# The Claude Code native binary the installer would fetch, pinned with its
+# sha256. Claude Code updates itself afterwards; this only seeds the install.
+# sha256 from: downloads.claude.ai/claude-code-releases/<v>/manifest.json,
+# platforms["linux-x64"].checksum
+claude_code_version: "2.1.316"
+claude_code_sha256: "fd13c70000fec3f2116dfbcbb6121210b4a29328bf0e46210a59dd594a67d824"
+# sha256 of packages.microsoft.com/keys/microsoft.asc (computed; a key rotation
+# fails the run loudly instead of trusting whatever the URL serves).
+microsoft_gpg_key_sha256: "2fa9c05d591a1582a9aba276272478c262e95ad00acf60eaee1644d93941e3c6"

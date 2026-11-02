@@ -15,3 +15,7 @@ repos_dir_aliases:
   ".github": dotgithub
 # Repo names (personal or org) never cloned by this role.
 repos_skip: []
+
+# sha256 of cli.github.com/packages/githubcli-archive-keyring.gpg (computed;
+# kalmia#259). A key rotation fails the run loudly instead of trusting the URL.
+gh_keyring_sha256: "6084d5d7bd8e288441e0e94fc6275570895da18e6751f70f057485dc2d1a811b"
