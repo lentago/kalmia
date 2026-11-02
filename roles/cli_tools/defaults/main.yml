@@ -5,3 +5,13 @@ pkg_fd: fd-find
 pkg_ripgrep: ripgrep
 pkg_shellcheck: shellcheck
 pkg_pipx: pipx
+
+# --- Pinned downloads (kalmia#259) ------------------------------------------
+# Every download carries a sha256 pinned here. A bump changes the version and
+# its checksum together, taken from the upstream source named above each pair.
+# sha256 from: release `checksums`, SHA-256 column (`checksums_hashes_order`)
+yq_version: "v4.54.1"
+yq_sha256: "8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f"
+# sha256 from: starship-x86_64-unknown-linux-musl.tar.gz.sha256
+starship_version: "v1.27.0"
+starship_sha256: "10c8eb4cb3b761d9bf59ea828444c2dab36c900b7d69a69e08814b286969df89"

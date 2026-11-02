@@ -1,5 +1,5 @@
 # ============================================================================
-# Ansible Lint — syntax check + ansible-lint on every non-draft PR.
+# Ansible Lint — download pins, syntax check + ansible-lint on every non-draft PR.
 # Self-contained (no shared workflow exists for Ansible yet). Required-ish
 # signal for the playbook + roles; could graduate to shared-workflows later.
 # ============================================================================
@@ -26,6 +26,9 @@ jobs:
 
       - name: Install required collections
         run: ansible-galaxy collection install -r requirements.yml
+
+      - name: Downloads are pinned (kalmia#259)
+        run: python3 tests/download-pins.py
 
       - name: Syntax check
         run: ansible-playbook --syntax-check -i inventory/hosts.yml site.yml

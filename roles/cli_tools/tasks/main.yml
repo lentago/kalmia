@@ -22,22 +22,14 @@
     path: /usr/local/bin/yq
   register: yq_bin
 
-- name: Install yq
-  when: not yq_bin.stat.exists
+- name: Install yq {{ yq_version }}
+  ansible.builtin.get_url:
+    url: "https://github.com/mikefarah/yq/releases/download/{{ yq_version }}/yq_linux_amd64"
+    dest: /usr/local/bin/yq
+    checksum: "sha256:{{ yq_sha256 }}"
+    mode: "0755"
   become: true
-  block:
-    - name: Resolve the latest yq version
-      ansible.builtin.uri:
-        url: https://api.github.com/repos/mikefarah/yq/releases/latest
-        return_content: true
-      register: yq_release
-      check_mode: false
-
-    - name: Download the yq binary
-      ansible.builtin.get_url:
-        url: "https://github.com/mikefarah/yq/releases/download/{{ yq_release.json.tag_name }}/yq_linux_amd64"
-        dest: /usr/local/bin/yq
-        mode: "0755"
+  when: not yq_bin.stat.exists
 
 # --- fzf (git clone + installer, user space) -------------------------------
 - name: Clone fzf
@@ -61,9 +53,29 @@
   become: false
 
 # --- Starship prompt (single binary → /usr/local/bin) ----------------------
-- name: Install the Starship prompt
-  ansible.builtin.shell: set -o pipefail; curl -fsSL https://starship.rs/install.sh | sh -s -- -y
-  args:
-    executable: /bin/bash
-    creates: /usr/local/bin/starship
+# The pinned release tarball, checked against its sha256, replaces the
+# `curl starship.rs/install.sh | sh` installer (kalmia#259).
+- name: Check for Starship
+  ansible.builtin.stat:
+    path: /usr/local/bin/starship
+  register: starship_bin
+
+- name: Install the Starship prompt {{ starship_version }}
+  when: not starship_bin.stat.exists
   become: true
+  block:
+    - name: Download the Starship release
+      ansible.builtin.get_url:
+        url: "https://github.com/starship/starship/releases/download/{{ starship_version }}/starship-x86_64-unknown-linux-musl.tar.gz"
+        dest: "/tmp/starship-{{ starship_version }}.tar.gz"
+        checksum: "sha256:{{ starship_sha256 }}"
+        mode: "0644"
+
+    - name: Unpack Starship into /usr/local/bin
+      ansible.builtin.unarchive:
+        src: "/tmp/starship-{{ starship_version }}.tar.gz"
+        dest: /usr/local/bin
+        remote_src: true
+        include:
+          - starship
+        mode: "0755"

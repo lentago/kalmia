@@ -16,10 +16,11 @@
   when: "'aws-cli/2' not in (aws_check.stdout | default('')) and 'aws-cli/2' not in (aws_check.stderr | default(''))"
   become: true
   block:
-    - name: Download the AWS CLI v2 installer
+    - name: Download the AWS CLI v2 installer {{ awscli_version }}
       ansible.builtin.get_url:
-        url: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+        url: "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-{{ awscli_version }}.zip"
         dest: /tmp/awscliv2.zip
+        checksum: "sha256:{{ awscli_sha256 }}"
         mode: "0644"
 
     - name: Unpack the AWS CLI v2 installer
@@ -41,22 +42,20 @@
     path: /usr/local/bin/granted
   register: granted_bin
 
-- name: Install Granted
+- name: Install Granted {{ granted_version }}
   when: not granted_bin.stat.exists
   become: true
   block:
-    - name: Resolve the latest Granted release
-      ansible.builtin.uri:
-        url: https://api.github.com/repos/fwdcloudsec/granted/releases/latest
-        return_content: true
-      register: granted_release
-      check_mode: false
+    - name: Download the Granted release
+      ansible.builtin.get_url:
+        url: "https://github.com/fwdcloudsec/granted/releases/download/v{{ granted_version }}/granted_{{ granted_version }}_linux_x86_64.tar.gz"
+        dest: "/tmp/granted_{{ granted_version }}_linux_x86_64.tar.gz"
+        checksum: "sha256:{{ granted_sha256 }}"
+        mode: "0644"
 
-    - name: Download and unpack Granted into /usr/local/bin
+    - name: Unpack Granted into /usr/local/bin
       ansible.builtin.unarchive:
-        src: >-
-          https://github.com/fwdcloudsec/granted/releases/download/{{ granted_release.json.tag_name }}/granted_{{
-          granted_release.json.tag_name | regex_replace('^v', '') }}_linux_x86_64.tar.gz
+        src: "/tmp/granted_{{ granted_version }}_linux_x86_64.tar.gz"
         dest: /usr/local/bin
         remote_src: true
         include:
@@ -70,15 +69,29 @@
     path: /usr/local/bin/tfswitch
   register: tfswitch_bin
 
-- name: Install tfswitch
-  ansible.builtin.shell: >-
-    set -o pipefail;
-    curl -fsSL https://raw.githubusercontent.com/warrensbox/terraform-switcher/release/install.sh | bash
-  args:
-    executable: /bin/bash
-    creates: /usr/local/bin/tfswitch
-  become: true
+# The pinned release tarball, checked against its sha256, replaces the
+# `curl …/install.sh | bash` installer (kalmia#259).
+- name: Install tfswitch {{ tfswitch_version }}
   when: not tfswitch_bin.stat.exists
+  become: true
+  block:
+    - name: Download the tfswitch release
+      ansible.builtin.get_url:
+        url: >-
+          https://github.com/warrensbox/terraform-switcher/releases/download/{{ tfswitch_version
+          }}/terraform-switcher_{{ tfswitch_version }}_linux_amd64.tar.gz
+        dest: "/tmp/terraform-switcher_{{ tfswitch_version }}_linux_amd64.tar.gz"
+        checksum: "sha256:{{ tfswitch_sha256 }}"
+        mode: "0644"
+
+    - name: Unpack tfswitch into /usr/local/bin
+      ansible.builtin.unarchive:
+        src: "/tmp/terraform-switcher_{{ tfswitch_version }}_linux_amd64.tar.gz"
+        dest: /usr/local/bin
+        remote_src: true
+        include:
+          - tfswitch
+        mode: "0755"
 
 - name: Install the latest Terraform via tfswitch
   ansible.builtin.command: tfswitch --latest
@@ -88,18 +101,13 @@
   failed_when: false
 
 # --- kubectl ---------------------------------------------------------------
-- name: Resolve the latest stable kubectl version
-  ansible.builtin.uri:
-    url: https://dl.k8s.io/release/stable.txt
-    return_content: true
-  register: kubectl_stable
-  changed_when: false
-  check_mode: false
-
-- name: Install kubectl
+# Pinned, not `stable.txt` (kalmia#259). With a checksum, get_url converges an
+# existing /usr/local/bin/kubectl to the pin and leaves a matching one alone.
+- name: Install kubectl {{ kubectl_version }}
   ansible.builtin.get_url:
-    url: "https://dl.k8s.io/release/{{ kubectl_stable.content | trim }}/bin/linux/amd64/kubectl"
+    url: "https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/amd64/kubectl"
     dest: /usr/local/bin/kubectl
+    checksum: "sha256:{{ kubectl_sha256 }}"
     mode: "0755"
   become: true
 
@@ -109,16 +117,25 @@
     path: /usr/local/bin/eksctl
   register: eksctl_bin
 
-- name: Download and install eksctl
-  ansible.builtin.unarchive:
-    src: https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz
-    dest: /usr/local/bin
-    remote_src: true
-    include:
-      - eksctl
-    mode: "0755"
-  become: true
+- name: Install eksctl {{ eksctl_version }}
   when: not eksctl_bin.stat.exists
+  become: true
+  block:
+    - name: Download the eksctl release
+      ansible.builtin.get_url:
+        url: "https://github.com/eksctl-io/eksctl/releases/download/{{ eksctl_version }}/eksctl_Linux_amd64.tar.gz"
+        dest: "/tmp/eksctl_{{ eksctl_version }}_Linux_amd64.tar.gz"
+        checksum: "sha256:{{ eksctl_sha256 }}"
+        mode: "0644"
+
+    - name: Unpack eksctl into /usr/local/bin
+      ansible.builtin.unarchive:
+        src: "/tmp/eksctl_{{ eksctl_version }}_Linux_amd64.tar.gz"
+        dest: /usr/local/bin
+        remote_src: true
+        include:
+          - eksctl
+        mode: "0755"
 
 # --- Helm ------------------------------------------------------------------
 - name: Check for Helm
@@ -126,12 +143,35 @@
     path: /usr/local/bin/helm
   register: helm_bin
 
-- name: Install Helm
-  ansible.builtin.shell: >-
-    set -o pipefail;
-    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-  args:
-    executable: /bin/bash
-    creates: /usr/local/bin/helm
-  become: true
+# The pinned release tarball, checked against its sha256, replaces the
+# `curl …/get-helm-3 | bash` installer (kalmia#259). The binary sits under
+# linux-amd64/ in the tarball, so it unpacks to a scratch dir and is copied out.
+- name: Install Helm {{ helm_version }}
   when: not helm_bin.stat.exists
+  become: true
+  block:
+    - name: Download the Helm release
+      ansible.builtin.get_url:
+        url: "https://get.helm.sh/helm-{{ helm_version }}-linux-amd64.tar.gz"
+        dest: "/tmp/helm-{{ helm_version }}-linux-amd64.tar.gz"
+        checksum: "sha256:{{ helm_sha256 }}"
+        mode: "0644"
+
+    - name: Create the Helm unpack directory
+      ansible.builtin.file:
+        path: "/tmp/helm-{{ helm_version }}"
+        state: directory
+        mode: "0755"
+
+    - name: Unpack the Helm release
+      ansible.builtin.unarchive:
+        src: "/tmp/helm-{{ helm_version }}-linux-amd64.tar.gz"
+        dest: "/tmp/helm-{{ helm_version }}"
+        remote_src: true
+
+    - name: Install the helm binary into /usr/local/bin
+      ansible.builtin.copy:
+        src: "/tmp/helm-{{ helm_version }}/linux-amd64/helm"
+        dest: /usr/local/bin/helm
+        remote_src: true
+        mode: "0755"

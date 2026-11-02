@@ -21,6 +21,7 @@
       ansible.builtin.get_url:
         url: https://packages.microsoft.com/keys/microsoft.asc
         dest: /etc/apt/keyrings/packages.microsoft.asc
+        checksum: "sha256:{{ microsoft_gpg_key_sha256 }}"
         mode: "0644"
 
     - name: Add the VS Code apt repository
@@ -143,18 +144,34 @@
   when: install_vscode | bool
 
 # --- Claude Code (native binary, user space) -------------------------------
+# The pinned native binary, checked against the sha256 in its release manifest,
+# replaces `curl claude.ai/install.sh | bash` (kalmia#259). That installer does
+# the same thing: download the binary, check it, then `claude install`.
 - name: Check for Claude Code
   ansible.builtin.stat:
     path: "{{ target_home }}/.local/bin/claude"
   register: claude_bin
   become: false
 
-- name: Install Claude Code
-  ansible.builtin.shell: set -o pipefail; curl -fsSL https://claude.ai/install.sh | bash
-  args:
-    executable: /bin/bash
-    creates: "{{ target_home }}/.local/bin/claude"
-  become: false
+- name: Install Claude Code {{ claude_code_version }}
   when:
     - install_claude_code | bool
     - not claude_bin.stat.exists
+  become: false
+  block:
+    - name: Download the Claude Code binary
+      ansible.builtin.get_url:
+        url: "https://downloads.claude.ai/claude-code-releases/{{ claude_code_version }}/linux-x64/claude"
+        dest: "/tmp/claude-{{ claude_code_version }}-linux-x64"
+        checksum: "sha256:{{ claude_code_sha256 }}"
+        mode: "0755"
+
+    - name: Run the Claude Code installer
+      ansible.builtin.command: "/tmp/claude-{{ claude_code_version }}-linux-x64 install {{ claude_code_version }}"
+      args:
+        creates: "{{ target_home }}/.local/bin/claude"
+
+    - name: Remove the downloaded Claude Code binary
+      ansible.builtin.file:
+        path: "/tmp/claude-{{ claude_code_version }}-linux-x64"
+        state: absent

@@ -19,6 +19,7 @@
       ansible.builtin.get_url:
         url: "{{ docker_apt_repo_url }}/gpg"
         dest: /etc/apt/keyrings/docker.asc
+        checksum: "sha256:{{ docker_gpg_key_sha256 }}"
         mode: "0644"
 
     - name: Check whether the Docker apt repo publishes this release's codename

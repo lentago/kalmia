@@ -32,15 +32,32 @@
     mode: "0644"
   become: false
 
-- name: Install nvm
-  ansible.builtin.shell: >-
-    set -o pipefail;
-    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/{{ nvm_version }}/install.sh
-    | PROFILE=/dev/null NVM_DIR="{{ nvm_dir }}" bash
-  args:
-    executable: /bin/bash
-    creates: "{{ nvm_dir }}/nvm.sh"
+# nvm's install.sh at the pinned tag, checked against its sha256 before it runs,
+# replaces piping it straight into bash (kalmia#259).
+- name: Check for nvm
+  ansible.builtin.stat:
+    path: "{{ nvm_dir }}/nvm.sh"
+  register: nvm_sh
   become: false
+
+- name: Install nvm {{ nvm_version }}
+  when: not nvm_sh.stat.exists
+  become: false
+  block:
+    - name: Download the nvm installer
+      ansible.builtin.get_url:
+        url: "https://raw.githubusercontent.com/nvm-sh/nvm/{{ nvm_version }}/install.sh"
+        dest: "/tmp/nvm-install-{{ nvm_version }}.sh"
+        checksum: "sha256:{{ nvm_install_sha256 }}"
+        mode: "0644"
+
+    - name: Run the nvm installer
+      ansible.builtin.command: "bash /tmp/nvm-install-{{ nvm_version }}.sh"
+      environment:
+        PROFILE: /dev/null
+        NVM_DIR: "{{ nvm_dir }}"
+      args:
+        creates: "{{ nvm_dir }}/nvm.sh"
 
 - name: Install Node.js LTS and set it as the default
   ansible.builtin.shell: >-
@@ -70,6 +87,7 @@
       ansible.builtin.get_url:
         url: "https://go.dev/dl/go{{ go_version }}.linux-amd64.tar.gz"
         dest: "/tmp/go{{ go_version }}.linux-amd64.tar.gz"
+        checksum: "sha256:{{ go_sha256 }}"
         mode: "0644"
 
     - name: Remove any previous Go install
