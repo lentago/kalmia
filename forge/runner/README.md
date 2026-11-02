@@ -1,5 +1,8 @@
 # `claytonia-runner` image
 
+*Co-authored with Claude Code, which wrote the forge and this contract with
+Chris.*
+
 A versioned LXC template a bullpen worker is cut from. It replaces the hand-run
 `provision/01–05` bootstrap in [claytonia](https://github.com/lentago/claytonia):
 a new worker becomes `pct create` from this template + first-boot secrets +
@@ -20,6 +23,15 @@ storage `neptune`, LAN-wide).
 - The **gh CLI** (from GitHub's apt repo).
 - **Node 22 LTS**, system-wide from NodeSource's 22.x apt channel (pinned over
   Debian's 18.x) — Astro 7 needs 22 (lentago/claytonia#140).
+- **Gemini CLI** (npm `@google/gemini-cli`) at `/usr/bin/gemini` and **Codex
+  CLI** (the `openai/codex` release package, checked against GitHub's published
+  sha256) at `/usr/local/bin/codex` → `/opt/codex/current/bin/codex`, so every
+  worker carries every runtime (since v3; kalmia#255, lentago/claytonia#166). The
+  paths are fixed so claytonia's adapters and `cr-update` call them by absolute
+  path. Binaries only: their per-user config (`~/.gemini/settings.json`,
+  `~/.codex/config.toml`) is claytonia's to deploy, and their credentials are
+  never baked (below). `GEMINI_CLI_VERSION` / `CODEX_VERSION` pin a release at
+  build time; the default is the latest, and the build log prints both versions.
 - Runner scaffold dirs and **empty secret placeholders** at `/etc/claude-runner/`.
 - git bot identity + the GitHub-App credential helper wired for the `claude` user.
 - A `forge-firstboot` unit that regenerates ssh host keys on first boot.
@@ -39,7 +51,10 @@ not copied here:
 
 - **Secrets.** The OAuth token, the GitHub-App private key + ids, and any
   Grafana push token are placeholders only (`token.env`, `gh-app.env`,
-  `gh-app.pem` empty). They are injected at first boot, never baked.
+  `gh-app.pem` empty). They are injected at first boot, never baked. The
+  Gemini and Codex credentials (`gemini.env`, `codex.env`) get no placeholder at
+  all: they are installed by hand per claytonia ADR-0010, so a missing file
+  means "not configured", and `--verify` fails if either is present.
 - **Shared NAS runtime state.** The job queue and the project `registry.json`
   live on the NAS (`/srv/jobs`), not in the image — the build never mounts or
   writes them (claytonia `provision/04`'s registry step is deliberately not run).
@@ -96,7 +111,8 @@ mount + pool membership, inject secrets. First boot the gitops loop takes over;
 
 ## Versioning
 
-`vN` tracks the substrate (OS/Claude Code/gh/package baseline). Rebuild — a new
-`vN` — when the substrate should move: a base-image bump, a new baked package, a
-Claude Code pinning change. You do **not** rebuild for runner-software changes;
-those ship through claytonia's gitops loop with no new image.
+`vN` tracks the substrate (OS/Claude Code/gh/package baseline); v3 adds the
+Gemini and Codex CLIs (kalmia#255). Rebuild — a new `vN` — when the substrate
+should move: a base-image bump, a new baked package, a Claude Code pinning
+change. You do **not** rebuild for runner-software changes; those ship through
+claytonia's gitops loop with no new image.
