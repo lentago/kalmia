@@ -142,6 +142,13 @@ CLAYTONIA_REPO_DIR="$REPO_DIR" bash "$REPO_DIR/gitops/install.sh"
 # already in flight: `systemctl start` on a oneshot that is still activating
 # waits for it, and otherwise runs one. The forced deploy then runs alone. The
 # timer stays enabled, which is what the image ships; clones start it at boot.
+# The wait relies on the unit being Type=oneshot, which claytonia owns, so it is
+# checked here: under any other type, `start` returns at once and the race is back.
+svc_type="$(systemctl show -p Type --value claytonia-gitops.service)"
+[ "$svc_type" = oneshot ] || {
+  echo "claytonia-gitops.service is Type=${svc_type:-?}, not oneshot: the wait below would not wait (kalmia#268)" >&2
+  exit 1
+}
 systemctl stop claytonia-gitops.timer
 systemctl start claytonia-gitops.service \
   || echo "warn: the timer's gitops run failed; the forced deploy below runs anyway" >&2
@@ -161,10 +168,15 @@ systemctl enable claude-inbox.timer claude-heartbeat.timer >/dev/null 2>&1 || tr
 # check is loud on purpose. claytonia-gitops logs to a file, and the build CT
 # and its log are destroyed on exit, so a failure here prints the missing files,
 # the gitops log and the journal first.
-missing=""
+# The loop walks the same `bin/*` glob claytonia-gitops deploys from, and counts
+# as it goes, so the check and the count agree; an empty bin/ is a failure too.
+missing=""; n=0
 for f in "$REPO_DIR"/bin/*; do
+  [ -e "$f" ] || continue
+  n=$((n + 1))
   cmp -s "$f" "/opt/claude-runner/bin/$(basename "$f")" || missing="$missing $(basename "$f")"
 done
+[ "$n" -gt 0 ] || missing=" (nothing: $REPO_DIR/bin is empty)"
 if [ -n "$missing" ]; then
   echo "claytonia layer: not deployed to /opt/claude-runner/bin:$missing" >&2
   echo "--- /var/log/claytonia-gitops.log (last 40 lines)" >&2
@@ -173,7 +185,7 @@ if [ -n "$missing" ]; then
   journalctl -u claytonia-gitops.service -u claytonia-gitops.timer --no-pager -n 20 >&2 2>/dev/null || true
   exit 1
 fi
-echo "claytonia layer: $(find "$REPO_DIR/bin" -maxdepth 1 -type f | wc -l) bin/ files deployed"
+echo "claytonia layer: ${n} bin/ files deployed"
 systemctl is-enabled claytonia-gitops.timer claude-inbox.timer claude-heartbeat.timer
 echo SOFTWARE_DONE
 SOFTWARE
