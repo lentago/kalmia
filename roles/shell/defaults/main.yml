@@ -5,3 +5,22 @@ fd_command: fd
 github_default_owner: ""
 repos_dir: "{{ ansible_env.HOME }}/repos"
 github_org: ""
+
+# standing: level and repo at a glance (kalmia#265). Each EM's pane background is
+# a dark tint of its repo's hue, and its border and status line a bright accent of
+# the same hue. The Director keeps the plain background and gets the brand gold.
+# Values are hues in degrees, kept out of 195-255 because blue means a link and
+# nothing else is blue, or `neutral` for a grey with no hue. A repo not listed
+# here gets a stable hue hashed from its name. Change one, run `--tags shell`, and
+# `standing show <repo>` (or `up`) repaints a running EM.
+standing_colors:
+  solidago: 48          # goldenrod
+  uvularia: 75          # bellwort, pushed toward green to clear solidago
+  osmunda: 120          # fern green
+  site-lentago-dev: 165 # teal
+  shared-workflows: 185 # cyan-teal
+  claytonia: 275        # violet
+  kalmia: 320           # laurel pink
+  drosera: 355          # sundew red
+  dotgithub: neutral    # the org meta-repo
+standing_director_accent: "#E0A81C"   # anther gold, the brand's single accent

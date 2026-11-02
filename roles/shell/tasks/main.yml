@@ -60,6 +60,20 @@
 # var the repos role clones into.
 # ~/.local/bin already exists and is on PATH (common role, .bashrc block).
 # Adding a helper: drop roles/shell/templates/<name>.j2 in and list it here.
+# standing's hues (kalmia#265) must stay out of the link-blue band, and be
+# degrees or `neutral`, or the colours would read as links.
+- name: Check the standing hues
+  ansible.builtin.assert:
+    that:
+      - item.value == 'neutral' or (item.value is number and 0 <= item.value < 360 and not (195 <= item.value <= 255))
+    fail_msg: >-
+      standing_colors.{{ item.key }} is {{ item.value }}: use a hue in degrees
+      (0-359, outside 195-255, which is reserved for links) or neutral
+    quiet: true
+  loop: "{{ standing_colors | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
 - name: Install the CLI helpers
   ansible.builtin.template:
     src: "{{ item }}.j2"

@@ -1,4 +1,4 @@
-{# Body is a verbatim copy of the script wrapped in raw: it uses `${#x[@]}` (array length) throughout, which Jinja would read as a comment opener. Only the REPOS_DIR default is templated. Keep `-%}` on the raw tag or the shebang lands on line 2. #}
+{# Body is a verbatim copy of the script wrapped in raw: it uses `${#x[@]}` (array length) throughout, which Jinja would read as a comment opener. Only the REPOS_DIR default and the colour map (HUE, DIRECTOR_ACCENT) are templated. Keep `-%}` on the raw tag or the shebang lands on line 2. #}
 {% raw -%}
 #!/usr/bin/env bash
 # standing — start and tend a standing interactive Claude Code session in a
@@ -121,6 +121,12 @@
 #     > 1) are still listed, restarted and downed; window N is viewed through
 #     "lentago-vN". (Before kalmia#249, window 1 was viewed through the base session;
 #     a terminal still attached there is not counted as showing it.)
+#   * Colours tell level and repo apart at a glance (kalmia#265). An EM's pane has a
+#     dark tint of its repo's hue, and its border and status line a bright accent;
+#     the Director keeps the plain background and gets a gold frame. All of it is set
+#     in tmux, so it is the same in any terminal; ghostty also gets the tint for its
+#     padding. Hues come from `standing_colors` in roles/shell defaults; `up`, `show`
+#     and `director` re-apply them, so a running session repaints after a change.
 #   * ANSIBLE MANAGED — kalmia roles/shell (like clean-all/pull-all). Local edits
 #     are overwritten on the next run; change roles/shell/templates/standing.j2 instead.
 set -euo pipefail
@@ -158,6 +164,21 @@ EXCLUDE=(coderabbit office-presence site-pitzilabs-dev workstation-bootstrap rep
 KICKOFF_DEFAULT='You are the Engineering Manager for this repo (see the org model in ~/repos/lentago/CLAUDE.md). %DIRECTOR%Chris is Product Owner, CTO and CEO. You may spawn subagents of your own choice (Haiku, Sonnet, Opus) for parallel or read-only work; their judgments come back through you. Introduce yourself per your CLAUDE.md, call ListAgents once so you know your peers, then stand by. Do not start any work until asked.'
 # shellcheck disable=SC2016  # backticks are markdown in the prompt, not a command
 DIRECTOR_SENTENCE='Your Engineering Director is the session named `%NAME%`; report to it with SendMessage when work is done or blocked. '
+
+# Colours (kalmia#265). HUE is rendered from `standing_colors` in roles/shell
+# defaults: a hue in degrees, or `neutral` for a grey. A repo not in it gets a
+# stable hue hashed from its name (repo_colors), so a new repo needs no edit.
+{% endraw %}
+declare -A HUE=(
+{% for repo, hue in standing_colors | dictsort %}
+    [{{ repo }}]='{{ hue }}'
+{% endfor %}
+)
+DIRECTOR_ACCENT='{{ standing_director_accent }}'
+{% raw -%}
+EMBER='#1d120d'            # the terminals' own background: the Director's status text on gold
+TINT_S=38; TINT_L=8        # HSL saturation and lightness (%) of an EM's pane tint: about ember's
+ACCENT_S=65; ACCENT_L=60   # and of its accent (border, status line)
 
 # ---------------------------------------------------------------- helpers ----
 
@@ -410,6 +431,81 @@ apply_options() {
         tmux set-option -w -t "$(win_t "$w")" pane-border-format ' #{@repo}#{?pane_dead, [dead],} '
         tmux select-layout -t "$(win_t "$w")" tiled >/dev/null
     done
+    paint_ems
+}
+
+# #rrggbb for a hue in degrees and a saturation and lightness in percent.
+hsl_hex() {
+    awk -v h="$1" -v s="$2" -v l="$3" '
+        function mn(a, b) { return a < b ? a : b }
+        function mx(a, b) { return a > b ? a : b }
+        function ch(n,   k, a) {
+            k = (n + h / 30) % 12
+            a = s / 100 * mn(l / 100, 1 - l / 100)
+            return int(255 * (l / 100 - a * mx(-1, mn(mn(k - 3, 9 - k), 1))) + 0.5)
+        }
+        BEGIN { printf "#%02x%02x%02x", ch(0), ch(8), ch(4) }'
+}
+
+# Sets TINT (pane background) and ACCENT (border, status line) for a repo. A repo
+# not in HUE gets a hue from a CRC of its name, spread over the 299 degrees
+# outside the link-blue band (195-255): stable across runs and machines.
+repo_colors() {
+    local h=${HUE[$1]:-} s_t=$TINT_S s_a=$ACCENT_S
+    if [[ -z "$h" ]]; then
+        h=$(( $(printf '%s' "$1" | cksum | cut -d' ' -f1) % 299 ))
+        (( h < 195 )) || h=$(( h + 61 ))
+    elif [[ "$h" == neutral ]]; then
+        h=0; s_t=0; s_a=0
+    fi
+    TINT=$(hsl_hex "$h" "$s_t" "$TINT_L")
+    ACCENT=$(hsl_hex "$h" "$s_a" "$ACCENT_L")
+}
+
+# Paint every EM (kalmia#265). Each pane gets its repo's tint as its background,
+# each window its (first) EM's accent on the border line that names the repo, and
+# each view session that accent as its status line, with the tint as the text.
+# The base session keeps tmux's own status line. Idempotent: `up`, `show` and
+# `open` re-apply it, so a running EM repaints after a hue changes.
+paint_ems() {
+    local w s id repo
+    local -A w_accent=() w_tint=()
+    for w in $(std_windows); do
+        while IFS="$US" read -r id repo; do
+            [[ -n "$repo" ]] || continue
+            repo_colors "$repo"
+            tmux set-option -p -t "$id" window-style "bg=$TINT"
+            tmux set-option -p -t "$id" window-active-style "bg=$TINT"
+            [[ -n "${w_accent[$w]:-}" ]] || { w_accent[$w]=$ACCENT; w_tint[$w]=$TINT; }
+        done < <(tmux list-panes -t "$(win_t "$w")" -F "#{pane_id}${US}#{@repo}" 2>/dev/null || true)
+        [[ -n "${w_accent[$w]:-}" ]] || continue
+        tmux set-option -w -t "$(win_t "$w")" pane-border-style "fg=${w_accent[$w]}"
+        tmux set-option -w -t "$(win_t "$w")" pane-active-border-style "fg=${w_accent[$w]},bold"
+    done
+    for s in $(view_sessions); do
+        w=$(view_window "$s")
+        [[ -n "$w" && -n "${w_accent[$w]:-}" ]] || continue
+        tmux set-option -t "$s:" status-style "bg=${w_accent[$w]},fg=${w_tint[$w]}"
+    done
+}
+
+# The Director's frame: a gold border line naming it and a gold status line, on
+# the terminal's own background. Idempotent, like paint_ems.
+paint_director() {
+    tmux set-option -w -t "=$DIRECTOR_NAME:" pane-border-status top
+    tmux set-option -w -t "=$DIRECTOR_NAME:" pane-border-format " $DIRECTOR_TITLE#{?pane_dead, [dead],} "
+    tmux set-option -w -t "=$DIRECTOR_NAME:" pane-border-style "fg=$DIRECTOR_ACCENT"
+    tmux set-option -w -t "=$DIRECTOR_NAME:" pane-active-border-style "fg=$DIRECTOR_ACCENT,bold"
+    tmux set-option -t "=$DIRECTOR_NAME:" status-style "bg=$DIRECTOR_ACCENT,fg=$EMBER"
+}
+
+# A window's tint, for the terminal's padding: its active pane's repo.
+win_tint() {
+    local repo
+    repo=$(tmux display-message -p -t "$(win_t "$1")" '#{@repo}' 2>/dev/null || true)
+    [[ -n "$repo" ]] || return 0
+    repo_colors "$repo"
+    printf '%s' "$TINT"
 }
 
 have_display() { [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; }
@@ -435,12 +531,14 @@ term_title() {
 }
 
 # Open a maximized terminal attached to a view session, with the given title,
-# at the terminal's own font size unless STANDING_FONT_SIZE says otherwise.
+# at the terminal's own font size unless STANDING_FONT_SIZE says otherwise. An
+# optional third argument, the EM's tint, also colours ghostty's own background,
+# so its padding matches the tinted pane instead of framing it in ember.
 launch_terminal() {
-    local view=$1 title=$2 fs="${STANDING_FONT_SIZE:-}"
+    local view=$1 title=$2 bg=${3:-} fs="${STANDING_FONT_SIZE:-}"
     local -a attach=(tmux attach-session -t "=$view") cmd
     case "$TERM_BIN" in
-        ghostty)   cmd=(ghostty --maximize=true --title="$title" ${fs:+--font-size="$fs"} -e "${attach[@]}") ;;
+        ghostty)   cmd=(ghostty --maximize=true --title="$title" ${fs:+--font-size="$fs"} ${bg:+--background="$bg"} -e "${attach[@]}") ;;
         ptyxis)    cmd=(ptyxis --new-window --maximize --title "$title" -- "${attach[@]}") ;;
         alacritty) cmd=(alacritty --title "$title" -o window.startup_mode=Maximized ${fs:+-o font.size="$fs"} -e "${attach[@]}") ;;
         *)         cmd=("$TERM_BIN" -e "${attach[@]}") ;;
@@ -533,11 +631,13 @@ ensure_director() {
     tmux set-option -w -t "=$DIRECTOR_NAME:" window-size latest
     tmux set-option -w -t "=$DIRECTOR_NAME:" automatic-rename off
     tmux set-option -w -t "=$DIRECTOR_NAME:" remain-on-exit on
+    paint_director
 }
 
 # Open a maximized terminal on the Director unless one already shows it.
 show_director() {
     director_up || die "the Director is not running — 'director' starts it ('director --open' in its own window)"
+    paint_director   # repaint even when it is already shown (kalmia#265)
     local n
     n=$(clients_of "$DIRECTOR_NAME")
     if (( n )); then
@@ -841,7 +941,7 @@ open_terminals() {
     pick_terminal
     scrub_env
     for w in "${missing[@]}"; do
-        launch_terminal "$(view_for "$w")" "$(term_title "$w")"
+        launch_terminal "$(view_for "$w")" "$(term_title "$w")" "$(win_tint "$w")"
         ok "opened $TERM_BIN for $w"
     done
     # Re-tile grid windows once the new clients' sizes have been picked up
@@ -860,6 +960,7 @@ cmd_show() {
     id=$(pane_for "$repo")
     [[ -n "$id" ]] || die "$repo has no standing EM — 'standing up $repo' starts one, terminal included"
     w=$(window_of "$id")
+    paint_ems   # repaint even when it is already shown, so a hue change lands (kalmia#265)
     n=$(clients_of "$(view_for "$w")")
     if (( n )); then
         say "$repo is already shown in $n terminal(s)"
