@@ -428,7 +428,9 @@ apply_options() {
         tmux set-option -w -t "$(win_t "$w")" automatic-rename off
         tmux set-option -w -t "$(win_t "$w")" remain-on-exit on
         tmux set-option -w -t "$(win_t "$w")" pane-border-status top
-        tmux set-option -w -t "$(win_t "$w")" pane-border-format ' #{@repo}#{?pane_dead, [dead],} '
+        # The label takes its own pane's accent, so in a grid window each EM's
+        # border names its repo in that repo's colour (kalmia#265).
+        tmux set-option -w -t "$(win_t "$w")" pane-border-format '#{?@accent,#[fg=#{@accent}],} #{@repo}#{?pane_dead, [dead],} '
         tmux select-layout -t "$(win_t "$w")" tiled >/dev/null
     done
     paint_ems
@@ -462,9 +464,10 @@ repo_colors() {
     ACCENT=$(hsl_hex "$h" "$s_a" "$ACCENT_L")
 }
 
-# Paint every EM (kalmia#265). Each pane gets its repo's tint as its background,
-# each window its (first) EM's accent on the border line that names the repo, and
-# each view session that accent as its status line, with the tint as the text.
+# Paint every EM (kalmia#265). Each pane gets its repo's tint as its background
+# and its accent as @accent, which colours the border label naming the repo.
+# Each window's border line takes its (first) EM's accent, and each view session
+# that accent as its status line, with the tint as the text.
 # The base session keeps tmux's own status line. Idempotent: `up`, `show` and
 # `open` re-apply it, so a running EM repaints after a hue changes.
 paint_ems() {
@@ -474,6 +477,7 @@ paint_ems() {
         while IFS="$US" read -r id repo; do
             [[ -n "$repo" ]] || continue
             repo_colors "$repo"
+            tmux set-option -p -t "$id" @accent "$ACCENT"
             tmux set-option -p -t "$id" window-style "bg=$TINT"
             tmux set-option -p -t "$id" window-active-style "bg=$TINT"
             [[ -n "${w_accent[$w]:-}" ]] || { w_accent[$w]=$ACCENT; w_tint[$w]=$TINT; }
