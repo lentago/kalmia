@@ -90,6 +90,8 @@ node --version
 # Both install system-wide at fixed paths, so the adapters and cr-update can call
 # them by absolute path (claytonia#163). The version checks run with a throwaway
 # HOME: `gemini --version` writes ~/.gemini, and that state must not be baked.
+# They also read stdin from /dev/null: the CLI reads a non-tty stdin, and fed
+# this script on stdin it reads the rest of the script away (kalmia#266).
 # GEMINI_CLI_VERSION / CODEX_VERSION pin a release; the default is the latest.
 GEMINI_CLI_VERSION="${GEMINI_CLI_VERSION:-latest}"
 CODEX_VERSION="${CODEX_VERSION:-latest}"
@@ -101,11 +103,11 @@ echo ">>> [substrate] Gemini CLI (npm, system-wide on Node 22)"
 # no-op whether it was pinned or not.
 GEMINI_WANT="$(npm view --no-update-notifier "@google/gemini-cli@${GEMINI_CLI_VERSION}" version | tail -n1)"
 [ -n "$GEMINI_WANT" ] || { echo "npm has no @google/gemini-cli@${GEMINI_CLI_VERSION}" >&2; exit 1; }
-if [ "$(HOME="$(mktemp -d)" /usr/bin/gemini --version 2>/dev/null || true)" != "$GEMINI_WANT" ]; then
+if [ "$(HOME="$(mktemp -d)" /usr/bin/gemini --version </dev/null 2>/dev/null || true)" != "$GEMINI_WANT" ]; then
   npm install -g --prefix /usr --no-fund --no-audit --no-update-notifier --loglevel=error \
     "@google/gemini-cli@${GEMINI_WANT}" >/dev/null
 fi
-GEMINI_V="$(HOME="$(mktemp -d)" /usr/bin/gemini --version)"
+GEMINI_V="$(HOME="$(mktemp -d)" /usr/bin/gemini --version </dev/null)"
 echo "GEMINI_OK ${GEMINI_V}"
 
 echo ">>> [substrate] Codex CLI (release package, system-wide)"
@@ -143,7 +145,7 @@ for f in bin/codex bin/codex-exec-server codex-resources/bwrap; do
 done
 ln -sfn "$CODEX_VER" /opt/codex/current
 ln -sfn /opt/codex/current/bin/codex /usr/local/bin/codex
-CODEX_V="$(HOME="$(mktemp -d)" /usr/local/bin/codex --version 2>/dev/null)"
+CODEX_V="$(HOME="$(mktemp -d)" /usr/local/bin/codex --version </dev/null 2>/dev/null)"
 echo "CODEX_OK ${CODEX_V} (${CODEX_ASSET} sha256:${CODEX_SHA})"
 
 echo ">>> [substrate] runner dirs"
