@@ -95,6 +95,10 @@
 #   STANDING_TMUX_SESSION  tmux session name       (default: lentago)
 #   STANDING_DIRECTOR_NAME the Director's tmux session and claude --name
 #                                                  (default: lentago-director)
+#   STANDING_REMOTE_CONTROL  1 (default): every EM and the Director start with
+#                          `--remote-control <their --name>`, so they show up by name in
+#                          the claude.ai session list; set 0 to disable. A
+#                          `--remote-control*` passed after `--` takes precedence.
 #   STANDING_PER_WINDOW    EMs per window          (default: 1 — a window and terminal each;
 #                          N > 1 packs N tiled panes into windows standing-1, standing-2, …)
 #   STANDING_MODEL         model every EM starts on (default: claude-opus-5-5; set it
@@ -139,6 +143,7 @@ DIRECTOR_TITLE="lentago — Engineering Director"
 PER_WINDOW="${STANDING_PER_WINDOW:-1}"
 MODEL="${STANDING_MODEL-claude-opus-5-5}"
 NAME_SUFFIX="${STANDING_NAME_SUFFIX:-standing}"
+REMOTE_CONTROL="${STANDING_REMOTE_CONTROL:-1}"
 EXIT_WAIT="${STANDING_EXIT_WAIT:-20}"
 WIN_PREFIX="standing"   # grid windows: standing-1, standing-2, … (PER_WINDOW > 1, or older runs)
 # Size a window has while no terminal is attached (so splits always fit);
@@ -352,6 +357,17 @@ env_prefix() {
         < <(tmux show-environment -g 2>/dev/null | grep -oE '^CLAUDE[A-Za-z0-9_]*' || true)
 }
 
+# Remote Control flag for a session named $1, unless disabled or the caller
+# already passed their own --remote-control* after `--`. Prints NUL-separated.
+remote_control_args() {
+    local a
+    [[ "$REMOTE_CONTROL" == 0 ]] && return 0
+    for a in "${EXTRA[@]}"; do
+        [[ "$a" == --remote-control* ]] && return 0
+    done
+    printf '%s\0' --remote-control "$1"
+}
+
 # Build the argv that runs claude in a pane: CLAUDE* stripped from the tmux
 # server's global environment too (it may predate this script), the default
 # model unless the caller passed one, then the caller's extras and the prompt.
@@ -362,6 +378,7 @@ claude_argv() {
     local a has_model=0
     mapfile -d '' cmd < <(env_prefix)
     cmd+=("$CLI_BIN" --name "$repo-$NAME_SUFFIX")
+    mapfile -d '' -O "${#cmd[@]}" cmd < <(remote_control_args "$repo-$NAME_SUFFIX")
     for a in "${EXTRA[@]}"; do [[ "$a" == --model || "$a" == --model=* ]] && has_model=1; done
     [[ -n "$MODEL" && $has_model == 0 ]] && cmd+=(--model "$MODEL")
     cmd+=("${EXTRA[@]}")
@@ -603,6 +620,7 @@ director_argv() {
     local -a cmd=()
     mapfile -d '' cmd < <(env_prefix)
     cmd+=("$CLI_BIN" --name "$DIRECTOR_NAME")
+    mapfile -d '' -O "${#cmd[@]}" cmd < <(remote_control_args "$DIRECTOR_NAME")
     (( FRESH )) || cmd+=(--continue)
     cmd+=("${EXTRA[@]}")
     printf '%s\0' "${cmd[@]}"

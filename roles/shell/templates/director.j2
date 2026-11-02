@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # director — start or resume the standing Engineering Director and attach to it.
 #
-# The Director is `claude --name lentago-director --continue` in ~/repos/lentago,
+# The Director is `claude --name lentago-director --remote-control lentago-director
+# --continue` (Remote Control on by default; STANDING_REMOTE_CONTROL=0 turns it off) in ~/repos/lentago,
 # in its own tmux session "lentago-director" on the same tmux server as the EMs.
 # Running this again attaches without starting a second Claude; after /exit it
 # respawns the pane. Same as `standing director`; flags pass through:

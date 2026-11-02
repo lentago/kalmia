@@ -9,7 +9,8 @@ description: Director-side handling of a repo's standing Engineering Manager —
 # /em — a standing EM, on demand, in its own window
 
 The model (Chris, 2026-10-31): each Engineering Manager is `claude --name <repo>-standing`
-in one tmux pane, one per repo, shown in its own maximized Ghostty titled
+(started with `--remote-control <repo>-standing`, so it appears by name in the claude.ai
+session list; `STANDING_REMOTE_CONTROL=0` opts out) in one tmux pane, one per repo, shown in its own maximized Ghostty titled
 `<repo> — standing EM`. The Director starts an EM the first time it needs one, never all
 at init, opens its window so Chris can watch the work alongside the Director's, and Chris
 closes windows at will to tidy his workspace: closing a terminal only detaches a tmux
