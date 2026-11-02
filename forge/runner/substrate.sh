@@ -26,10 +26,11 @@ apt-get update -qq
 # recommend) out — a runner doesn't mail cron output, and postfix's chroot
 # device nodes break unprivileged-container extraction of the captured template.
 # openssh-client is listed explicitly so ssh-keygen is present for first-boot
-# host-key regen even without recommends.
+# host-key regen even without recommends. uuid-runtime ships uuidgen, which
+# run-job mints each job's session id with (lentago/claytonia#179, kalmia#260).
 apt-get install -y -qq --no-install-recommends \
   curl ca-certificates git jq ripgrep inotify-tools sudo python3 less \
-  openssh-server openssh-client tini cron rsync shellcheck >/dev/null
+  openssh-server openssh-client tini cron rsync shellcheck uuid-runtime >/dev/null
 echo "PKGS_OK"
 
 echo ">>> [substrate] claude service user + sudoers"
