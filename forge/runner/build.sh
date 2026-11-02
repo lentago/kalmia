@@ -43,6 +43,25 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 SUBSTRATE="${SUBSTRATE:-$HERE/substrate.sh}"
 
 say(){ echo "=== $* ==="; }
+# ct_run VMID SCRIPT [VAR=value ...] — run SCRIPT with bash inside container VMID.
+# The script goes in as an argument and stdin is /dev/null. pct exec (lxc-attach)
+# hands the host's file descriptor straight into the container, so a script fed
+# on stdin can be read away by any command in it that reads stdin. bash then hits
+# EOF and exits 0 with the rest unrun: `gemini --version` did that to the v3
+# substrate (kalmia#266). The appended end marker catches a step that stops
+# early for any reason, so the build fails at that step, not a later one.
+STEP_END="forge-step-end-$$"
+ct_run(){
+  local vid=$1 script=$2 out; shift 2
+  out="$(mktemp)"
+  if ! pct exec "$vid" -- env "$@" bash -c "${script}"$'\n'"echo ${STEP_END}" </dev/null | tee "$out"; then
+    rm -f "$out"; return 1
+  fi
+  if ! grep -qxF "$STEP_END" "$out"; then
+    rm -f "$out"; echo "the step stopped before its last line (no end marker)" >&2; return 1
+  fi
+  rm -f "$out"
+}
 # Cluster-wide: `pct status` sees only this node, so a VMID in use on another
 # node used to pass. `nextid --vmid` is the same check `pct create` applies.
 # Returns 1 only for "already exists"; any other failure (no quorum, no
@@ -104,14 +123,12 @@ done
 
 # ---- 2. substrate layer (kalmia) --------------------------------------------
 say "apply substrate.sh"
-pct exec "$BUILD_VMID" -- env \
-  GEMINI_CLI_VERSION="$GEMINI_CLI_VERSION" CODEX_VERSION="$CODEX_VERSION" \
-  bash -s < "$SUBSTRATE"
+ct_run "$BUILD_VMID" "$(cat "$SUBSTRATE")" \
+  GEMINI_CLI_VERSION="$GEMINI_CLI_VERSION" CODEX_VERSION="$CODEX_VERSION"
 
 # ---- 3. software layer (claytonia gitops — referenced, not copied) ----------
 say "install claytonia software layer @ ${CLAYTONIA_REF}"
-pct exec "$BUILD_VMID" -- env \
-  CLAYTONIA_URL="$CLAYTONIA_URL" CLAYTONIA_REF="$CLAYTONIA_REF" bash -s <<'SOFTWARE'
+SOFTWARE_SH="$(cat <<'SOFTWARE'
 set -euo pipefail
 REPO_DIR=/opt/claytonia
 git clone --quiet "$CLAYTONIA_URL" "$REPO_DIR"
@@ -135,10 +152,12 @@ test -x /opt/claude-runner/bin/run-job
 systemctl is-enabled claytonia-gitops.timer claude-inbox.timer claude-heartbeat.timer
 echo SOFTWARE_DONE
 SOFTWARE
+)"
+ct_run "$BUILD_VMID" "$SOFTWARE_SH" CLAYTONIA_URL="$CLAYTONIA_URL" CLAYTONIA_REF="$CLAYTONIA_REF"
 
 # ---- 4. de-identify (strip per-instance + build state) ----------------------
 say "de-identify"
-pct exec "$BUILD_VMID" -- bash -s <<'CLEAN'
+CLEAN_SH="$(cat <<'CLEAN'
 set -uo pipefail
 # Unique-per-clone identity (regenerated first boot / by systemd).
 rm -f /etc/ssh/ssh_host_*
@@ -152,6 +171,8 @@ rm -f /root/.bash_history /home/claude/.bash_history
 journalctl --rotate >/dev/null 2>&1 || true; journalctl --vacuum-time=1s >/dev/null 2>&1 || true
 echo CLEAN_DONE
 CLEAN
+)"
+ct_run "$BUILD_VMID" "$CLEAN_SH"
 
 # ---- 5. capture -> vztmpl (atomic write-then-rename) ------------------------
 say "capture rootfs -> ${OUT}"
@@ -223,7 +244,7 @@ if [ "$VERIFY" = 1 ]; then
         && { echo "ERR  token BAKED (must be empty)"; rc=1; } || echo "OK   token placeholder empty"
       ls /etc/ssh/ssh_host_*_key >/dev/null 2>&1 \
         && echo "OK   ssh host keys regenerated" || echo "WARN ssh host keys not up yet (first-boot timing)"
-      exit $rc'
+      exit $rc' </dev/null
     vrc=$?
     set -e
     pct stop "$VID" >/dev/null 2>&1 || true
