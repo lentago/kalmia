@@ -7,8 +7,12 @@
 #   * a get_url task with no `checksum`;
 #   * an unarchive task whose `src` is a URL — it cannot carry a checksum, so
 #     download with get_url + checksum first and unarchive the local file;
-#   * a shell, command or raw task that pipes curl or wget into a shell, or
-#     feeds one to it (`bash <(curl …)`, `sh -c "$(curl …)"`).
+#   * a uri task with `dest` — a download to disk that cannot carry a checksum;
+#   * a shell, command or raw task that runs curl or wget at all: piped or fed
+#     into a shell (`| sh`, `bash <(curl …)`, `sh -c "$(curl …)"`) or saved
+#     with -o/-O, it is a download get_url should make. Use uri for API calls.
+#
+# rpm_key URLs are not covered yet (kalmia#262).
 #
 # Usage: tests/download-pins.py [REPO_ROOT]   (default: the repo this file is in)
 # Exit 0 when clean, 1 with one line per finding. Needs PyYAML, which Ansible
@@ -27,6 +31,7 @@ def names(short):
 
 GET_URL = names("get_url")
 UNARCHIVE = names("unarchive")
+URI = names("uri")
 SHELLISH = names("shell") | names("command") | names("raw")
 TASK_LISTS = ("tasks", "pre_tasks", "post_tasks", "handlers")
 BLOCK_KEYS = ("block", "rescue", "always")
@@ -39,6 +44,7 @@ PIPE_TO_SHELL = re.compile(
     + _SHELL
 )
 FEED_TO_SHELL = re.compile(_SHELL + r"[^|]*(?:<\(|\$\()\s*(?:curl|wget)\b")
+ANY_FETCH = re.compile(r"\b(?:curl|wget)\b")
 
 
 class Loader(yaml.SafeLoader):
@@ -94,11 +100,16 @@ def check_task(task):
     mod = module_of(task, UNARCHIVE)
     if mod and re.match(r"^\s*(?:https?|ftp)://", str(args_of(task, mod).get("src", ""))):
         found.append(f"unarchive straight from a URL (no checksum possible): {label}")
+    mod = module_of(task, URI)
+    if mod and args_of(task, mod).get("dest"):
+        found.append(f"uri downloading to disk (no checksum possible): {label}")
     mod = module_of(task, SHELLISH)
     if mod:
         text = " ".join(command_text(args_of(task, mod)).split())
         if PIPE_TO_SHELL.search(text) or FEED_TO_SHELL.search(text):
             found.append(f"remote script piped into a shell: {label}")
+        elif ANY_FETCH.search(text):
+            found.append(f"curl/wget in a {mod.split('.')[-1]} task (download with get_url + checksum): {label}")
     return found
 
 
