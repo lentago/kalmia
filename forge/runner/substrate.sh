@@ -145,7 +145,7 @@ for f in bin/codex bin/codex-exec-server codex-resources/bwrap; do
 done
 ln -sfn "$CODEX_VER" /opt/codex/current
 ln -sfn /opt/codex/current/bin/codex /usr/local/bin/codex
-CODEX_V="$(HOME="$(mktemp -d)" /usr/local/bin/codex --version 2>/dev/null)"
+CODEX_V="$(HOME="$(mktemp -d)" /usr/local/bin/codex --version </dev/null 2>/dev/null)"
 echo "CODEX_OK ${CODEX_V} (${CODEX_ASSET} sha256:${CODEX_SHA})"
 
 echo ">>> [substrate] runner dirs"
