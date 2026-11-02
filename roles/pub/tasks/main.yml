@@ -336,6 +336,7 @@
     - brasenia-family-brief
     - brasenia-home
     - brasenia-fleet
+    - brasenia-prs
     - brasenia-links
     - brasenia-grafana
   become: true
@@ -355,6 +356,7 @@
     - brasenia-family-brief
     - brasenia-home
     - brasenia-fleet
+    - brasenia-prs
     - brasenia-links
     - brasenia-grafana
   become: true

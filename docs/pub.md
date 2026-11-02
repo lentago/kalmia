@@ -248,6 +248,15 @@ is why they run here and not on LXC 118 (no NAS mount, by design).
   fleet_producer`, WorkingDirectory `/srv/brasenia/producers/fleet`). It
   carries `ConditionPathIsMountPoint=` for both mounts. It opens heartbeats,
   claim records and run `.meta` files, never a prompt or a log.
+- `brasenia-prs.service` (#278, brasenia#134) reads GitHub's search API
+  without a token and keeps `viewport/panes/prs/` up as an `ambient` pane: the
+  `lentago` org's pull requests, newest event first, with each one's merge
+  status (`python3 -m prs_producer`, WorkingDirectory
+  `/srv/brasenia/producers/prs`). It cycles every 60 s
+  (`pub_viewport_prs_interval`) and refreshes from search every 2 minutes,
+  inside the unauthenticated search limit and apart from the core budget the
+  focus producer paces against. It needs no credential and no mount beyond the
+  share.
 - `brasenia-links.service` (brasenia#97, brasenia ADR-0018) keeps the
   household's standing slots on the bus. A standing slot is a web page the
   household keeps on the wall as a resting pane, saved in
@@ -364,14 +373,14 @@ restarts the services if the checkout or a unit file changed.
 **Health check:**
 
 ```bash
-systemctl status brasenia-compositor brasenia-focus brasenia-pipeline brasenia-family-brief brasenia-home brasenia-fleet brasenia-links brasenia-grafana && curl -s http://pub.lan/viewport/current.json
+systemctl status brasenia-compositor brasenia-focus brasenia-pipeline brasenia-family-brief brasenia-home brasenia-fleet brasenia-prs brasenia-links brasenia-grafana && curl -s http://pub.lan/viewport/current.json
 ```
 
-All eight units should be `active (running)`, except `brasenia-home` and
+All nine units should be `active (running)`, except `brasenia-home` and
 `brasenia-grafana` before their tokens are seeded (inactive, "start condition
 unmet"). With an empty bus, `current.json`
 points at the briefing (`http://pub.lan/brief/…`). Logs:
-`journalctl -u brasenia-compositor -u brasenia-focus -u brasenia-pipeline -u brasenia-family-brief -u brasenia-home -u brasenia-fleet -u brasenia-links -u brasenia-grafana`.
+`journalctl -u brasenia-compositor -u brasenia-focus -u brasenia-pipeline -u brasenia-family-brief -u brasenia-home -u brasenia-fleet -u brasenia-prs -u brasenia-links -u brasenia-grafana`.
 A live family-brief producer logs `family-today: brief of <date> rendered for
 <date>`, and `/srv/www/viewport/panes/family-today/manifest.json` reads
 `"class": "ambient"`.
