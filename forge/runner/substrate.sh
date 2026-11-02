@@ -35,8 +35,21 @@ echo "PKGS_OK"
 
 echo ">>> [substrate] claude service user + sudoers"
 id claude >/dev/null 2>&1 || useradd -m -s /bin/bash claude
-echo "claude ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/claude
-chmod 440 /etc/sudoers.d/claude
+# The agent runs as claude and gets no root: its one sudo rule is the GitHub App
+# token broker (lentago/claytonia#177, kalmia#264). On a worker, claytonia's
+# bin/cr-harden re-asserts this file every minute. The text here matches its RULE
+# byte for byte, with the same owner and mode, so a fresh clone already
+# satisfies cr-harden and its first run changes nothing. visudo checks the file
+# before it replaces the old one, so a bad rule fails the build and never ships.
+SUDOERS_RULE="# Managed by claytonia bin/cr-harden (#177): a change made here is replaced within a minute.
+# The agent user may run the GitHub App token broker as root, and nothing else.
+claude ALL=(root) NOPASSWD: /opt/claude-runner/bin/gh-token"
+SUDOERS_TMP="/etc/sudoers.d/.claude.substrate.$$"   # a dotted name, which sudo never reads
+( umask 077; printf '%s\n' "$SUDOERS_RULE" > "$SUDOERS_TMP" )
+chown root:root "$SUDOERS_TMP"; chmod 0440 "$SUDOERS_TMP"
+visudo -cqf "$SUDOERS_TMP" || { rm -f "$SUDOERS_TMP"; echo "sudoers rule failed visudo" >&2; exit 1; }
+mv -f "$SUDOERS_TMP" /etc/sudoers.d/claude
+echo "SUDO_OK claude: /opt/claude-runner/bin/gh-token only"
 
 echo ">>> [substrate] operator ssh key (root + claude)"
 for u in root claude; do

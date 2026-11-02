@@ -275,6 +275,11 @@ if [ "$VERIFY" = 1 ]; then
         && echo "OK   Codex CLI $v (+ bwrap)" || { echo "ERR  Codex CLI"; rc=1; }
       [ ! -e /etc/claude-runner/gemini.env ] && [ ! -e /etc/claude-runner/codex.env ] \
         && echo "OK   no Gemini/Codex credentials" || { echo "ERR  Gemini/Codex credential file BAKED"; rc=1; }
+      g=$(sudo -n -l -U claude 2>/dev/null | sed -n "/may run the following commands/,\$p" | tail -n +2 | sed "s/^[[:space:]]*//")
+      [ "$g" = "(root) NOPASSWD: /opt/claude-runner/bin/gh-token" ] \
+        && echo "OK   sudo: claude may run only the gh-token broker" || { echo "ERR  sudo grants for claude: ${g:-none}"; rc=1; }
+      su - claude -c "sudo -n true" >/dev/null 2>&1 \
+        && { echo "ERR  claude has blanket sudo"; rc=1; } || echo "OK   claude has no blanket sudo"
       [ -d /opt/claytonia ] && [ ! -e /opt/bullpen ] \
         && echo "OK   /opt/claytonia, no /opt/bullpen" || { echo "ERR  checkout path (want /opt/claytonia, no /opt/bullpen)"; rc=1; }
       grep -q "OAUTH_TOKEN=." /etc/claude-runner/token.env 2>/dev/null \
