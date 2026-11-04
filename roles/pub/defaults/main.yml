@@ -114,11 +114,18 @@ pub_viewport_fleet_interval: 60
 # to reach the bus. At most 300, half the panes' 10-minute TTL (asserted in
 # tasks/main.yml).
 pub_viewport_links_interval: 30
-# The PRs producer (#278, brasenia#134) reads GitHub's search API without a
-# token and keeps panes/prs/ up: the lentago org's pull requests and their
-# merge status. Its seconds between cycles; each cycle rewrites the pane, and
-# the producer refreshes from search every 2 minutes on its own clock.
+# The PRs producer (#278, brasenia#134) reads GitHub's search API and keeps
+# panes/prs/ up: the lentago org's pull requests and their merge status. Its
+# seconds between cycles; each cycle rewrites the pane, and the producer
+# refreshes from search every 2 minutes on its own clock.
 pub_viewport_prs_interval: 60
+# The GitHub token the PRs and focus producers share (#280, brasenia
+# ADR-0021): a fine-grained, public-read-only token, loaded with
+# LoadCredential= into those two units alone. systemd won't start a unit whose
+# credential path is missing, so the role creates this file empty and
+# root-only once and never writes it again. Empty, the producers read
+# anonymously, as before. It is seeded by hand (docs/pub.md).
+pub_viewport_github_token_file: /etc/brasenia/github-token
 # The grafana producer (#202, brasenia#98, ADR-0017) renders Grafana Cloud
 # dashboards into panes. Its Viewer service-account token (drosera#287,
 # `brasenia-viewer`) is a systemd credential loaded from

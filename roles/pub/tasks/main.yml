@@ -271,15 +271,44 @@
     - pub_viewport_enabled
     - pub_viewport_webroot not in (ansible_facts.mounts | map(attribute='mount'))
 
-- name: Ensure the home producer's credential directory exists (root-only)
-  # Holds pub_viewport_home_token_file, which is seeded by hand and never by
-  # this role (docs/pub.md); systemd hands it to brasenia-home alone.
+- name: Ensure the producers' credential directory exists (root-only)
+  # Holds the Home Assistant, Grafana and GitHub tokens, each seeded by hand
+  # (docs/pub.md). systemd hands each one only to the units that use it.
   ansible.builtin.file:
-    path: "{{ pub_viewport_home_token_file | dirname }}"
+    path: "{{ item }}"
     state: directory
     owner: root
     group: root
     mode: "0700"
+  loop: "{{ [pub_viewport_home_token_file, pub_viewport_grafana_token_file, pub_viewport_github_token_file] | map('dirname') | unique }}"
+  become: true
+  when: pub_viewport_enabled
+
+- name: Ensure the GitHub token file exists, root-only (empty until seeded)
+  # brasenia-prs and brasenia-focus load it with LoadCredential=, which fails a
+  # unit whose path is missing (#280, brasenia ADR-0021). touch creates it
+  # empty when it is missing and never changes the contents, so a seeded token
+  # stays. Preserving the times keeps re-runs unchanged.
+  ansible.builtin.file:
+    path: "{{ pub_viewport_github_token_file }}"
+    state: touch
+    owner: root
+    group: root
+    mode: "0600"
+    modification_time: preserve
+    access_time: preserve
+  become: true
+  when: pub_viewport_enabled
+
+- name: Deploy the GitHub token check
+  # Tests the seeded token, including the check-runs read ADR-0021 asks for,
+  # without printing it (docs/pub.md).
+  ansible.builtin.copy:
+    src: brasenia-github-token-check
+    dest: /usr/local/sbin/brasenia-github-token-check
+    owner: root
+    group: root
+    mode: "0750"
   become: true
   when: pub_viewport_enabled
 
