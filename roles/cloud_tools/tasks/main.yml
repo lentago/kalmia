@@ -23,6 +23,39 @@
         checksum: "sha256:{{ awscli_sha256 }}"
         mode: "0644"
 
+    - name: Download the AWS CLI v2 installer signature
+      ansible.builtin.get_url:
+        url: "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-{{ awscli_version }}.zip.sig"
+        dest: /tmp/awscliv2.zip.sig
+        checksum: "sha256:{{ awscli_sig_sha256 }}"
+        mode: "0644"
+
+    - name: Stage the AWS CLI Team public key
+      ansible.builtin.copy:
+        src: aws-cli-team.asc
+        dest: /tmp/aws-cli-team.asc
+        mode: "0644"
+
+    # A throwaway GNUPGHOME keeps the user's keyring out of it. VALIDSIG is
+    # printed only for a good signature, and its last field is the signing
+    # key's primary fingerprint, which must be the pinned one. A revoked key
+    # fails even though the signature is good.
+    - name: Verify the AWS CLI v2 installer against the AWS CLI Team key
+      ansible.builtin.shell: |
+        set -euo pipefail
+        GNUPGHOME="$(mktemp -d)"
+        export GNUPGHOME
+        trap 'rm -rf "$GNUPGHOME"' EXIT
+        gpg --batch --quiet --import /tmp/aws-cli-team.asc
+        status="$(gpg --batch --status-fd 1 --verify /tmp/awscliv2.zip.sig /tmp/awscliv2.zip 2>/dev/null)"
+        if grep -q '^\[GNUPG:\] REVKEYSIG ' <<<"$status"; then
+          echo "AWS CLI Team key is revoked" >&2; exit 1
+        fi
+        grep -Eq '^\[GNUPG:\] VALIDSIG .* {{ awscli_pgp_fingerprint }}$' <<<"$status"
+      args:
+        executable: /bin/bash
+      changed_when: false
+
     - name: Unpack the AWS CLI v2 installer
       ansible.builtin.unarchive:
         src: /tmp/awscliv2.zip

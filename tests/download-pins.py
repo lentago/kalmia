@@ -10,9 +10,11 @@
 #   * a uri task with `dest` — a download to disk that cannot carry a checksum;
 #   * a shell, command or raw task that runs curl or wget at all: piped or fed
 #     into a shell (`| sh`, `bash <(curl …)`, `sh -c "$(curl …)"`) or saved
-#     with -o/-O, it is a download get_url should make. Use uri for API calls.
-#
-# rpm_key URLs are not covered yet (kalmia#262).
+#     with -o/-O, it is a download get_url should make. Use uri for API calls;
+#   * an rpm_key task whose `key` is a URL, or a template that may render to
+#     one, with no `fingerprint` (kalmia#262). The key is what every later
+#     package is checked against, so pin the fingerprint its publisher
+#     documents. Removing a key (`state: absent`) needs no fingerprint.
 #
 # Usage: tests/download-pins.py [REPO_ROOT]   (default: the repo this file is in)
 # Exit 0 when clean, 1 with one line per finding. Needs PyYAML, which Ansible
@@ -32,6 +34,7 @@ def names(short):
 GET_URL = names("get_url")
 UNARCHIVE = names("unarchive")
 URI = names("uri")
+RPM_KEY = names("rpm_key")
 SHELLISH = names("shell") | names("command") | names("raw")
 TASK_LISTS = ("tasks", "pre_tasks", "post_tasks", "handlers")
 BLOCK_KEYS = ("block", "rescue", "always")
@@ -103,6 +106,13 @@ def check_task(task):
     mod = module_of(task, URI)
     if mod and args_of(task, mod).get("dest"):
         found.append(f"uri downloading to disk (no checksum possible): {label}")
+    mod = module_of(task, RPM_KEY)
+    if mod:
+        args = args_of(task, mod)
+        key = str(args.get("key", ""))
+        remote = re.match(r"^\s*(?:https?|ftp)://", key) or "{{" in key
+        if remote and args.get("state") != "absent" and not args.get("fingerprint"):
+            found.append(f"rpm_key from a URL without fingerprint: {label}")
     mod = module_of(task, SHELLISH)
     if mod:
         text = " ".join(command_text(args_of(task, mod)).split())
@@ -144,7 +154,8 @@ def main():
     for line in findings:
         print(line)
     if findings:
-        print(f"download-pins: {len(findings)} unpinned download(s); pin a version and a sha256 (kalmia#259)",
+        print(f"download-pins: {len(findings)} unpinned download(s); pin a version and a sha256 "
+              "(kalmia#259), or an rpm_key fingerprint (kalmia#262)",
               file=sys.stderr)
         return 1
     print("download-pins: every download is pinned")

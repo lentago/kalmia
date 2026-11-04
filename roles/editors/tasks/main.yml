@@ -93,6 +93,7 @@
     - name: Import the Microsoft GPG key
       ansible.builtin.rpm_key:
         key: https://packages.microsoft.com/keys/microsoft.asc
+        fingerprint: "{{ microsoft_gpg_fingerprint }}"
         state: present
 
     - name: Add the VS Code dnf repository
