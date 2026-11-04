@@ -214,7 +214,12 @@ is why they run here and not on LXC 118 (no NAS mount, by design).
   `/srv/brasenia`).
 - `brasenia-focus.service` turns session beacons in `viewport/focus/` into
   open-PR panes every 30 s (`python3 -m focus_producer`, WorkingDirectory
-  `/srv/brasenia/producers/focus`).
+  `/srv/brasenia/producers/focus`). It shares the GitHub token with
+  `brasenia-prs`: `LoadCredential=github-token:/etc/brasenia/github-token`
+  (brasenia ADR-0021, #280). The role creates that file empty and root-only
+  the first time, because systemd won't start a unit whose credential path is
+  missing, and never writes it again. Empty, the producer reads anonymously.
+  Seed it as below.
 - `brasenia-pipeline.service` (#148, brasenia#36) reads
   `http://pub.lan/viewport/pipeline.json` every 15 s and keeps
   `viewport/panes/change-pipeline/` up while a change is in flight
@@ -248,15 +253,13 @@ is why they run here and not on LXC 118 (no NAS mount, by design).
   fleet_producer`, WorkingDirectory `/srv/brasenia/producers/fleet`). It
   carries `ConditionPathIsMountPoint=` for both mounts. It opens heartbeats,
   claim records and run `.meta` files, never a prompt or a log.
-- `brasenia-prs.service` (#278, brasenia#134) reads GitHub's search API
-  without a token and keeps `viewport/panes/prs/` up as an `ambient` pane: the
-  `lentago` org's pull requests, newest event first, with each one's merge
-  status (`python3 -m prs_producer`, WorkingDirectory
-  `/srv/brasenia/producers/prs`). It cycles every 60 s
-  (`pub_viewport_prs_interval`) and refreshes from search every 2 minutes,
-  inside the unauthenticated search limit and apart from the core budget the
-  focus producer paces against. It needs no credential and no mount beyond the
-  share.
+- `brasenia-prs.service` (#278, brasenia#134) reads GitHub's search API and
+  keeps `viewport/panes/prs/` up as an `ambient` pane: the `lentago` org's
+  pull requests, newest event first, with each one's merge status (`python3 -m
+  prs_producer`, WorkingDirectory `/srv/brasenia/producers/prs`). It cycles
+  every 60 s (`pub_viewport_prs_interval`) and refreshes from search every 2
+  minutes. It loads the same GitHub token as `brasenia-focus` (above), and
+  needs no mount beyond the share.
 - `brasenia-links.service` (brasenia#97, brasenia ADR-0018) keeps the
   household's standing slots on the bus. A standing slot is a web page the
   household keeps on the wall as a resting pane, saved in
@@ -349,6 +352,54 @@ the service account in the stack; the grafana panes then leave the bus at
 their TTL. `journalctl -u brasenia-grafana` stays quiet after the first
 render. "redirected to a login" or "rejected the token" means the token is
 missing, revoked, or not `brasenia-viewer`'s.
+
+**The GitHub token (manual; rotate every 90 days).** `brasenia-prs` and
+`brasenia-focus` share one token (brasenia ADR-0021). It's a fine-grained
+personal access token on the `cpitzi` account: resource owner `cpitzi`,
+repository access **public repositories**, no repository or account
+permissions, expiry **90 days**, name `brasenia pub`. Mint it under GitHub →
+Settings → Developer settings → Fine-grained tokens. Then, from your own
+terminal (not through an agent), paste it at the prompt, which doesn't echo.
+Both units restart, because `LoadCredential=` copies the file only when a
+unit starts:
+
+```bash
+read -rsp 'GitHub token: ' T && echo && printf '%s' "$T" | ssh root@pve.local \
+  "ssh pve4 'pct exec 114 -- sh -c \"umask 077; cat > /etc/brasenia/github-token\"'" ; unset T
+ssh root@pve.local "ssh pve4 'pct exec 114 -- systemctl restart brasenia-prs brasenia-focus'"
+```
+
+Then run the check. It reads the token on pub and prints the results but
+never the token:
+
+```bash
+ssh root@pve.local "ssh pve4 'pct exec 114 -- /usr/local/sbin/brasenia-github-token-check'"
+```
+
+- `token accepted: core limit 5000` means GitHub took the token. `token
+  expires:` gives the date for the record below.
+- `check runs readable` (exit 0) settles ADR-0021's open question: the focus
+  producer can read `GET …/commits/{ref}/check-runs` with this token.
+- `check runs refused` (exit 2) means GitHub won't let a fine-grained token
+  read check runs. The focus producer then needs the ADR's fallback (GraphQL
+  `statusCheckRollup`, or check runs read without the token); raise it on
+  brasenia#31.
+- `token rejected` or `empty` (exit 1) means the seed didn't land. Run the
+  `read -rsp` step again.
+
+Rotation record. Add a row at each seed; the next rotation is due before the
+expiry:
+
+| Seeded | Expires | Check runs |
+|---|---|---|
+| not yet seeded | | |
+
+A leaked token can only read what anyone can read, but it spends your
+personal rate limit and acts as you. To revoke it, delete it under
+Fine-grained tokens. Both producers then fall back to anonymous reads on the
+401. To pause it without revoking, empty the file (`: >
+/etc/brasenia/github-token` on pub) and restart both units. Don't delete the
+file: a missing credential path stops both units from starting.
 
 All are `Type=simple`, `Restart=always`, and run as the unprivileged
 `brasenia` system user in the `webdrop` group. The share is a CIFS mount that

@@ -10,6 +10,10 @@ Type=simple
 User={{ pub_viewport_user }}
 Group={{ pub_viewport_group }}
 Environment=PYTHONDONTWRITEBYTECODE=1
+# The GitHub token (brasenia ADR-0021) reaches brasenia-prs and brasenia-focus
+# alone, as $CREDENTIALS_DIRECTORY/github-token. The role creates the file
+# empty, so the unit starts before the first seed and reads anonymously.
+LoadCredential=github-token:{{ pub_viewport_github_token_file }}
 WorkingDirectory={{ pub_brasenia_checkout }}/producers/prs
 ExecStart=/usr/bin/python3 -m prs_producer --webroot {{ pub_viewport_webroot }} --interval {{ pub_viewport_prs_interval }}
 Restart=always
