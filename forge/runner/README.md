@@ -101,9 +101,12 @@ captures the rootfs to a `vztmpl` and prunes to the last `RETAIN` versions.
 
 A brand-new container's MAC lands in the Firewalla's Device Access Protection
 `learning` state (default-block), so `apt`/installer egress fails. `build.sh`
-detects this within 30s and tells you. Classify the device or force a FireMain
-re-evaluation, then re-run. (Same gotcha the kalmia `terraform/README.md`
-documents for new guests.)
+detects this within 30s and tells you. Its egress check makes an HTTP request
+to `deb.debian.org`, the substrate's first need, so a block that lets DNS
+through but refuses connections stops the build at the check, not inside `apt`
+(kalmia#228). Classify the device or force a FireMain re-evaluation, then
+re-run. (Same gotcha the kalmia `terraform/README.md` documents for new
+guests.) The same check also stops the build when the mirror itself is down.
 
 ## Consume (claytonia)
 
