@@ -392,7 +392,7 @@ expiry:
 
 | Seeded | Expires | Check runs |
 |---|---|---|
-| not yet seeded | | |
+| 2026-11-04 | 2027-02-02 19:19 UTC | readable |
 
 A leaked token can only read what anyone can read, but it spends your
 personal rate limit and acts as you. To revoke it, delete it under
