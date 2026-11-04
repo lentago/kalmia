@@ -113,11 +113,30 @@ pct create "$BUILD_VMID" "$BASE_TEMPLATE" \
   --nameserver 192.168.139.1 --searchdomain local \
   --unprivileged 0 --start 1 >/dev/null
 
-say "wait for network egress"
-for i in $(seq 1 30); do
-  pct exec "$BUILD_VMID" -- getent hosts github.com >/dev/null 2>&1 && break
-  [ "$i" = 30 ] && { echo "no DNS/egress after 30s — a fresh CT lands in Firewalla 'learning' (default-block)." >&2
-                     echo "Fix: classify its MAC / restart FireMain, then re-run. See forge/runner/README.md." >&2; exit 1; }
+# Egress means what the substrate needs first, HTTP to the Debian mirror, not
+# just DNS. A name that resolves proves nothing about whether the CT may
+# connect: a Firewalla device block once let DNS through and refused TCP:80, so
+# the old `getent hosts` check passed and the build failed inside apt instead
+# (kalmia#228). The probe needs only bash and coreutils `timeout`: the base
+# template ships no curl. Each probe is capped at 5s, inside a 30s window.
+EGRESS_HOST=deb.debian.org
+# shellcheck disable=SC2016  # expanded by the bash inside the CT, with $1 = host
+EGRESS_PROBE='exec 3<>"/dev/tcp/$1/80" || exit 1
+printf "HEAD /debian/ HTTP/1.0\r\nHost: %s\r\n\r\n" "$1" >&3
+IFS= read -r line <&3 && [[ $line == "HTTP/1."?" "[23]* ]]'
+say "wait for network egress (HTTP to ${EGRESS_HOST})"
+deadline=$((SECONDS + 30))
+until pct exec "$BUILD_VMID" -- timeout 5 bash -c "$EGRESS_PROBE" probe "$EGRESS_HOST" </dev/null >/dev/null 2>&1; do
+  if (( SECONDS >= deadline )); then
+    if pct exec "$BUILD_VMID" -- getent hosts "$EGRESS_HOST" </dev/null >/dev/null 2>&1; then
+      echo "no egress after 30s: ${EGRESS_HOST} resolves, but HTTP to it fails." >&2
+      echo "The CT is likely blocked (a fresh CT can land in Firewalla 'learning', default-block), or the mirror is down." >&2
+    else
+      echo "no egress after 30s: ${EGRESS_HOST} does not resolve (no network or DNS yet)." >&2
+    fi
+    echo "Fix: classify its MAC / restart FireMain, then re-run. See forge/runner/README.md." >&2
+    exit 1
+  fi
   sleep 1
 done
 
