@@ -283,28 +283,19 @@
   become: true
   when: pub_viewport_enabled
 
-- name: Create the GitHub token file, empty, if it is missing
+- name: Ensure the GitHub token file exists, root-only (empty until seeded)
   # brasenia-prs and brasenia-focus load it with LoadCredential=, which fails a
-  # unit whose path is missing (#280, brasenia ADR-0021). force: false means a
-  # seeded token is never overwritten.
-  ansible.builtin.copy:
-    content: ""
-    dest: "{{ pub_viewport_github_token_file }}"
-    force: false
-    owner: root
-    group: root
-    mode: "0600"
-  become: true
-  when: pub_viewport_enabled
-
-- name: Keep the GitHub token file root-only
-  # The copy above leaves an existing file alone, mode included.
+  # unit whose path is missing (#280, brasenia ADR-0021). touch creates it
+  # empty when it is missing and never changes the contents, so a seeded token
+  # stays. Preserving the times keeps re-runs unchanged.
   ansible.builtin.file:
     path: "{{ pub_viewport_github_token_file }}"
-    state: file
+    state: touch
     owner: root
     group: root
     mode: "0600"
+    modification_time: preserve
+    access_time: preserve
   become: true
   when: pub_viewport_enabled
 
