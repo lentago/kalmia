@@ -59,6 +59,7 @@
     - name: Import the Docker GPG key
       ansible.builtin.rpm_key:
         key: "{{ docker_dnf_repo_url }}/gpg"
+        fingerprint: "{{ docker_dnf_gpg_fingerprint }}"
         state: present
 
     - name: Add the Docker dnf repository

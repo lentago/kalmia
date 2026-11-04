@@ -12,3 +12,8 @@ docker_apt_repo_codename_fallback: "noble"
 # sha256 of Docker's apt key, the same file at linux/ubuntu/gpg and
 # linux/debian/gpg (computed; kalmia#259). A rotation fails the run loudly.
 docker_gpg_key_sha256: "1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570"
+
+# Fingerprint of Docker's Fedora rpm key at linux/fedora/gpg, as Docker's
+# Fedora install guide publishes it (kalmia#262). rpm_key refuses a key whose
+# fingerprint differs.
+docker_dnf_gpg_fingerprint: "060A61C51B558A7F742B77AAC52FEB6B621E9F35"

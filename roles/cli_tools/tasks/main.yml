@@ -32,13 +32,46 @@
   when: not yq_bin.stat.exists
 
 # --- fzf (git clone + installer, user space) -------------------------------
-- name: Clone fzf
+# The clone and the binary are pinned to one release tag (kalmia#262). The
+# installer would fetch its binary with `curl | tar` and no checksum, so the
+# role puts the checksummed release binary in ~/.fzf/bin first. The installer
+# finds it at the version it expects and downloads nothing.
+- name: Clone fzf {{ fzf_version }}
   ansible.builtin.git:
     repo: https://github.com/junegunn/fzf.git
     dest: "{{ target_home }}/.fzf"
     depth: 1
-    version: master
+    version: "v{{ fzf_version }}"
   become: false
+
+- name: Check the fzf binary version
+  ansible.builtin.command: "{{ target_home }}/.fzf/bin/fzf --version"
+  register: fzf_bin_version
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  become: false
+
+- name: Install the fzf {{ fzf_version }} binary
+  when: ((fzf_bin_version.stdout | default('')).split(' ') | first) != fzf_version
+  become: false
+  block:
+    - name: Download the fzf release
+      ansible.builtin.get_url:
+        url: "https://github.com/junegunn/fzf/releases/download/v{{ fzf_version }}/fzf-{{ fzf_version }}-linux_amd64.tar.gz"
+        dest: "/tmp/fzf-{{ fzf_version }}-linux_amd64.tar.gz"
+        checksum: "sha256:{{ fzf_sha256 }}"
+        mode: "0644"
+
+    # --check downloads nothing, so there is no tarball to unpack yet.
+    - name: Unpack fzf into ~/.fzf/bin
+      when: not ansible_check_mode
+      ansible.builtin.unarchive:
+        src: "/tmp/fzf-{{ fzf_version }}-linux_amd64.tar.gz"
+        dest: "{{ target_home }}/.fzf/bin"
+        remote_src: true
+        include:
+          - fzf
 
 # Generate ~/.fzf.bash (PATH + key-bindings + completion) but don't touch
 # .bashrc — the shell role owns that, and the block sources ~/.fzf.bash.

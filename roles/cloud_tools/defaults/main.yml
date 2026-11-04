@@ -4,9 +4,20 @@
 # --- Pinned downloads (kalmia#259) ------------------------------------------
 # Every download carries a sha256 pinned here. A bump changes the version and
 # its checksum together, taken from the upstream source named above each pair.
-# sha256 from: computed: AWS publishes a PGP .sig, no sha256
+# sha256 from: computed. AWS publishes a PGP .sig, not a sha256, so the zip and
+# its .sig are pinned by computed sha256 and the install also checks the .sig
+# against the AWS CLI Team key (kalmia#262). A bad first fetch then fails the
+# signature check instead of being pinned as good. On a bump, recompute both
+# sha256s and confirm `gpg --verify` passes before committing them.
 awscli_version: "2.39.3"
 awscli_sha256: "14cb35809ad7547dd3c69fa9899a3975fbd850b6a6791f3fe264856490cd9a63"
+awscli_sig_sha256: "d67d56cb8a307d265d1379b9aaddd6708a1c909164f2bb60bdc9007afc9ae64a"
+# The AWS CLI Team key, copied into files/aws-cli-team.asc from the AWS CLI
+# install guide (docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html),
+# which publishes this fingerprint. The key copy expires 2027-07-01. An expired
+# copy still verifies a good signature, but refresh it from the guide when AWS
+# extends the key.
+awscli_pgp_fingerprint: "FB5DB77FD5C118B80511ADA8A6310ACC4672475C"
 # sha256 from: release checksums.txt
 granted_version: "0.40.0"
 granted_sha256: "c55e2ccaf60ed810b5d389f558c9a48a35b356375d7fe6666b19b98695eda794"
