@@ -117,8 +117,12 @@ pct create "$BUILD_VMID" "$BASE_TEMPLATE" \
 # just DNS. A name that resolves proves nothing about whether the CT may
 # connect: a Firewalla device block once let DNS through and refused TCP:80, so
 # the old `getent hosts` check passed and the build failed inside apt instead
-# (kalmia#228). The probe needs only bash and coreutils `timeout`: the base
-# template ships no curl. Each probe is capped at 5s, inside a 30s window.
+# (kalmia#228). The check is aimed at a block on the CT as a whole, which
+# stops every host at once. It doesn't probe the later hosts (github.com,
+# api.github.com, claude.ai, deb.nodesource.com): an outage on one of those
+# fails in the step that needs it. The probe needs only bash and coreutils
+# `timeout`: the base template ships no curl. Each probe is capped at 5s,
+# inside a 30s window.
 EGRESS_HOST=deb.debian.org
 # shellcheck disable=SC2016  # expanded by the bash inside the CT, with $1 = host
 EGRESS_PROBE='exec 3<>"/dev/tcp/$1/80" || exit 1

@@ -106,9 +106,7 @@ to `deb.debian.org`, the substrate's first need, so a block that lets DNS
 through but refuses connections stops the build at the check, not inside `apt`
 (kalmia#228). Classify the device or force a FireMain re-evaluation, then
 re-run. (Same gotcha the kalmia `terraform/README.md` documents for new
-guests.) The Firewalla's new-device quarantine has been off since 2026-10-30,
-so a fresh CT normally gets egress. The check remains for when a block comes
-back, and for a mirror that is down.
+guests.) The same check also stops the build when the mirror itself is down.
 
 ## Consume (claytonia)
 
