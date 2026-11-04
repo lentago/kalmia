@@ -14,3 +14,7 @@ claude_code_sha256: "fd13c70000fec3f2116dfbcbb6121210b4a29328bf0e46210a59dd594a6
 # sha256 of packages.microsoft.com/keys/microsoft.asc (computed; a key rotation
 # fails the run loudly instead of trusting whatever the URL serves).
 microsoft_gpg_key_sha256: "2fa9c05d591a1582a9aba276272478c262e95ad00acf60eaee1644d93941e3c6"
+# Fingerprint of that key ("Microsoft (Release signing)"), as Microsoft's
+# Linux package repository docs publish it (kalmia#262). rpm_key refuses a key
+# whose fingerprint differs.
+microsoft_gpg_fingerprint: "BC528686B50D79E339D3721CEB3E94ADBE1229CF"
