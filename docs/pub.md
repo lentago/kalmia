@@ -39,7 +39,7 @@ drosera's pipeline producer on LXC 105 (`grafana-stack`, 192.168.139.20:8611;
 web share, so the change-pipeline document reaches the viewport bus (the
 `web/viewport/` folder on the share, where brasenia's producers read and write
 the wall display's panes) through pub rather than as a file on the share, and
-pub keeps no credential of its own (brasenia ADR-0005). While the producer is down the path answers 502; the brasenia
+pub needs no Loki credential for it (brasenia ADR-0005). While the producer is down the path answers 502; the brasenia
 producers read that as "no rows". Check: `curl -s http://pub.lan/viewport/pipeline.json | jq .schema`.
 
 The caddy package is not installed by the role. On a rebuild, install it from
@@ -396,10 +396,13 @@ expiry:
 
 A leaked token can only read what anyone can read, but it spends your
 personal rate limit and acts as you. To revoke it, delete it under
-Fine-grained tokens. Both producers then fall back to anonymous reads on the
-401. To pause it without revoking, empty the file (`: >
+Fine-grained tokens. To pause it without revoking, empty the file (`: >
 /etc/brasenia/github-token` on pub) and restart both units. Don't delete the
-file: a missing credential path stops both units from starting.
+file: a missing credential path stops both units from starting. Under
+ADR-0021 a producer falls back to anonymous reads on a 401 or an empty file.
+That takes effect once the producers read the token (brasenia#137 for the PRs
+pane, brasenia#31 for focus). Until then both read anonymously whatever the
+file holds.
 
 All are `Type=simple`, `Restart=always`, and run as the unprivileged
 `brasenia` system user in the `webdrop` group. The share is a CIFS mount that

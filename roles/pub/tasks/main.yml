@@ -275,11 +275,12 @@
   # Holds the Home Assistant, Grafana and GitHub tokens, each seeded by hand
   # (docs/pub.md). systemd hands each one only to the units that use it.
   ansible.builtin.file:
-    path: "{{ pub_viewport_home_token_file | dirname }}"
+    path: "{{ item }}"
     state: directory
     owner: root
     group: root
     mode: "0700"
+  loop: "{{ [pub_viewport_home_token_file, pub_viewport_grafana_token_file, pub_viewport_github_token_file] | map('dirname') | unique }}"
   become: true
   when: pub_viewport_enabled
 

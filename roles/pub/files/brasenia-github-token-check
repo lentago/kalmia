@@ -14,7 +14,8 @@
 #      and the focus producer needs it. ADR-0021 names the fallback if not.
 #
 # Exit 0: both pass. 1: the file is missing or empty, or the token is
-# rejected. 2: the token works but check runs are refused. 3: anything else.
+# rejected. 2: the token works but check runs are refused. 3: anything else,
+# including a network error, so a transient failure never reads as a bad seed.
 # ============================================================================
 import json
 import sys
@@ -37,6 +38,9 @@ def get(token, path):
             return resp.status, json.load(resp), resp.headers
     except urllib.error.HTTPError as err:
         return err.code, None, err.headers
+    except (urllib.error.URLError, OSError) as err:  # DNS, refused, timeout
+        print(f"network error reaching GitHub: {getattr(err, 'reason', err)}")
+        sys.exit(3)
 
 
 def main():
