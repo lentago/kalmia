@@ -34,14 +34,18 @@ resource "proxmox_virtual_environment_vm" "xubuntu_ws" {
     enabled = true
   }
 
+  # Sized as the session host for the Director and standing EMs (#286): 6 vCPU
+  # on one socket, matching pve5's single-socket i5-8500T, and 16 GiB. NUMA and
+  # CPU/memory hotplug are off, so a resize lands as pending config and takes
+  # effect only on a PVE-side restart (`qm reboot 102`), never a guest reboot.
   cpu {
-    cores   = 2
-    sockets = 2
+    cores   = 6
+    sockets = 1
     type    = "x86-64-v2-AES"
   }
 
   memory {
-    dedicated = 8192
+    dedicated = 16384
   }
 
   # Moved off `local` (pve5's root fs) to thin LVM and grown 32 -> 64 GB
