@@ -13,7 +13,7 @@
 #
 # Org model (see ~/repos/lentago/CLAUDE.md): the session at ~/repos/lentago is
 # the Engineering Director; each standing session is that repo's Engineering
-# Manager (EM), on Opus by default, free to spawn subagents of its own choice;
+# Manager (EM), on Sonnet by default, free to spawn subagents of its own choice;
 # Chris is Product Owner, CTO and CEO. EMs start on demand: the Director runs
 # `standing up <repo>` the first time a dispatch needs that EM, never for every
 # repo at init, so a normal day grows from zero EMs to the handful it dispatches to.
@@ -101,7 +101,7 @@
 #                          `--remote-control*` passed after `--` takes precedence.
 #   STANDING_PER_WINDOW    EMs per window          (default: 1 — a window and terminal each;
 #                          N > 1 packs N tiled panes into windows standing-1, standing-2, …)
-#   STANDING_MODEL         model every EM starts on (default: claude-opus-5-5; set it
+#   STANDING_MODEL         model every EM starts on (default: claude-sonnet-5-5; set it
 #                          empty for Claude's own default; `-- --model X` overrides per run)
 #   STANDING_NAME_SUFFIX   claude --name suffix    (default: standing → "kalmia-standing")
 #   STANDING_TERMINAL      terminal for `open`     (default: first of ghostty, ptyxis, alacritty)
@@ -141,7 +141,7 @@ DIRECTOR_NAME="${STANDING_DIRECTOR_NAME:-lentago-director}"
 DIRECTOR_WIN=director
 DIRECTOR_TITLE="lentago — Engineering Director"
 PER_WINDOW="${STANDING_PER_WINDOW:-1}"
-MODEL="${STANDING_MODEL-claude-opus-5-5}"
+MODEL="${STANDING_MODEL-claude-sonnet-5-5}"
 NAME_SUFFIX="${STANDING_NAME_SUFFIX:-standing}"
 REMOTE_CONTROL="${STANDING_REMOTE_CONTROL:-1}"
 EXIT_WAIT="${STANDING_EXIT_WAIT:-20}"
@@ -384,6 +384,19 @@ claude_argv() {
     cmd+=("${EXTRA[@]}")
     (( USE_PROMPT )) && cmd+=("$PROMPT")
     printf '%s\0' "${cmd[@]}"
+}
+
+# The model an EM actually gets: a `--model X` / `--model=X` passed after `--`
+# wins over the default, same as claude_argv. Prints nothing when neither is set.
+effective_model() {
+    local i
+    for (( i = 0; i < ${#EXTRA[@]}; i++ )); do
+        case "${EXTRA[i]}" in
+            --model)   printf '%s' "${EXTRA[i+1]:-}"; return ;;   # bare/empty: claude_argv adds no default either
+            --model=*) printf '%s' "${EXTRA[i]#--model=}"; return ;;
+        esac
+    done
+    printf '%s' "$MODEL"
 }
 
 # Create the pane for a repo (creating the session as needed); prints its id.
@@ -766,7 +779,7 @@ cmd_up() {
             id=$(spawn_pane "$repo" "$dir" "${cmd[@]}")
             w=$(window_of "$id"); want+=("$w")
             if [[ "$w" == "$(win_name "$repo")" ]]; then where="its own window"; else where="window $w"; fi
-            ok "$repo started in $where  ${c_dim}(claude --name $repo-$NAME_SUFFIX${MODEL:+ --model $MODEL})${c_off}"
+            ok "$repo started in $where  ${c_dim}(claude --name $repo-$NAME_SUFFIX$(m=$(effective_model); [[ -n "$m" ]] && printf ' --model %s' "$m"))${c_off}"
             started=$((started + 1))
         fi
         apply_options
@@ -812,7 +825,7 @@ cmd_restart() {
         (( ${#cmd[@]} >= 3 )) || die "internal: could not build the claude command for $repo"
         graceful_exit "$id" "$repo" || true
         tmux respawn-pane -k -t "$id" -c "$REPOS_DIR/$repo" -- "${cmd[@]}"
-        ok "$repo restarted  ${c_dim}(${MODEL:+--model $MODEL})${c_off}"
+        ok "$repo restarted  ${c_dim}($(m=$(effective_model); [[ -n "$m" ]] && printf -- '--model %s' "$m"))${c_off}"
         n=$((n + 1))
     done
     apply_options
