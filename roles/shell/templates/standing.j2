@@ -392,7 +392,7 @@ effective_model() {
     local i
     for (( i = 0; i < ${#EXTRA[@]}; i++ )); do
         case "${EXTRA[i]}" in
-            --model)   [[ -n "${EXTRA[i+1]:-}" ]] && { printf '%s' "${EXTRA[i+1]}"; return; } ;;
+            --model)   printf '%s' "${EXTRA[i+1]:-}"; return ;;   # bare/empty: claude_argv adds no default either
             --model=*) printf '%s' "${EXTRA[i]#--model=}"; return ;;
         esac
     done
