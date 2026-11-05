@@ -641,6 +641,7 @@ pane_state() {
 # by a reused pid are ignored. python3 parses them: Ansible needs it on every target.
 
 SESSIONS_DIR="${STANDING_SESSIONS_DIR:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/sessions}"
+OUTSIDE_CACHE=""; OUTSIDE_CACHED=0   # warn_if_outside scans once per run
 
 # One line per live session record: pid US name US entrypoint US status US cwd.
 live_sessions() {
@@ -696,10 +697,12 @@ outside_sessions() {
 outside_pid_of() { outside_sessions | awk -F"$US" -v n="$1" '$2 == n { print $1; exit }'; }
 
 # Warn before starting a session whose name is already live outside tmux:
-# two sessions under one name split it, and messages reach either.
+# two sessions under one name split it, and messages reach either. The scan
+# runs once per run (it starts python3), not once per repo `up` starts.
 warn_if_outside() {
     local op
-    op=$(outside_pid_of "$1")
+    if (( ! OUTSIDE_CACHED )); then OUTSIDE_CACHE=$(outside_sessions); OUTSIDE_CACHED=1; fi
+    op=$(awk -F"$US" -v n="$1" '$2 == n { print $1; exit }' <<<"$OUTSIDE_CACHE")
     [[ -z "$op" ]] || warn "a session named '$1' already runs outside tmux (pid $op): this starts a second one under the same name — close that one first"
 }
 
