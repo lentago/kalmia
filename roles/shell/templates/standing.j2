@@ -25,7 +25,14 @@
 # `standing director` (or the `director` command) creates or resumes it and
 # attaches. While that session exists, `standing up` points new EMs at it.
 #
-# Dependencies: tmux (>= 3.2), claude, coreutils; ghostty/ptyxis/alacritty for `open`
+# Sessions outside tmux: a Director or EM can also run where standing did not start
+# it (the VS Code extension, the desktop app, a plain terminal). standing reads
+# Claude Code's session records (~/.claude/sessions) to see them: `status` lists
+# them, `up` points new EMs at an outside Director, and `director`/`up` warn before
+# starting a second session under a name that is already live (kalmia#291).
+#
+# Dependencies: tmux (>= 3.2), claude, coreutils; ghostty/ptyxis/alacritty for `open`;
+# python3 to read the session records (without it standing sees only its own panes)
 #
 # Usage:
 #   standing                       same as `standing status`
@@ -59,7 +66,10 @@
 #                                  still report to lentago-director, which `director` brings back
 #   standing status                the Director's row, then one row per EM: repo, state,
 #                                  terminal, pid, size, session name (state "trust?" = waiting
-#                                  at Claude's folder-trust dialog)
+#                                  at Claude's folder-trust dialog); then any live Claude
+#                                  session outside these panes: name, state, where it runs
+#                                  (cli, vscode, desktop), pid and role (director, em, ad-hoc
+#                                  for a session in a repo below the repos dir, other)
 #   standing trust [repo ...] [--yes]  list the EMs waiting at the folder-trust dialog and,
 #                                  after a y/N prompt (or --yes), accept it in each — your
 #                                  call to run; these are your repos and Claude won't run it for you
@@ -339,9 +349,13 @@ parse_launch_flags() {
     if (( NO_DIRECTOR )); then
         DIRECTOR=""
     elif [[ -z "$DIRECTOR" ]]; then
-        # The tmux-hosted Director, while it exists, outranks a remembered name:
-        # that is how EMs started after the switch stop pointing at an old session.
-        if director_up; then DIRECTOR=$DIRECTOR_NAME; else DIRECTOR=$(recall_director); fi
+        # A live Director, in tmux or outside it (kalmia#291), outranks a remembered
+        # name: that is how EMs started after the switch stop pointing at an old session.
+        if director_up || [[ -n "$(outside_pid_of "$DIRECTOR_NAME")" ]]; then
+            DIRECTOR=$DIRECTOR_NAME
+        else
+            DIRECTOR=$(recall_director)
+        fi
     fi
     local dsent=""
     [[ -n "$DIRECTOR" ]] && dsent=${DIRECTOR_SENTENCE//%NAME%/$DIRECTOR}
@@ -619,6 +633,98 @@ pane_state() {
     fi
 }
 
+# ------------------------------------------------ sessions outside tmux ----
+# Claude Code keeps a record for every live session in ~/.claude/sessions/<pid>.json:
+# name, entrypoint, cwd, status, procStart, pidDomain. A record counts only when its
+# pidDomain is this host's (machine id and pid namespace), its pid is alive and its
+# procStart matches that process, so records copied in from another machine or left
+# by a reused pid are ignored. python3 parses them: Ansible needs it on every target.
+
+SESSIONS_DIR="${STANDING_SESSIONS_DIR:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/sessions}"
+OUTSIDE_CACHE=""; OUTSIDE_CACHED=0   # warn_if_outside scans once per run
+
+# One line per live session record: pid US name US entrypoint US status US cwd.
+live_sessions() {
+    [[ -d "$SESSIONS_DIR" ]] && command -v python3 >/dev/null 2>&1 || return 0
+    python3 - "$SESSIONS_DIR" 2>/dev/null <<'PY' || true
+import glob, json, os, sys
+try:
+    domain = "linux:%s:%s" % (open("/etc/machine-id").read().strip(), os.readlink("/proc/self/ns/pid"))
+except OSError:
+    domain = None
+for path in sorted(glob.glob(os.path.join(sys.argv[1], "*.json"))):
+    try:
+        with open(path) as f:
+            r = json.load(f)
+        pid = int(r["pid"])
+        with open("/proc/%d/stat" % pid) as f:
+            start = f.read().rsplit(")", 1)[1].split()[19]
+    except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError):
+        continue
+    if domain and r.get("pidDomain") not in (None, domain):
+        continue
+    if str(r.get("procStart", start)) != start:
+        continue
+    out = [str(pid)] + [str(r.get(k) or "") for k in ("name", "entrypoint", "status", "cwd")]
+    print("\x1f".join(v.replace("\x1f", " ").replace("\n", " ") for v in out))
+PY
+}
+
+# Pane pids of the sessions standing manages: the EMs' and the Director's.
+managed_pane_pids() {
+    command -v tmux >/dev/null 2>&1 || return 0
+    if has_session; then tmux list-panes -s -t "=$TMUX_SESSION" -F '#{pane_pid}' 2>/dev/null || true; fi
+    if director_up; then tmux list-panes -s -t "=$DIRECTOR_NAME" -F '#{pane_pid}' 2>/dev/null || true; fi
+}
+
+# live_sessions() minus those running in a managed pane (the pid, or an ancestor
+# of it, is a pane's pid). Same line format.
+outside_sessions() {
+    local -A pane=()
+    local p line
+    for p in $(managed_pane_pids); do pane[$p]=1; done
+    while IFS= read -r line; do
+        p=${line%%"$US"*}
+        while [[ -n "$p" && "$p" != 0 && "$p" != 1 && -z "${pane[$p]:-}" ]]; do
+            p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ') || p=""
+        done
+        if [[ -n "$p" && -n "${pane[$p]:-}" ]]; then continue; fi
+        printf '%s\n' "$line"
+    done < <(live_sessions)
+}
+
+# Pid of the live session named $1 outside the managed panes, if there is one.
+outside_pid_of() { outside_sessions | awk -F"$US" -v n="$1" '$2 == n { print $1; exit }'; }
+
+# Warn before starting a session whose name is already live outside tmux:
+# two sessions under one name split it, and messages reach either. The scan
+# runs once per run (it starts python3), not once per repo `up` starts.
+warn_if_outside() {
+    local op
+    if (( ! OUTSIDE_CACHED )); then OUTSIDE_CACHE=$(outside_sessions); OUTSIDE_CACHED=1; fi
+    op=$(awk -F"$US" -v n="$1" '$2 == n { print $1; exit }' <<<"$OUTSIDE_CACHE")
+    [[ -z "$op" ]] || warn "a session named '$1' already runs outside tmux (pid $op): this starts a second one under the same name — close that one first"
+}
+
+# Where a session runs, from its record's entrypoint.
+where_of() {
+    case "$1" in
+        cli | "")       printf 'cli' ;;
+        claude-vscode)  printf 'vscode' ;;
+        claude-desktop) printf 'desktop' ;;
+        sdk*)           printf 'sdk' ;;
+        *)              printf '%s' "${1#claude-}" ;;
+    esac
+}
+
+# A session's role from its name ($1) and cwd ($2).
+role_of() {
+    if [[ "$1" == "$DIRECTOR_NAME" ]]; then printf 'director'
+    elif [[ "$1" == *-"$NAME_SUFFIX" ]]; then printf 'em'
+    elif [[ "$2" == "$REPOS_DIR" || "$2" == "$REPOS_DIR"/* ]]; then printf 'ad-hoc'
+    else printf 'other'; fi
+}
+
 # --------------------------------------------------------------- director ----
 # The Director's own tmux session: not grouped with the EMs' base session, so
 # view_sessions(), `down` and `open` never see it. Its terminal attaches to the
@@ -647,6 +753,7 @@ ensure_director() {
     mapfile -d '' cmd < <(director_argv)
     (( ${#cmd[@]} >= 3 )) || die "internal: could not build the claude command for the Director"
     if ! director_up; then
+        warn_if_outside "$DIRECTOR_NAME"
         # remain-on-exit in the same command sequence, so a claude that exits at
         # once (nothing to --continue, say) leaves its screen instead of the session vanishing.
         tmux new-session -d -s "$DIRECTOR_NAME" -n "$DIRECTOR_WIN" -x "$DEF_W" -y "$DEF_H" \
@@ -776,6 +883,7 @@ cmd_up() {
                 kept=$((kept + 1))
             fi
         else
+            warn_if_outside "$repo-$NAME_SUFFIX"
             id=$(spawn_pane "$repo" "$dir" "${cmd[@]}")
             w=$(window_of "$id"); want+=("$w")
             if [[ "$w" == "$(win_name "$repo")" ]]; then where="its own window"; else where="window $w"; fi
@@ -841,7 +949,9 @@ cmd_restart() {
 cmd_status() {
     need tmux
     local w n term id repo dead pid cmdname size i show_win=0 lacking=0 ems=1
-    local d_state d_term="-" d_pid="-" d_size="-"
+    local d_state d_term="-" d_pid="-" d_size="-" d_out="" line o_pid o_name o_entry o_state o_cwd
+    local -a out=() dup=()
+    local -A in_tmux=()
     local -a r_repo=() r_state=() r_term=() r_win=() r_pid=() r_size=()
     if director_up; then
         n=$(clients_of "$DIRECTOR_NAME")
@@ -884,10 +994,28 @@ cmd_status() {
                 "${r_pid[$i]}" "${r_size[$i]}" "${r_repo[$i]}-$NAME_SUFFIX"
         fi
     done
-    if (( ! ems )); then
-        say "No EMs: tmux session '$TMUX_SESSION' is not running — 'standing up <repo>' starts one"
+    for i in "${!r_repo[@]}"; do in_tmux["${r_repo[$i]}-$NAME_SUFFIX"]=1; done
+    director_up && in_tmux["$DIRECTOR_NAME"]=1
+    mapfile -t out < <(outside_sessions)
+    if (( ${#out[@]} )); then
+        say ""
+        say "Outside standing's tmux (Claude Code session records):"
+        printf '%-30s %-9s %-8s %-8s %s\n' SESSION STATE WHERE PID ROLE
+        for line in "${out[@]}"; do
+            IFS="$US" read -r o_pid o_name o_entry o_state o_cwd <<<"$line"
+            printf '%-30s %-9s %-8s %-8s %s\n' "${o_name:-(unnamed)}" "${o_state:--}" "$(where_of "$o_entry")" \
+                "$o_pid" "$(role_of "$o_name" "$o_cwd")"
+            [[ "$o_name" == "$DIRECTOR_NAME" && -z "$d_out" ]] && d_out="$(where_of "$o_entry"), pid $o_pid"
+            [[ -n "$o_name" && -n "${in_tmux[$o_name]:-}" ]] && dup+=("$o_name")
+        done
+        say ""
     fi
-    if ! director_up; then
+    if (( ! ems )); then
+        say "No EMs in tmux: session '$TMUX_SESSION' is not running — 'standing up <repo>' starts one"
+    fi
+    if ! director_up && [[ -n "$d_out" ]]; then
+        say "${c_warn}The Director runs outside tmux ($d_out): 'director' would start a second '$DIRECTOR_NAME' — close that one first${c_off}"
+    elif ! director_up; then
         say "${c_dim}The Director is not in tmux — 'director' starts or resumes it${c_off}"
     elif [[ "$d_state" == *trust\?* ]]; then
         say "${c_warn}The Director waits at the folder-trust dialog — 'director' attaches you to answer it${c_off}"
@@ -895,6 +1023,9 @@ cmd_status() {
     if (( lacking )); then
         say "${c_warn}$lacking window(s) without a terminal — 'standing open' opens them${c_off}"
     fi
+    for line in "${dup[@]}"; do
+        say "${c_warn}Two sessions are named '$line', one in tmux and one outside: messages reach either — close one${c_off}"
+    done
 }
 
 cmd_down() {
