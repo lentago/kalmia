@@ -44,6 +44,9 @@ client, the session keeps running. Canon: `~/repos/lentago/CLAUDE.md` § Directo
    `ListAgents` every 10 s, up to 60 s, until the name appears. If `standing status`
    shows `trust?`, stop and tell Chris: accepting the folder-trust dialog is his
    (`standing trust`).
+   EMs start on Sonnet 5.5 by default (Chris, 2026-11-05, kalmia#288); for gnarly work
+   run `standing up <repo> -- --model claude-opus-5-5`, and read the model off the
+   `started` line.
 3. **Show** an EM that was already up: `standing show <repo>`. It opens one terminal,
    or says the EM is already shown and opens nothing. Never `standing open`: it reopens
    every EM's window, including ones Chris closed.
