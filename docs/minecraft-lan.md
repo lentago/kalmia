@@ -61,6 +61,12 @@ signed in to Xbox Live; nothing is forwarded) can use commands without
 per-player setup. Set `member` if the LAN ever carries devices whose players
 shouldn't. `level-name` and `server-name` belong to the sync script.
 
+`client-side-chunk-generation-enabled=false` (with `view-distance=32`, both
+owned by the role) makes the server send real chunks out to each client's
+render distance. With it on, clients draw distant chunks themselves from the
+seed, which in a flat world is plain grass, so builds far from a player stayed
+invisible until they got close (#305).
+
 **Transport: NetherNet**, the 1.26 default and the only one 1.26 clients use.
 With `transport=raknet` the server logs "NetherNet is the only supported
 transport type. Players will not be able to connect to your game without
