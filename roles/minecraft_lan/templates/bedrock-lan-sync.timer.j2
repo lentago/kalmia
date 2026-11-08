@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Check pub.lan for the Bedrock world to serve
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec={{ minecraft_lan_sync_interval }}
+
+[Install]
+WantedBy=timers.target

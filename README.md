@@ -44,7 +44,7 @@ graph TB
     end
 
     FORGE["forge/ — substrate.sh\nbuilds versioned LXC templates"]
-    ANSIBLE["Ansible — separate plane\nsite.yml / pub.yml / brasenia.yml / pe-publish.yml / minecraft-runner.yml\nidempotent roles provision inside each guest"]
+    ANSIBLE["Ansible — separate plane\nsite.yml / pub.yml / brasenia.yml / pe-publish.yml / minecraft-runner.yml / minecraft-lan.yml\nidempotent roles provision inside each guest"]
 
     PR --> VALIDATE
     VALIDATE -->|"same-repo PRs only — fork PRs\nnever reach the LAN runner"| PLAN
@@ -303,6 +303,11 @@ The fifth: `minecraft-runner.yml` + the `minecraft_runner` role provision LXC
 124, the self-hosted Actions runner for `cpitzi/minecraft-builds`: Chunker
 conversions checked on a Bedrock Dedicated Server, releases to pub.lan — see
 [`docs/minecraft-runner.md`](docs/minecraft-runner.md).
+
+The sixth: `minecraft-lan.yml` + the `minecraft_lan` role provision LXC 125, a
+Bedrock Dedicated Server that LAN clients find under LAN Games, serving the
+world the pub.lan worlds page announces — see
+[`docs/minecraft-lan.md`](docs/minecraft-lan.md).
 
 The Terraform layer that declares these guests carries its own naming-debt
 footnote: kalmia's state backend migrated to `solidago-tfstate-*` keys

@@ -1,0 +1,20 @@
+---
+# ============================================================================
+# Provision the minecraft-lan LXC (125, pve4) — a Bedrock Dedicated Server for
+# the LAN (#297). Self-provisioning, same as minecraft-runner.yml: run this ON
+# the container.
+#
+#   ansible-playbook -i inventory/hosts.yml minecraft-lan.yml
+#
+# The guest and its NAS bind mount are created by terraform/minecraft-lan.tf
+# (CI apply-on-merge, mount via the pve_host mount hook). See
+# docs/minecraft-lan.md.
+# ============================================================================
+- name: Provision the LAN Bedrock server
+  hosts: all
+  gather_facts: true
+  become: false
+
+  roles:
+    - role: minecraft_lan
+      tags: [minecraft_lan, bedrock]
