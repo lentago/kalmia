@@ -10,6 +10,6 @@
   ansible.builtin.systemd_service:
     name: bedrock-server.service
     state: restarted
-  when: ansible_facts.services['bedrock-server.service'].state | default('') == 'running'
+  when: (ansible_facts.services['bedrock-server.service'] | default({})).state | default('') == 'running'
   become: true
   listen: Restart the Bedrock server

@@ -12,7 +12,7 @@ to the game, and the game has no import button on Android.
 | Provisioned by | `minecraft-lan.yml` + the `minecraft_lan` role |
 | Server | `/opt/bedrock/server` → `bds-<version>`; user `bedrock`; `bedrock-server.service` |
 | World sync | `bedrock-lan-sync.timer` (every minute) runs `/usr/local/bin/bedrock-lan-sync` |
-| Ports | UDP 7551 (NetherNet LAN discovery) and 19132 (game), LAN only (nothing is forwarded) |
+| Ports | UDP 7551 (NetherNet LAN discovery), 19132 and 19133 (game, IPv4 and IPv6), LAN only (nothing is forwarded) |
 
 ## Which world it serves
 
@@ -100,7 +100,7 @@ themselves, so when they move to a new Bedrock release:
    ```bash
    ssh root@pve4 "pct exec 125 -- env LC_ALL=C.UTF-8 bash -lc '
      apt-get update && apt-get install -y git ansible
-     git clone https://github.com/lentago/kalmia /opt/kalmia 2>/dev/null || git -C /opt/kalmia pull --ff-only
+     if [ -d /opt/kalmia ]; then git -C /opt/kalmia pull --ff-only; else git clone https://github.com/lentago/kalmia /opt/kalmia; fi
      cd /opt/kalmia && ansible-playbook -i inventory/hosts.yml minecraft-lan.yml'"
    ```
 
