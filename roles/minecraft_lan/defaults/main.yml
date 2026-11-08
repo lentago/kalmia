@@ -51,6 +51,11 @@ minecraft_lan_properties:
   # carries devices whose players shouldn't have that.
   default-player-permission-level: operator
   content-log-console-output-enabled: "true"
+  # Send real chunks out to each client's render distance. With client-side
+  # generation on, clients draw far-off chunks themselves from the seed, which
+  # in a flat world is plain grass: a castle 200 blocks out stayed invisible
+  # until the player was close (#305).
+  client-side-chunk-generation-enabled: "false"
 
 # The share is CIFS forced to uid/gid 101000 (container 1000), mode 0770;
 # same group as the other guests that read it.

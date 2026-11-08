@@ -59,7 +59,7 @@ turns it on, which would refuse every unlisted player), LAN visibility on, and
 decision: every player who can reach the server (a device on the main LAN,
 signed in to Xbox Live; nothing is forwarded) can use commands without
 per-player setup. Set `member` if the LAN ever carries devices whose players
-shouldn't. `level-name` and `server-name` belong to the sync script.
+shouldn't. `client-side-chunk-generation-enabled=false` makes the server send real chunks out to each client's render distance; with it on, clients draw distant chunks from the seed (plain grass in a flat world), so builds far from a player were invisible until they got close. `level-name` and `server-name` belong to the sync script.
 
 **Transport: NetherNet**, the 1.26 default and the only one 1.26 clients use.
 With `transport=raknet` the server logs "NetherNet is the only supported
