@@ -12,7 +12,7 @@ to the game, and the game has no import button on Android.
 | Provisioned by | `minecraft-lan.yml` + the `minecraft_lan` role |
 | Server | `/opt/bedrock/server` → `bds-<version>`; user `bedrock`; `bedrock-server.service` |
 | World sync | `bedrock-lan-sync.timer` (every minute) runs `/usr/local/bin/bedrock-lan-sync` |
-| Ports | UDP 19132 and 19133 (game and LAN discovery, IPv4 and IPv6, RakNet), LAN only (nothing is forwarded) |
+| Ports | UDP 7551 (NetherNet LAN discovery); NetherNet game traffic on `server-udp-ports` (19132, from the stock file); `server-port` 19132 / `server-portv6` 19133 set by the role. LAN only (nothing is forwarded) |
 
 ## Which world it serves
 
@@ -55,15 +55,15 @@ signed in to Xbox Live; nothing is forwarded) can use commands without
 per-player setup. Set `member` if the LAN ever carries devices whose players
 shouldn't. `level-name` and `server-name` belong to the sync script.
 
-**Transport: RakNet, not the 1.26 default.** With NetherNet, the server
-answers LAN discovery itself (UDP 7551) but sets every connection up through
-Microsoft's signaling service, even between two machines on the LAN. On this
-guest the signaling connections were found dead (CLOSE-WAIT, never
-re-established) within half an hour of start; the server still showed in LAN
-Games, and joining failed with `InitialConnection-145` before reaching the
-server (#299). RakNet has clients connect straight to UDP 19132 and answers
-LAN discovery there, with no cloud dependency for LAN play. Players still sign
-in to Xbox Live (online mode).
+**Transport: NetherNet**, the 1.26 default and the only one 1.26 clients use.
+With `transport=raknet` the server logs "NetherNet is the only supported
+transport type. Players will not be able to connect to your game without
+NetherNet", and it disappears from LAN Games (#300 tried it). NetherNet
+answers LAN discovery on UDP 7551 and keeps signed-in connections to
+Microsoft's signaling service; on this guest those connections were found
+closed by the far end (CLOSE-WAIT, never re-established) within 15-25 minutes
+of each start, and a join attempt then failed with `InitialConnection-145`.
+Whether that is the cause of the failed join is open in #299.
 
 `server.properties` and `worlds/` live in `/opt/bedrock` and are linked into
 each version directory, so an upgrade keeps both.
@@ -114,6 +114,6 @@ themselves, so when they move to a new Bedrock release:
    ```
 
 5. **Check:** the play's last task prints what the sync did. From the LAN, the
-   server answers a RakNet ping on UDP 19132 with its title, version and world
-   (cpitzi/minecraft-builds has `tools/lan_server.py discover`), and a tablet
-   lists it under LAN Games and can join it.
+   server answers NetherNet LAN discovery (UDP 7551) with its title, version
+   and world (cpitzi/minecraft-builds has `tools/lan_server.py discover`), and
+   a tablet lists it under LAN Games and can join it.
