@@ -1,7 +1,7 @@
 ---
 # ============================================================================
 # minecraft_lan — a Bedrock Dedicated Server on LXC 125 (pve4, #297) that
-# Bedrock clients on the LAN find under Play → Friends → LAN Games. The world
+# Bedrock clients on the LAN join as an added server (Play → Servers). The world
 # it serves is announced by the pub.lan worlds page; a sync timer downloads it.
 # See docs/minecraft-lan.md.
 # ============================================================================

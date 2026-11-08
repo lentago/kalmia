@@ -79,8 +79,9 @@ something a dedicated server doesn't do; it's outside our control. LAN
 visibility stays on (the list entry is harmless, discovery is how
 `tools/lan_server.py` checks the server, and a future client may join from it).
 The server's HTTPS connections to Microsoft close after about 90 seconds on any
-host (also seen on a workstation running the same server); that's routine and
-not involved.
+host (also seen on a workstation running the same server), so those closes are
+routine; joins through an added server work while they're closed, but whether
+they play a part in the LAN Games path failing isn't known.
 
 `server.properties` and `worlds/` live in `/opt/bedrock` and are linked into
 each version directory, so an upgrade keeps both.
