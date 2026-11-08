@@ -1,0 +1,20 @@
+---
+# ============================================================================
+# Provision the minecraft-runner LXC (124, pve4) — the self-hosted Actions
+# runner for cpitzi/minecraft-builds (#293). Self-provisioning, same as
+# pe-publish.yml: run this ON the container.
+#
+#   MINECRAFT_RUNNER_TOKEN=<token> ansible-playbook -i inventory/hosts.yml minecraft-runner.yml
+#
+# The token is needed only for the first registration. The guest and its NAS
+# bind mounts are created by terraform/minecraft-runner.tf (CI apply-on-merge,
+# mounts via the pve_host mount hook). See docs/minecraft-runner.md.
+# ============================================================================
+- name: Provision the minecraft-builds CI runner
+  hosts: all
+  gather_facts: true
+  become: false
+
+  roles:
+    - role: minecraft_runner
+      tags: [minecraft_runner, runner]
