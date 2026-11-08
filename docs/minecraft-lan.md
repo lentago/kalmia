@@ -12,7 +12,7 @@ to the game, and the game has no import button on Android.
 | Provisioned by | `minecraft-lan.yml` + the `minecraft_lan` role |
 | Server | `/opt/bedrock/server` → `bds-<version>`; user `bedrock`; `bedrock-server.service` |
 | World sync | `bedrock-lan-sync.timer` (every minute) runs `/usr/local/bin/bedrock-lan-sync` |
-| Ports | UDP 7551 (NetherNet LAN discovery) and the NetherNet game ports (`server-udp-ports`, 19132), LAN only (nothing is forwarded) |
+| Ports | UDP 7551 (NetherNet LAN discovery); NetherNet game traffic on `server-udp-ports` (19132, from the stock file); `server-port` 19132 / `server-portv6` 19133 set by the role. LAN only (nothing is forwarded) |
 
 ## Which world it serves
 
