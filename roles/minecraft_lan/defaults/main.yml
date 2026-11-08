@@ -34,15 +34,13 @@ minecraft_lan_properties:
   # The stock file turns the allowlist on, which would refuse every player not
   # listed in allowlist.json. Who may join is decided by who can reach it.
   allow-list: "false"
-  # RakNet, the classic transport: clients reach UDP 19132 directly. The 1.26
-  # default, NetherNet, sets every connection up through Microsoft's signaling
-  # service, even on the LAN. On this guest those signaling connections went
-  # dead (CLOSE-WAIT, never re-established) within half an hour of start, and
-  # joining then failed with InitialConnection-145 while the server still
-  # showed in LAN Games (#299).
-  transport: raknet
-  # Answer LAN discovery (RakNet pings on UDP 19132): this is what makes it
-  # appear under LAN Games.
+  # NetherNet, the 1.26 default and the only transport 1.26 clients use: with
+  # RakNet the server logs "NetherNet is the only supported transport type.
+  # Players will not be able to connect", and clients no longer list it under
+  # LAN Games (#300 tried RakNet; #299 tracks the join failure).
+  transport: nethernet
+  # Answer LAN discovery (NetherNet, UDP 7551): this is what makes it appear
+  # under LAN Games.
   enable-lan-visibility: "true"
   server-port: "19132"
   server-portv6: "19133"
