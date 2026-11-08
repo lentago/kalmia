@@ -1,0 +1,176 @@
+---
+# ============================================================================
+# minecraft_lan — installs the pinned Bedrock Dedicated Server from the
+# read-only staging mount into a version directory, keeps the worlds and
+# server.properties outside it (so an upgrade keeps both), and installs:
+#   bedrock-server.service    the server; its console is a FIFO
+#   bedrock-lan-sync.timer    serve the world pub.lan announces
+# The timer is the one thing enabled at boot: it starts the server once a
+# world is announced, so the server never creates a stray default world.
+# ============================================================================
+- name: Install the server's dependencies
+  ansible.builtin.apt:
+    name:
+      - unzip
+      - curl
+      - ca-certificates
+      - python3
+      # The Bedrock Dedicated Server links against these.
+      - libcurl4
+      - libssl3
+    state: present
+    update_cache: true
+  become: true
+
+- name: Ensure the share's gid-1000 group exists
+  ansible.builtin.group:
+    name: "{{ minecraft_lan_group }}"
+    gid: "{{ minecraft_lan_group_gid }}"
+    system: true
+  become: true
+
+- name: Create the server user
+  ansible.builtin.user:
+    name: "{{ minecraft_lan_user }}"
+    groups: "{{ minecraft_lan_group }}"
+    append: true
+    system: true
+    home: "{{ minecraft_lan_home }}"
+    create_home: false
+    shell: /usr/sbin/nologin
+  become: true
+
+- name: Ensure the server directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ minecraft_lan_user }}"
+    group: "{{ minecraft_lan_user }}"
+    mode: "0755"
+  loop:
+    - "{{ minecraft_lan_home }}"
+    - "{{ minecraft_lan_home }}/worlds"
+    - "{{ minecraft_lan_home }}/bds-{{ minecraft_lan_bds_version }}"
+  become: true
+
+# ---------------------------------------------------------------- the server
+- name: Check the staged Bedrock Dedicated Server against its pin
+  ansible.builtin.stat:
+    path: "{{ minecraft_lan_staging }}/bedrock-server-{{ minecraft_lan_bds_version }}.zip"
+    checksum_algorithm: sha256
+  register: minecraft_lan_zip
+
+- name: Refuse a missing or modified server zip
+  ansible.builtin.fail:
+    msg: >-
+      {{ minecraft_lan_staging }}/bedrock-server-{{ minecraft_lan_bds_version }}.zip is
+      {{ 'missing' if not minecraft_lan_zip.stat.exists else 'not the pinned file' }}.
+      Stage it on the NAS (cpitzi/minecraft-ci) and check the mount; see docs/minecraft-lan.md.
+  when: not minecraft_lan_zip.stat.exists or
+        minecraft_lan_zip.stat.checksum != minecraft_lan_bds_sha256
+
+- name: Unpack the server {{ minecraft_lan_bds_version }}
+  ansible.builtin.unarchive:
+    src: "{{ minecraft_lan_staging }}/bedrock-server-{{ minecraft_lan_bds_version }}.zip"
+    dest: "{{ minecraft_lan_home }}/bds-{{ minecraft_lan_bds_version }}"
+    remote_src: true
+    owner: "{{ minecraft_lan_user }}"
+    group: "{{ minecraft_lan_user }}"
+    creates: "{{ minecraft_lan_home }}/bds-{{ minecraft_lan_bds_version }}/bedrock_server"
+  become: true
+
+# The first install seeds the shared server.properties from the stock file;
+# later versions link to it instead of bringing their own.
+- name: Seed server.properties from the stock file
+  ansible.builtin.copy:
+    src: "{{ minecraft_lan_home }}/bds-{{ minecraft_lan_bds_version }}/server.properties"
+    dest: "{{ minecraft_lan_home }}/server.properties"
+    remote_src: true
+    force: false
+    owner: "{{ minecraft_lan_user }}"
+    group: "{{ minecraft_lan_user }}"
+    mode: "0644"
+  become: true
+
+- name: Link this version's server.properties and worlds to the shared ones
+  ansible.builtin.file:
+    src: "{{ minecraft_lan_home }}/{{ item }}"
+    dest: "{{ minecraft_lan_home }}/bds-{{ minecraft_lan_bds_version }}/{{ item }}"
+    state: link
+    force: true
+    owner: "{{ minecraft_lan_user }}"
+    group: "{{ minecraft_lan_user }}"
+  loop:
+    - server.properties
+    - worlds
+  become: true
+  notify: Restart the Bedrock server
+
+- name: Set the server properties this role owns
+  ansible.builtin.lineinfile:
+    path: "{{ minecraft_lan_home }}/server.properties"
+    regexp: "^{{ item.key }}="
+    line: "{{ item.key }}={{ item.value }}"
+  loop: "{{ minecraft_lan_properties | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  become: true
+  notify: Restart the Bedrock server
+
+- name: Point the server path at this version
+  ansible.builtin.file:
+    src: "{{ minecraft_lan_home }}/bds-{{ minecraft_lan_bds_version }}"
+    dest: "{{ minecraft_lan_home }}/server"
+    state: link
+    owner: "{{ minecraft_lan_user }}"
+    group: "{{ minecraft_lan_user }}"
+  become: true
+  notify: Restart the Bedrock server
+
+# ---------------------------------------------------------------- services
+- name: Install the world sync script
+  ansible.builtin.copy:
+    src: bedrock-lan-sync.py
+    dest: /usr/local/bin/bedrock-lan-sync
+    mode: "0755"
+  become: true
+
+- name: Install the systemd units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop:
+    - bedrock-server.service
+    - bedrock-lan-sync.service
+    - bedrock-lan-sync.timer
+  become: true
+  register: minecraft_lan_units
+  notify: Restart the Bedrock server
+
+- name: Reload systemd after a unit change
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  become: true
+  when: minecraft_lan_units.changed
+
+- name: Restart the server now if anything it reads changed
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the world sync timer
+  ansible.builtin.systemd_service:
+    name: bedrock-lan-sync.timer
+    enabled: true
+    state: started
+  become: true
+
+# One sync now, so a world already announced is being served when the play ends.
+- name: Sync the announced world
+  ansible.builtin.command: /usr/local/bin/bedrock-lan-sync
+  register: minecraft_lan_sync
+  changed_when: "'switched' in minecraft_lan_sync.stdout"
+  become: true
+
+- name: Show what the server is doing
+  ansible.builtin.debug:
+    msg: "{{ minecraft_lan_sync.stdout_lines }}"

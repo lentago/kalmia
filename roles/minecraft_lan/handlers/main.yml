@@ -1,0 +1,15 @@
+---
+# Only a running server is restarted. Before the first world is announced it
+# isn't running, and starting it would create a default world. Both handlers
+# listen on one topic and run in this order.
+- name: Read the Bedrock server's state
+  ansible.builtin.service_facts:
+  listen: Restart the Bedrock server
+
+- name: Restart the running Bedrock server
+  ansible.builtin.systemd_service:
+    name: bedrock-server.service
+    state: restarted
+  when: (ansible_facts.services['bedrock-server.service'] | default({})).state | default('') == 'running'
+  become: true
+  listen: Restart the Bedrock server

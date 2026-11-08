@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Serve the Bedrock world announced on pub.lan
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=ANNOUNCE_URL={{ minecraft_lan_announce_url }}
+Environment=BEDROCK_HOME={{ minecraft_lan_home }}
+Environment=BEDROCK_USER={{ minecraft_lan_user }}
+ExecStart=/usr/local/bin/bedrock-lan-sync

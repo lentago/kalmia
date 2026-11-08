@@ -1,0 +1,23 @@
+# {{ ansible_managed }}
+# Bedrock Dedicated Server for the LAN (kalmia #297). Started by
+# bedrock-lan-sync once a world is announced; not enabled on its own.
+[Unit]
+Description=Minecraft Bedrock Dedicated Server (LAN)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User={{ minecraft_lan_user }}
+Group={{ minecraft_lan_user }}
+WorkingDirectory={{ minecraft_lan_home }}/server
+Environment=LD_LIBRARY_PATH=.
+RuntimeDirectory=bedrock
+ExecStartPre=/usr/bin/mkfifo -m 0600 /run/bedrock/console
+# Stdin is a FIFO opened read-write: the server quits when stdin reaches EOF,
+# and this one never does. Console commands: echo "list" > /run/bedrock/console
+ExecStart=/bin/sh -c 'exec ./bedrock_server <> /run/bedrock/console'
+# "stop" saves the world and exits; wait for that before systemd moves on.
+ExecStop=/bin/sh -c 'echo stop > /run/bedrock/console; while kill -0 $$MAINPID 2>/dev/null; do sleep 1; done'
+TimeoutStopSec=120
+Restart=on-failure
+RestartSec=10
