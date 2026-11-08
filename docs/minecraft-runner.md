@@ -33,6 +33,13 @@ has none. `cpitzi/minecraft-builds` is not a bullpen project, and its canary
 workflow gates PRs, so running branch code is this runner's job. It serves
 that one private repo.
 
+That means any job, PR canaries included, runs as `runner` with write access to
+`/srv/www/minecraft`, the pub.lan worlds page. Scoping that write to the release
+job would not narrow who can publish. The only people who can push a branch to
+the repo can also push `main` and dispatch the release. pub.lan is LAN-only. If
+the repo ever gains a writer who shouldn't publish, such as a bullpen
+registration, add a pe-publish-style guard first.
+
 ## Environment
 
 The role writes these into `/opt/actions-runner/.env`. The repo's tools read
@@ -72,11 +79,13 @@ mount hook from its allowlist; see
    and the apply attaches both mounts. Check from pve4:
    `pct exec 124 -- findmnt -t cifs`.
 3. **Provision**, on the container, with a registration token (valid one hour)
-   minted from a workstation where `gh` can administer the repo:
+   minted from a workstation where `gh` can administer the repo. The token goes
+   over stdin, so it never appears in a command line on pve4:
 
    ```bash
-   TOKEN=$(gh api -X POST repos/cpitzi/minecraft-builds/actions/runners/registration-token -q .token)
-   ssh root@pve4 "pct exec 124 -- env LC_ALL=C.UTF-8 MINECRAFT_RUNNER_TOKEN=$TOKEN bash -lc '
+   gh api -X POST repos/cpitzi/minecraft-builds/actions/runners/registration-token -q .token |
+   ssh root@pve4 "pct exec 124 -- env LC_ALL=C.UTF-8 bash -lc '
+     read -r MINECRAFT_RUNNER_TOKEN && export MINECRAFT_RUNNER_TOKEN
      apt-get update && apt-get install -y git ansible
      git clone https://github.com/lentago/kalmia /opt/kalmia 2>/dev/null || git -C /opt/kalmia pull --ff-only
      cd /opt/kalmia && ansible-playbook -i inventory/hosts.yml minecraft-runner.yml'"

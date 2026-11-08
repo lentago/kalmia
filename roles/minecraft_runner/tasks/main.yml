@@ -104,12 +104,27 @@
     group: "{{ minecraft_runner_user }}"
   become: true
 
+# copy's checksum: is SHA-1 only, so the SHA-256 pin is checked with stat, as for the zip.
+- name: Check the staged Bedrock block schema against its pin
+  ansible.builtin.stat:
+    path: "{{ minecraft_runner_staging }}/mojang-blocks.json"
+    checksum_algorithm: sha256
+  register: minecraft_runner_blocks
+
+- name: Refuse a missing or modified block schema
+  ansible.builtin.fail:
+    msg: >-
+      {{ minecraft_runner_staging }}/mojang-blocks.json is
+      {{ 'missing' if not minecraft_runner_blocks.stat.exists else 'not the pinned file' }}.
+      Stage it on the NAS (cpitzi/minecraft-ci); see docs/minecraft-runner.md.
+  when: not minecraft_runner_blocks.stat.exists or
+        minecraft_runner_blocks.stat.checksum != minecraft_runner_blocks_sha256
+
 - name: Copy the Bedrock block schema
   ansible.builtin.copy:
     src: "{{ minecraft_runner_staging }}/mojang-blocks.json"
     dest: "{{ minecraft_runner_home }}/ref/mojang-blocks.json"
     remote_src: true
-    checksum: "{{ minecraft_runner_blocks_sha256 }}"
     owner: "{{ minecraft_runner_user }}"
     group: "{{ minecraft_runner_user }}"
     mode: "0644"
