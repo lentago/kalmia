@@ -1,9 +1,15 @@
 # minecraft-lan — Bedrock Dedicated Server for the LAN (LXC 125, pve4)
 
-A Bedrock Dedicated Server that Bedrock clients on the LAN find under
-**Play → Friends → LAN Games** (#297). It exists so worlds reach tablets
-without importing `.mcworld` files: Android's Files app often won't hand those
-to the game, and the game has no import button on Android.
+A Bedrock Dedicated Server for the household's Bedrock clients (#297), so
+worlds reach tablets without importing `.mcworld` files: Android's Files app
+often won't hand those to the game, and the game has no import button on
+Android.
+
+**How clients join: add it as a server.** In Minecraft, **Play → Servers →
+Add Server**, address `192.168.139.2`, port `19132`. The server also shows
+under **Play → Friends → LAN Games**, but with 1.26.62 clients a join from
+that list never contacts the server and fails with `InitialConnection-145`
+("Boat"); see Transport below (#299).
 
 | | |
 |---|---|
@@ -58,12 +64,23 @@ shouldn't. `level-name` and `server-name` belong to the sync script.
 **Transport: NetherNet**, the 1.26 default and the only one 1.26 clients use.
 With `transport=raknet` the server logs "NetherNet is the only supported
 transport type. Players will not be able to connect to your game without
-NetherNet", and it disappears from LAN Games (#300 tried it). NetherNet
-answers LAN discovery on UDP 7551 and keeps signed-in connections to
-Microsoft's signaling service; on this guest those connections were found
-closed by the far end (CLOSE-WAIT, never re-established) within 15-25 minutes
-of each start, and a join attempt then failed with `InitialConnection-145`.
-Whether that is the cause of the failed join is open in #299.
+NetherNet", and clients neither list it nor connect (#300 tried it). On
+NetherNet a dedicated server takes joins on a dual-stack **TCP** socket on
+`server-port` (an HTTP signaling handshake), then negotiates a UDP connection
+for gameplay on `server-udp-ports` (`bedrock_server_how_to.html`, § Transport).
+A client joining an **added server** does exactly that, and it works: the first
+successful join, from a 1.26.62 ChromeOS client, went this way (#299).
+
+A join from **LAN Games** doesn't: packet captures on the guest's interface
+show the client broadcasting discovery (UDP 7551) and the server answering, but
+no TCP or UDP from the client to the server at all during the join, which
+fails with `InitialConnection-145`. The client-side LAN path apparently expects
+something a dedicated server doesn't do; it's outside our control. LAN
+visibility stays on (the list entry is harmless, discovery is how
+`tools/lan_server.py` checks the server, and a future client may join from it).
+The server's HTTPS connections to Microsoft close after about 90 seconds on any
+host (also seen on a workstation running the same server); that's routine and
+not involved.
 
 `server.properties` and `worlds/` live in `/opt/bedrock` and are linked into
 each version directory, so an upgrade keeps both.
@@ -115,5 +132,6 @@ themselves, so when they move to a new Bedrock release:
 
 5. **Check:** the play's last task prints what the sync did. From the LAN, the
    server answers NetherNet LAN discovery (UDP 7551) with its title, version
-   and world (cpitzi/minecraft-builds has `tools/lan_server.py discover`), and
-   a tablet lists it under LAN Games and can join it.
+   and world (cpitzi/minecraft-builds has `tools/lan_server.py discover`), TCP
+   19132 accepts connections, and a client joins it as an added server
+   (Play → Servers → Add Server, `192.168.139.2`, port `19132`).

@@ -1,5 +1,5 @@
 # LXC 125 — minecraft-lan: a Bedrock Dedicated Server on the LAN (#297). Bedrock
-# tablets join it from Play → Friends → LAN Games, so worlds reach them without
+# tablets join it as an added server (Play → Servers), so worlds reach them without
 # importing .mcworld files (Android's Files app often won't hand those to the
 # game). The world it serves is announced on pub.lan by the cpitzi/minecraft-builds
 # publisher (minecraft/lan.json); a sync timer in the guest downloads it. In-guest

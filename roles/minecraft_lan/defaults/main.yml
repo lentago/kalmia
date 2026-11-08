@@ -39,8 +39,8 @@ minecraft_lan_properties:
   # Players will not be able to connect", and clients no longer list it under
   # LAN Games (#300 tried RakNet; #299 tracks the join failure).
   transport: nethernet
-  # Answer LAN discovery (NetherNet, UDP 7551): this is what makes it appear
-  # under LAN Games.
+  # Answer LAN discovery (NetherNet, UDP 7551): it appears under LAN Games,
+  # though 1.26.62 clients can only join it as an added server (#299).
   enable-lan-visibility: "true"
   server-port: "19132"
   server-portv6: "19133"

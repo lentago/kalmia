@@ -305,7 +305,7 @@ conversions checked on a Bedrock Dedicated Server, releases to pub.lan — see
 [`docs/minecraft-runner.md`](docs/minecraft-runner.md).
 
 The sixth: `minecraft-lan.yml` + the `minecraft_lan` role provision LXC 125, a
-Bedrock Dedicated Server that LAN clients find under LAN Games, serving the
+Bedrock Dedicated Server that LAN clients join as an added server, serving the
 world the pub.lan worlds page announces — see
 [`docs/minecraft-lan.md`](docs/minecraft-lan.md).
 
