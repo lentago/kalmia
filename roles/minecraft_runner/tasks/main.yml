@@ -1,0 +1,219 @@
+---
+# ============================================================================
+# minecraft_runner — installs the conversion toolchain (Java for Chunker,
+# python3 + venv, the Bedrock Dedicated Server from the read-only staging
+# mount) and the GitHub Actions runner agent, registers it to
+# cpitzi/minecraft-builds and runs it as a systemd service under an
+# unprivileged user in the share's gid-1000 group. Registration needs a
+# one-hour token in MINECRAFT_RUNNER_TOKEN on the first run only; see
+# docs/minecraft-runner.md.
+#
+# No job-started guard, unlike pe_publish (#195): that guard exists because
+# bullpen agents push branches to its repo. minecraft-builds is not a bullpen
+# project, and its canary workflow gates PRs, so this runner runs branch code
+# by design. It is registered to that one private repo.
+# ============================================================================
+- name: Install the conversion toolchain and runner dependencies
+  ansible.builtin.apt:
+    name:
+      - python3
+      - python3-venv
+      - git
+      - openssh-client
+      - rsync
+      - curl
+      - ca-certificates
+      - unzip
+      # Chunker needs Java 17 or newer.
+      - openjdk-17-jre-headless
+      # The Bedrock Dedicated Server links against these.
+      - libcurl4
+      - libssl3
+      # The agent's .NET runtime needs these (its installdependencies.sh list
+      # for Debian 12).
+      - libicu72
+      - libkrb5-3
+      - liblttng-ust1
+      - zlib1g
+    state: present
+    update_cache: true
+  become: true
+
+- name: Ensure the share's gid-1000 group exists
+  ansible.builtin.group:
+    name: "{{ minecraft_runner_group }}"
+    gid: "{{ minecraft_runner_group_gid }}"
+    system: true
+  become: true
+
+- name: Create the runner user
+  ansible.builtin.user:
+    name: "{{ minecraft_runner_user }}"
+    groups: "{{ minecraft_runner_group }}"
+    append: true
+    shell: /bin/bash
+    create_home: true
+  become: true
+
+- name: Ensure the runner and job directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ minecraft_runner_user }}"
+    group: "{{ minecraft_runner_user }}"
+    mode: "0755"
+  loop:
+    - "{{ minecraft_runner_dir }}"
+    - "{{ minecraft_runner_home }}"
+    - "{{ minecraft_runner_home }}/ref"
+    - "{{ minecraft_runner_home }}/bds-{{ minecraft_runner_bds_version }}"
+  become: true
+
+# ---------------------------------------------------------------- Bedrock server
+- name: Check the staged Bedrock Dedicated Server against its pin
+  ansible.builtin.stat:
+    path: "{{ minecraft_runner_staging }}/bedrock-server-{{ minecraft_runner_bds_version }}.zip"
+    checksum_algorithm: sha256
+  register: minecraft_runner_bds_zip
+
+- name: Refuse a missing or modified Bedrock server zip
+  ansible.builtin.fail:
+    msg: >-
+      {{ minecraft_runner_staging }}/bedrock-server-{{ minecraft_runner_bds_version }}.zip is
+      {{ 'missing' if not minecraft_runner_bds_zip.stat.exists else 'not the pinned file' }}.
+      Stage it on the NAS (cpitzi/minecraft-ci) and check the mount; see docs/minecraft-runner.md.
+  when: not minecraft_runner_bds_zip.stat.exists or
+        minecraft_runner_bds_zip.stat.checksum != minecraft_runner_bds_sha256
+
+- name: Unpack the Bedrock server {{ minecraft_runner_bds_version }}
+  ansible.builtin.unarchive:
+    src: "{{ minecraft_runner_staging }}/bedrock-server-{{ minecraft_runner_bds_version }}.zip"
+    dest: "{{ minecraft_runner_home }}/bds-{{ minecraft_runner_bds_version }}"
+    remote_src: true
+    owner: "{{ minecraft_runner_user }}"
+    group: "{{ minecraft_runner_user }}"
+    creates: "{{ minecraft_runner_home }}/bds-{{ minecraft_runner_bds_version }}/bedrock_server"
+  become: true
+
+- name: Point the tools' server path at this version
+  ansible.builtin.file:
+    src: "{{ minecraft_runner_home }}/bds-{{ minecraft_runner_bds_version }}"
+    dest: "{{ minecraft_runner_home }}/server"
+    state: link
+    owner: "{{ minecraft_runner_user }}"
+    group: "{{ minecraft_runner_user }}"
+  become: true
+
+- name: Copy the Bedrock block schema
+  ansible.builtin.copy:
+    src: "{{ minecraft_runner_staging }}/mojang-blocks.json"
+    dest: "{{ minecraft_runner_home }}/ref/mojang-blocks.json"
+    remote_src: true
+    checksum: "{{ minecraft_runner_blocks_sha256 }}"
+    owner: "{{ minecraft_runner_user }}"
+    group: "{{ minecraft_runner_user }}"
+    mode: "0644"
+  become: true
+
+# ---------------------------------------------------------------- runner agent
+- name: Download the runner agent {{ minecraft_runner_version }}
+  ansible.builtin.get_url:
+    url: "https://github.com/actions/runner/releases/download/v{{ minecraft_runner_version }}/actions-runner-linux-x64-{{ minecraft_runner_version }}.tar.gz"
+    dest: "/var/cache/actions-runner-linux-x64-{{ minecraft_runner_version }}.tar.gz"
+    checksum: "sha256:{{ minecraft_runner_sha256 }}"
+    mode: "0644"
+  become: true
+
+- name: Unpack the runner agent
+  ansible.builtin.unarchive:
+    src: "/var/cache/actions-runner-linux-x64-{{ minecraft_runner_version }}.tar.gz"
+    dest: "{{ minecraft_runner_dir }}"
+    remote_src: true
+    owner: "{{ minecraft_runner_user }}"
+    group: "{{ minecraft_runner_user }}"
+    creates: "{{ minecraft_runner_dir }}/config.sh"
+  become: true
+
+- name: Check whether the runner is registered
+  ansible.builtin.stat:
+    path: "{{ minecraft_runner_dir }}/.runner"
+  register: minecraft_runner_registered
+
+- name: Require a registration token for the first registration
+  ansible.builtin.fail:
+    msg: >-
+      The runner is not registered yet. Mint a token and pass it in the
+      environment: MINECRAFT_RUNNER_TOKEN=$(gh api -X POST
+      repos/{{ minecraft_runner_repo }}/actions/runners/registration-token -q .token)
+      — see docs/minecraft-runner.md.
+  when:
+    - not minecraft_runner_registered.stat.exists
+    - lookup('ansible.builtin.env', 'MINECRAFT_RUNNER_TOKEN') | length == 0
+
+# config.sh refuses to run as root; runuser avoids needing sudo in the guest.
+- name: Register the runner with {{ minecraft_runner_repo }}
+  ansible.builtin.command:
+    argv:
+      - runuser
+      - -u
+      - "{{ minecraft_runner_user }}"
+      - --
+      - ./config.sh
+      - --unattended
+      - --url
+      - "https://github.com/{{ minecraft_runner_repo }}"
+      - --token
+      - "{{ lookup('ansible.builtin.env', 'MINECRAFT_RUNNER_TOKEN') }}"
+      - --name
+      - "{{ minecraft_runner_name }}"
+      - --labels
+      - "{{ minecraft_runner_labels }}"
+      - --work
+      - _work
+      - --replace
+    chdir: "{{ minecraft_runner_dir }}"
+    creates: "{{ minecraft_runner_dir }}/.runner"
+  no_log: true
+  become: true
+
+# svc.sh install enables the unit but does not start it.
+- name: Install the runner systemd service
+  ansible.builtin.command:
+    cmd: ./svc.sh install {{ minecraft_runner_user }}
+    chdir: "{{ minecraft_runner_dir }}"
+    creates: "{{ minecraft_runner_dir }}/.service"
+  become: true
+
+- name: Read the runner service name
+  ansible.builtin.slurp:
+    src: "{{ minecraft_runner_dir }}/.service"
+  register: minecraft_runner_service
+
+# The jobs find everything they keep between runs through these. The agent
+# reads .env (written by config.sh) when it starts, so a change restarts it.
+- name: Set the job environment in the runner's .env
+  ansible.builtin.lineinfile:
+    path: "{{ minecraft_runner_dir }}/.env"
+    regexp: "^{{ item.key }}="
+    line: "{{ item.key }}={{ item.value }}"
+  loop:
+    - { key: MCB_BEDROCK_HOME, value: "{{ minecraft_runner_home }}" }
+    - { key: VENV, value: "{{ minecraft_runner_home }}/venv" }
+    - { key: WORLD_GIT_DIR, value: "{{ minecraft_runner_home }}/worlds.git" }
+    - { key: MCB_WEB_DIR, value: "{{ minecraft_runner_web_dir }}" }
+  loop_control:
+    label: "{{ item.key }}"
+  become: true
+  notify: Restart the runner service
+
+# Restart now, not at the end of the play, so a later failure can't leave the
+# running agent with a stale environment.
+- name: Restart the runner now if its environment changed
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start the runner service
+  ansible.builtin.systemd_service:
+    name: "{{ minecraft_runner_service.content | b64decode | trim }}"
+    enabled: true
+    state: started
+  become: true

@@ -44,7 +44,7 @@ graph TB
     end
 
     FORGE["forge/ — substrate.sh\nbuilds versioned LXC templates"]
-    ANSIBLE["Ansible — separate plane\nsite.yml / pub.yml / brasenia.yml / pe-publish.yml\nidempotent roles provision inside each guest"]
+    ANSIBLE["Ansible — separate plane\nsite.yml / pub.yml / brasenia.yml / pe-publish.yml / minecraft-runner.yml\nidempotent roles provision inside each guest"]
 
     PR --> VALIDATE
     VALIDATE -->|"same-repo PRs only — fork PRs\nnever reach the LAN runner"| PLAN
@@ -298,6 +298,11 @@ The fourth: `pe-publish.yml` + the `pe_publish` role provision LXC 123, the
 self-hosted Actions runner that publishes `cpitzi/professional-endeavors` to
 pub.lan on every merge, the first guest to get its NAS bind mounts from the
 pipeline — see [`docs/pe-publish.md`](docs/pe-publish.md).
+
+The fifth: `minecraft-runner.yml` + the `minecraft_runner` role provision LXC
+124, the self-hosted Actions runner for `cpitzi/minecraft-builds`: Chunker
+conversions checked on a Bedrock Dedicated Server, releases to pub.lan — see
+[`docs/minecraft-runner.md`](docs/minecraft-runner.md).
 
 The Terraform layer that declares these guests carries its own naming-debt
 footnote: kalmia's state backend migrated to `solidago-tfstate-*` keys

@@ -1,0 +1,42 @@
+---
+# ============================================================================
+# minecraft_runner — the self-hosted Actions runner for cpitzi/minecraft-builds
+# on LXC 124 (pve4, #293). Its canary workflow converts a test world with
+# Chunker and checks it on a Bedrock Dedicated Server; its release workflow
+# converts a tagged world and publishes it to /srv/www/minecraft (pub.lan).
+# Both NAS paths are bind mounts attached by the kalmia mount hook. See
+# docs/minecraft-runner.md.
+# ============================================================================
+minecraft_runner_repo: cpitzi/minecraft-builds
+minecraft_runner_name: minecraft-runner
+# Comma-separated; GitHub adds self-hosted, Linux and X64 on its own.
+minecraft_runner_labels: minecraft
+minecraft_runner_user: runner
+minecraft_runner_dir: /opt/actions-runner
+
+# Bootstrap version only, as for pe_publish: the agent updates itself once
+# registered. Checksum from the release notes.
+minecraft_runner_version: "2.338.2"
+minecraft_runner_sha256: baebf204307bac6193480852732f0aba2ae97b6c5597c244f4d5558390147c40
+
+# Everything the jobs keep between runs, outside the workspace that each
+# checkout wipes: the Bedrock server, Chunker jar, conversions, the Python
+# venv and the bare clone of the world repo.
+minecraft_runner_home: /opt/minecraft-ci
+
+# Staged on the NAS (read-only mount): the Bedrock Dedicated Server can't be
+# downloaded by script, so it is downloaded by hand and pinned here.
+minecraft_runner_staging: /srv/minecraft-ci
+minecraft_runner_bds_version: "1.26.63.1"
+minecraft_runner_bds_sha256: b40b04c8f5a7c42a19ee685c22fc593e66116b9c22741b8c75489306b252ff62
+# Bedrock block schema (Mojang/bedrock-samples), for Java -> Bedrock names.
+minecraft_runner_blocks_sha256: 1e693c37f0d024ff9d9298e80b108d3809d8144ec4116a36212caf8b63eae2e4
+
+# Where the release workflow publishes (the web/minecraft mount).
+minecraft_runner_web_dir: /srv/www/minecraft
+
+# The share is CIFS forced to uid/gid 101000 (container 1000), mode 0770, so
+# membership of a gid-1000 group is what grants access. Same group name as
+# pub and pe-publish.
+minecraft_runner_group: webdrop
+minecraft_runner_group_gid: 1000
