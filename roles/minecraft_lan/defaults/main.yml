@@ -34,7 +34,15 @@ minecraft_lan_properties:
   # The stock file turns the allowlist on, which would refuse every player not
   # listed in allowlist.json. Who may join is decided by who can reach it.
   allow-list: "false"
-  # Answer LAN discovery: this is what makes it appear under LAN Games.
+  # RakNet, the classic transport: clients reach UDP 19132 directly. The 1.26
+  # default, NetherNet, sets every connection up through Microsoft's signaling
+  # service, even on the LAN. On this guest those signaling connections went
+  # dead (CLOSE-WAIT, never re-established) within half an hour of start, and
+  # joining then failed with InitialConnection-145 while the server still
+  # showed in LAN Games (#299).
+  transport: raknet
+  # Answer LAN discovery (RakNet pings on UDP 19132): this is what makes it
+  # appear under LAN Games.
   enable-lan-visibility: "true"
   server-port: "19132"
   server-portv6: "19133"
