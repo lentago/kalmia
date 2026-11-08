@@ -56,6 +56,9 @@ minecraft_lan_properties:
   # in a flat world is plain grass: a castle 200 blocks out stayed invisible
   # until the player was close (#305).
   client-side-chunk-generation-enabled: "false"
+  # How far (in chunks) the server sends real chunks; the stock value, owned
+  # here so the range above can't change without a commit.
+  view-distance: "32"
 
 # The share is CIFS forced to uid/gid 101000 (container 1000), mode 0770;
 # same group as the other guests that read it.
