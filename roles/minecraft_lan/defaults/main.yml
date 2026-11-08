@@ -1,7 +1,7 @@
 ---
 # ============================================================================
 # minecraft_lan — a Bedrock Dedicated Server on LXC 125 (pve4, #297) that
-# Bedrock clients on the LAN find under Play → Friends → LAN Games. The world
+# Bedrock clients on the LAN join as an added server (Play → Servers). The world
 # it serves is announced by the pub.lan worlds page; a sync timer downloads it.
 # See docs/minecraft-lan.md.
 # ============================================================================
@@ -39,8 +39,8 @@ minecraft_lan_properties:
   # Players will not be able to connect", and clients no longer list it under
   # LAN Games (#300 tried RakNet; #299 tracks the join failure).
   transport: nethernet
-  # Answer LAN discovery (NetherNet, UDP 7551): this is what makes it appear
-  # under LAN Games.
+  # Answer LAN discovery (NetherNet, UDP 7551): it appears under LAN Games,
+  # though 1.26.62 clients can only join it as an added server (#299).
   enable-lan-visibility: "true"
   server-port: "19132"
   server-portv6: "19133"

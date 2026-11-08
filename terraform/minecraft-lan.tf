@@ -1,5 +1,5 @@
 # LXC 125 — minecraft-lan: a Bedrock Dedicated Server on the LAN (#297). Bedrock
-# tablets join it from Play → Friends → LAN Games, so worlds reach them without
+# tablets join it as an added server (Play → Servers), so worlds reach them without
 # importing .mcworld files (Android's Files app often won't hand those to the
 # game). The world it serves is announced on pub.lan by the cpitzi/minecraft-builds
 # publisher (minecraft/lan.json); a sync timer in the guest downloads it. In-guest
@@ -18,8 +18,10 @@ locals {
 }
 
 resource "proxmox_virtual_environment_container" "minecraft_lan" {
-  node_name     = "pve4"
-  vm_id         = 125
+  node_name = "pve4"
+  vm_id     = 125
+  # Still says LAN Games; clients join via Play → Servers. Updating it is an
+  # in-place PVE change, deferred to #304 (apply while nobody is playing).
   description   = "minecraft-lan — Bedrock Dedicated Server for the LAN (Play → Friends → LAN Games). Serves the world pub.lan/minecraft/lan.json announces. NAS mount attached by the kalmia mount hook. Provisioned by minecraft-lan.yml (#297).\n"
   unprivileged  = true
   started       = true
