@@ -18,8 +18,8 @@ locals {
 }
 
 resource "proxmox_virtual_environment_container" "minecraft_lan" {
-  node_name     = "pve4"
-  vm_id         = 125
+  node_name = "pve4"
+  vm_id     = 125
   # Still says LAN Games; clients join via Play → Servers. Updating it is an
   # in-place PVE change, deferred to #304 (apply while nobody is playing).
   description   = "minecraft-lan — Bedrock Dedicated Server for the LAN (Play → Friends → LAN Games). Serves the world pub.lan/minecraft/lan.json announces. NAS mount attached by the kalmia mount hook. Provisioned by minecraft-lan.yml (#297).\n"
