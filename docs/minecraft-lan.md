@@ -12,7 +12,7 @@ to the game, and the game has no import button on Android.
 | Provisioned by | `minecraft-lan.yml` + the `minecraft_lan` role |
 | Server | `/opt/bedrock/server` → `bds-<version>`; user `bedrock`; `bedrock-server.service` |
 | World sync | `bedrock-lan-sync.timer` (every minute) runs `/usr/local/bin/bedrock-lan-sync` |
-| Ports | UDP 19132 / 19133, LAN only (nothing is forwarded) |
+| Ports | UDP 7551 (NetherNet LAN discovery) and 19132 (game), LAN only (nothing is forwarded) |
 
 ## Which world it serves
 
@@ -24,11 +24,20 @@ next to the worlds it publishes:
 ```
 
 The sync timer reads it. A world it hasn't seen (by slug and hash) is
-downloaded, checked against the hash, unpacked into
+downloaded, checked against the hash (an integrity check: it catches a
+truncated or corrupt download, not tampering, since the hash arrives over the
+same plain HTTP from pub.lan), unpacked into
 `/opt/bedrock/worlds/<slug>-<hash[:8]>`, and the server is restarted on it. The
 title becomes the name in the LAN list. Earlier world directories are kept, so
 announcing an older world again resumes it where it was left, and a rebuilt
 world (new hash) starts fresh beside the old one.
+
+Trust: the guest serves whatever pub.lan announces. pub.lan is LAN-only, and
+anyone who could rewrite it or impersonate it on the LAN could make the server
+run a different world. The unpacker refuses archive members that are links or
+would land outside the world directory, and the server runs as the unprivileged
+`bedrock` user, so the most such a change can do is put a different world on
+the server.
 
 The timer is the only unit enabled at boot. It starts the server once a world
 is announced, so the server never creates a stray default world. To take the
@@ -38,10 +47,14 @@ server down, stop the timer too: `systemctl stop bedrock-lan-sync.timer bedrock-
 
 The role owns these `server.properties` lines (`minecraft_lan_properties`):
 creative, peaceful, cheats allowed, 8 players, online mode (Xbox Live sign-in,
-as on Realms, so the guest needs the WAN), LAN visibility on, and
-`default-player-permission-level=operator`. Anyone who can reach it is on the
-LAN, so they can use commands without per-player setup. `level-name` and
-`server-name` belong to the sync script.
+as on Realms, so the guest needs the WAN), the allowlist off (the stock file
+turns it on, which would refuse every unlisted player), LAN visibility on, and
+`default-player-permission-level=operator`. The last is a deliberate trust
+decision: every player who can reach the server (a device on the main LAN,
+signed in to Xbox Live; nothing is forwarded) can use commands without
+per-player setup. Set `member` if the LAN ever carries devices whose players
+shouldn't. The transport is the 1.26 default, NetherNet, whose LAN discovery
+answers on UDP 7551. `level-name` and `server-name` belong to the sync script.
 
 `server.properties` and `worlds/` live in `/opt/bedrock` and are linked into
 each version directory, so an upgrade keeps both.
@@ -92,5 +105,6 @@ themselves, so when they move to a new Bedrock release:
    ```
 
 5. **Check:** the play's last task prints what the sync did. From the LAN, the
-   server answers a RakNet unconnected ping on UDP 19132 with its title, and a
-   tablet lists it under LAN Games.
+   server answers NetherNet LAN discovery (UDP 7551) with its title, version
+   and world (cpitzi/minecraft-builds has `tools/lan_server.py discover`), and
+   a tablet lists it under LAN Games.
