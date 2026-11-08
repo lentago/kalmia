@@ -24,6 +24,8 @@
       - curl
       - ca-certificates
       - unzip
+      # Every workflow step is a target in the repo's Makefile.
+      - make
       # Chunker needs Java 17 or newer.
       - openjdk-17-jre-headless
       # The Bedrock Dedicated Server links against these.

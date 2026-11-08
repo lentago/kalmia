@@ -91,6 +91,16 @@ mount hook from its allowlist; see
      cd /opt/kalmia && ansible-playbook -i inventory/hosts.yml minecraft-runner.yml'"
    ```
 
+   Re-running on a registered runner (a role change, a new Bedrock server pin)
+   needs no token: the role only asks for one while `/opt/actions-runner/.runner`
+   is missing.
+
+   ```bash
+   ssh root@pve4 "pct exec 124 -- env LC_ALL=C.UTF-8 bash -lc '
+     git -C /opt/kalmia pull --ff-only &&
+     cd /opt/kalmia && ansible-playbook -i inventory/hosts.yml minecraft-runner.yml'"
+   ```
+
 4. **Check:** the runner shows `online`
    (`gh api repos/cpitzi/minecraft-builds/actions/runners`), and a canary run
    passes.
