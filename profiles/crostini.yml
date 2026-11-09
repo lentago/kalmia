@@ -22,5 +22,7 @@ clone_repos: true
 
 enable_tlp: false
 
+gnome_extensions: []           # no desktop shell in the container
+
 base_extra_packages: []
 base_services: []
