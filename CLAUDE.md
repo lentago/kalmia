@@ -131,7 +131,11 @@ instead of ~1,000-line bash scripts. It supersedes the bash scripts in
   any profile. Still unproven: clean-build behavior (every "already present"
   branch is unexercised on this profile), whether a pristine box reaches
   `failed=0` in one pass, and the `repos` role (gated behind `clone_repos`,
-  stayed `false` throughout).
+  stayed `false` throughout). The `gnome_extensions` role (#307), added
+  later and run only on this profile, was verified on the same host on
+  2026-11-09 with `--tags gnome`: `changed=0` against the live state,
+  `--check` clean, and a fresh unpack into an empty directory converging to
+  `changed=0` on re-run.
 - **No pending role follow-ups.** All core and platform roles are in; remote
   desktop (XRDP) was dropped as unused. Static CI can't catch runtime-only
   failures (removed plugins, host deps, idempotency) — real testbed runs do.

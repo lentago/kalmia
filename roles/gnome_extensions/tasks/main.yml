@@ -5,8 +5,9 @@
 # Gated in site.yml on a non-empty gnome_extensions list (only ubuntu_laptop
 # sets one). Runs entirely as the user.
 #
-# Presence only: GNOME Shell updates extensions.gnome.org extensions on its
-# own, so the role never reinstalls one that is already unpacked.
+# Presence only: the pinned release (version_tag + sha256) governs the first
+# install; after that GNOME Shell updates extensions.gnome.org extensions on
+# its own, so the role never reinstalls one that is already unpacked.
 #
 # Every write goes through gsettings, which needs the desktop session's D-Bus.
 # Without one, gsettings silently falls back to an in-memory backend and
@@ -22,11 +23,37 @@
       an in-memory backend and are lost.
     quiet: true
 
-- name: Look up the GNOME Shell version
-  ansible.builtin.command: gnome-shell --version
-  register: gnome_shell_version
-  changed_when: false
-  check_mode: false
+- name: Check which extensions are already unpacked
+  ansible.builtin.stat:
+    path: "{{ gnome_extensions_dir }}/{{ item.uuid }}/metadata.json"
+  loop: "{{ gnome_extensions }}"
+  loop_control:
+    label: "{{ item.uuid }}"
+  register: gnome_extensions_present
+
+- name: Ensure the extension download cache exists
+  ansible.builtin.file:
+    path: "{{ gnome_extensions_cache }}"
+    state: directory
+    mode: "0755"
+  when: gnome_extensions_present.results | rejectattr('stat.exists') | list | length > 0
+
+# In --check mode the cache directory above is not created and nothing is
+# downloaded, so this task and the unpack below have nothing to write to or
+# read from. Their failures are tolerated there (and only there).
+- name: Download the pinned extension releases
+  ansible.builtin.get_url:
+    url: >-
+      {{ gnome_extensions_ego_url }}/{{ item.item.uuid }}.shell-extension.zip?version_tag={{
+      item.item.version_tag }}
+    dest: "{{ gnome_extensions_cache }}/{{ item.item.uuid }}-{{ item.item.version_tag }}.zip"
+    checksum: "sha256:{{ item.item.sha256 }}"
+    mode: "0644"
+  loop: "{{ gnome_extensions_present.results }}"
+  loop_control:
+    label: "{{ item.item.uuid }}"
+  when: not item.stat.exists
+  ignore_errors: "{{ ansible_check_mode }}"
 
 - name: Ensure each extension's directory exists
   ansible.builtin.file:
@@ -37,18 +64,18 @@
   loop_control:
     label: "{{ item.uuid }}"
 
-- name: Install extensions from extensions.gnome.org
+- name: Unpack the extensions
   ansible.builtin.unarchive:
-    src: >-
-      {{ gnome_extensions_ego_url }}/{{ item.uuid }}.shell-extension.zip?shell_version={{
-      gnome_shell_version.stdout | regex_search('[0-9]+') }}
-    dest: "{{ gnome_extensions_dir }}/{{ item.uuid }}"
+    src: "{{ gnome_extensions_cache }}/{{ item.item.uuid }}-{{ item.item.version_tag }}.zip"
+    dest: "{{ gnome_extensions_dir }}/{{ item.item.uuid }}"
     remote_src: true
-    creates: "{{ gnome_extensions_dir }}/{{ item.uuid }}/metadata.json"
-  loop: "{{ gnome_extensions }}"
+    creates: "{{ gnome_extensions_dir }}/{{ item.item.uuid }}/metadata.json"
+  loop: "{{ gnome_extensions_present.results }}"
   loop_control:
-    label: "{{ item.uuid }}"
+    label: "{{ item.item.uuid }}"
+  when: not item.stat.exists
   register: gnome_extensions_installed
+  ignore_errors: "{{ ansible_check_mode }}"
 
 # GNOME's crash guard (org.gnome.Shell-disable-extensions.service) sets this
 # to true when the shell dies within ~60s of login, a reboot that soon
@@ -165,6 +192,6 @@
   ansible.builtin.debug:
     msg: >-
       Installed {{ gnome_extensions_installed.results | selectattr('changed')
-      | map(attribute='item.uuid') | join(', ') }}. Log out and back in to
-      load them.
+      | map(attribute='item.item.uuid') | join(', ') }}. Log out and back in
+      to load them.
   when: gnome_extensions_installed is changed
