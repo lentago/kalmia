@@ -79,6 +79,9 @@
       tags: [cli]
     - role: shell
       tags: [shell]
+    - role: gnome_extensions
+      tags: [gnome]
+      when: gnome_extensions | length > 0
     - role: repos
       tags: [repos]
       when: clone_repos | bool

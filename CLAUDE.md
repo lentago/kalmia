@@ -62,7 +62,7 @@ instead of ~1,000-line bash scripts. It supersedes the bash scripts in
   `become: true`, user-space tasks (nvm, `.bashrc`, Starship, VS Code settings)
   run as the user. Use `target_user` / `target_home`, never root's `$HOME`.
 - **Roles**: common, languages, cloud_tools, containers, power, editors,
-  cli_tools, shell, repos.
+  cli_tools, shell, gnome_extensions, repos.
 
 ## Editing guidelines
 

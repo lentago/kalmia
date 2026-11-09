@@ -1,0 +1,25 @@
+---
+# GNOME Shell extensions from extensions.gnome.org, per profile. Only the
+# ubuntu_laptop profile runs GNOME (xubuntu is XFCE, fedora is KDE, the
+# Chromebooks have no desktop shell), so every other profile leaves this empty
+# and site.yml skips the role.
+#
+# Each entry:
+#   uuid:     the extension's UUID on extensions.gnome.org
+#   schema:   its GSettings schema id (schemas/*.gschema.xml inside the
+#             extension). Required only when `settings` is given; most
+#             extensions don't declare it in metadata.json, so it is not
+#             looked up.
+#   settings: key -> value, each value written exactly as `gsettings get`
+#             prints it (GVariant text: true, 42, 'BOTTOM', ['a', 'b']).
+#             Quote it in YAML so `true` stays the string "true". The role
+#             compares that text to decide whether to write, so a
+#             non-canonical spelling re-applies on every run.
+gnome_extensions: []
+
+# Per-user extension directory.
+gnome_extensions_dir: "{{ target_home }}/.local/share/gnome-shell/extensions"
+
+# extensions.gnome.org download endpoint. The running shell's major version is
+# passed along, so EGO serves the newest release that supports it.
+gnome_extensions_ego_url: https://extensions.gnome.org/download-extension
