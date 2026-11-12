@@ -90,6 +90,24 @@
     label: "{{ item.key }}"
   become: false
 
+- name: Ensure the user git config directory exists
+  ansible.builtin.file:
+    path: "{{ target_home }}/.config/git"
+    state: directory
+    mode: "0755"
+  become: false
+
+- name: Write the global git ignore file
+  ansible.builtin.copy:
+    dest: "{{ target_home }}/.config/git/ignore"
+    content: |
+      # Managed by kalmia (roles/common, git_global_ignore). Edits here are overwritten.
+      {% for pattern in git_global_ignore %}
+      {{ pattern }}
+      {% endfor %}
+    mode: "0644"
+  become: false
+
 - name: Set git identity from explicit vars when provided
   community.general.git_config:
     name: "{{ item.name }}"

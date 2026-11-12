@@ -75,6 +75,16 @@ git_aliases:
   amend: commit --amend --no-edit
   wip: "!git add -A && git commit -m 'WIP'"
 
+# User-wide ignore file (~/.config/git/ignore), written whole by the common role.
+# Local files no repo should track, so a clone reads clean at session end
+# (#316). A leading / anchors to each repo's root; tracked files are unaffected.
+git_global_ignore:
+  - /AGENTS.md                       # Codex / Gemini CLI instructions, local only
+  - /.agents/
+  - /.codex/
+  - "**/.claude/settings.local.json*"  # Claude Code local settings and their backups
+  - "**/.claude/worktrees/"            # subagent worktrees
+
 # --- VS Code extensions ----------------------------------------------------
 vscode_extensions:
   - hashicorp.terraform
