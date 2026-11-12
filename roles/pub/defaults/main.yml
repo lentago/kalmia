@@ -164,8 +164,9 @@ pub_signals_port: 8620
 # rubric setting with its value in `label`, `undo` returns it to the default,
 # and the brasenia compositor applies the latest per setting
 # (lentago/brasenia ADR-0011). `pursue` is pe-wiki's triage page marking an
-# item for follow-up (#310); the action list is shared by every namespace, and
-# the compositor ignores actions other than `set` and `undo`.
+# item for follow-up (#310), and `dismiss-company` its dismissal of every item
+# from one employer; the action list is shared by every namespace, and the
+# compositor ignores actions other than `set` and `undo`.
 pub_signals_namespaces:
   - pe-wiki
   - rubric
@@ -174,3 +175,4 @@ pub_signals_actions:
   - undo
   - set
   - pursue
+  - dismiss-company
