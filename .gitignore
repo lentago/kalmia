@@ -17,3 +17,6 @@ collections/
 *.tfstate.*
 *.tfvars
 crash.log
+
+# Local agent instructions file, not part of the repo
+/AGENTS.md
