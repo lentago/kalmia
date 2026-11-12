@@ -229,7 +229,7 @@ table below — `docker`, `code`, the CLI utilities — should all be on your
 
 | Role | Installs / configures |
 |---|---|
-| `common` | base packages, base services, global git config |
+| `common` | base packages, base services, global git config and ignore file |
 | `languages` | Python, Node.js (nvm), Go |
 | `cloud_tools` | AWS CLI v2, Granted, Terraform (tfswitch), kubectl, eksctl, Helm |
 | `containers` | Docker Engine + Compose (daemon optional) |
