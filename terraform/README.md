@@ -164,6 +164,8 @@ runs use the `cpitzi-iac` IAM credentials already on the workstation.
 | 100 | qemu | haos-17.1 | pve3 | 3 — **last** |
 | 115 | lxc | gha-runner | pve4 | n/a — created BY this layer (phase 2) |
 | 123 | lxc | pe-publish | pve4 | n/a — created BY this layer (#190) |
+| 124 | lxc | minecraft-runner | pve4 | n/a — created BY this layer (#293) |
+| 125 | lxc | minecraft-lan | pve4 | n/a — created BY this layer (#297) |
 
 VM 100 (Home Assistant OS) is mission-critical and USB-pinned to pve3
 (Z-Wave/Zigbee/Matter radios; passthrough does not survive migration). It is
@@ -243,6 +245,8 @@ pipeline-recreatable guests unguarded so ordinary replacements still work.
 | brasenia CT 118 | `container.brasenia` | no | Pipeline-recreatable: token-created (nesting alone is allowed on create), no keyctl/bind mount; `terraform_data.brasenia_rebuild` forces a rebuild ([`containers.tf`](containers.tf); create-path evidence on [#63](https://github.com/lentago/kalmia/issues/63#issuecomment-6509707205)) |
 | gha-runner CT 115 | `container.gha_runner` | no | Pipeline-recreatable: token-created, no keyctl/bind mount. Note it runs this pipeline, so a self-replace mid-apply would need manual recovery |
 | pe-publish CT 123 | `container.pe_publish` | no | Pipeline-recreatable: token-created, bind mounts re-attached by the mount hook (§ below) |
+| minecraft-runner CT 124 | `container.minecraft_runner` | no | Pipeline-recreatable, as pe-publish: two mount-hook mounts, one read-only |
+| minecraft-lan CT 125 | `container.minecraft_lan` | no | Pipeline-recreatable, as minecraft-runner: one read-only mount-hook mount. Its worlds live in the guest, so a rebuild re-downloads only the world announced now |
 
 Intentionally replacing a guarded guest means removing the guard in a
 dedicated PR first (and, for import-only guests, pre-creating as root@pam).

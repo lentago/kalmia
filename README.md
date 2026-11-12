@@ -44,7 +44,7 @@ graph TB
     end
 
     FORGE["forge/ — substrate.sh\nbuilds versioned LXC templates"]
-    ANSIBLE["Ansible — separate plane\nsite.yml / pub.yml / brasenia.yml / pe-publish.yml\nidempotent roles provision inside each guest"]
+    ANSIBLE["Ansible — separate plane\nsite.yml / pub.yml / brasenia.yml / pe-publish.yml / minecraft-runner.yml / minecraft-lan.yml\nidempotent roles provision inside each guest"]
 
     PR --> VALIDATE
     VALIDATE -->|"same-repo PRs only — fork PRs\nnever reach the LAN runner"| PLAN
@@ -236,6 +236,7 @@ table below — `docker`, `code`, the CLI utilities — should all be on your
 | `power` | TLP power management, ThinkPad charge thresholds, fwupd (opt-in) |
 | `editors` | VS Code (+ extensions), Claude Code |
 | `cli_tools` | jq, yq, bat, fd, ripgrep, fzf, tmux, direnv, Starship, … |
+| `gnome_extensions` | GNOME Shell extensions from extensions.gnome.org, enabled and configured per profile (Dash to Panel on `ubuntu_laptop`; skipped elsewhere) |
 | `shell` | marker-managed `.bashrc` block + Starship config + the `pull-all` / `clean-all` / `gh-issue` / `standing` / `director` helpers + the Lentago Director's `/em` skill |
 | `repos` | GitHub CLI + clone your personal and org repos into `~/repos/<owner>/<name>` (on by default) |
 
@@ -298,6 +299,16 @@ The fourth: `pe-publish.yml` + the `pe_publish` role provision LXC 123, the
 self-hosted Actions runner that publishes `cpitzi/professional-endeavors` to
 pub.lan on every merge, the first guest to get its NAS bind mounts from the
 pipeline — see [`docs/pe-publish.md`](docs/pe-publish.md).
+
+The fifth: `minecraft-runner.yml` + the `minecraft_runner` role provision LXC
+124, the self-hosted Actions runner for `cpitzi/minecraft-builds`: Chunker
+conversions checked on a Bedrock Dedicated Server, releases to pub.lan — see
+[`docs/minecraft-runner.md`](docs/minecraft-runner.md).
+
+The sixth: `minecraft-lan.yml` + the `minecraft_lan` role provision LXC 125, a
+Bedrock Dedicated Server that LAN clients join as an added server, serving the
+world the pub.lan worlds page announces — see
+[`docs/minecraft-lan.md`](docs/minecraft-lan.md).
 
 The Terraform layer that declares these guests carries its own naming-debt
 footnote: kalmia's state backend migrated to `solidago-tfstate-*` keys

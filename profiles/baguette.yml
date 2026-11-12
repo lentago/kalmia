@@ -22,6 +22,8 @@ clone_repos: true
 
 enable_tlp: false              # ChromeOS owns power management on the host
 
+gnome_extensions: []           # no desktop shell in the VM; ChromeOS draws it
+
 # No sshd (ChromeOS brokers terminal access) and no qemu-guest-agent (crosvm,
 # not QEMU) — so nothing to add or enable beyond the base set.
 base_extra_packages: []

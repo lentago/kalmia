@@ -10,6 +10,8 @@ clone_repos: true
 
 enable_tlp: false
 
+gnome_extensions: []           # KDE desktop, no GNOME Shell
+
 base_extra_packages:
   - openssh-server
   - qemu-guest-agent

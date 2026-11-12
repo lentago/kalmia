@@ -22,7 +22,8 @@ pve_host_mount_hook_from: 192.168.139.15
 # Public half of repo secret PVE_MOUNT_HOOK_SSH_KEY. Rotate both together.
 pve_host_mount_hook_pubkey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHwka+aJSg5D7Jsl+/H0WOlopb0iwMV9yWNSiAjIyenp kalmia-ci-mount-hook"
 # Every bind mount the hook may apply. Each must equal, character for
-# character, a mount the terraform layer requests (terraform/pe-publish.tf);
+# character, a mount the terraform layer requests (terraform/pe-publish.tf,
+# terraform/minecraft-runner.tf, terraform/minecraft-lan.tf);
 # anything else is refused. `spec` is PVE's canonical mpN string, as
 # `pct config` prints it.
 pve_host_mount_hook_allow:
@@ -36,3 +37,14 @@ pve_host_mount_hook_allow:
   - vmid: 123
     key: mp2
     spec: /mnt/neptune-lentago/web/viewport/panes/search-board,mp=/srv/www/viewport/panes/search-board
+  # LXC 124 minecraft-runner: cpitzi/minecraft-builds CI runner (#293).
+  - vmid: 124
+    key: mp0
+    spec: /mnt/neptune-lentago/web/minecraft,mp=/srv/www/minecraft
+  - vmid: 124
+    key: mp1
+    spec: /mnt/neptune-lentago/cpitzi/minecraft-ci,mp=/srv/minecraft-ci,ro=1
+  # LXC 125 minecraft-lan: Bedrock Dedicated Server for the LAN (#297).
+  - vmid: 125
+    key: mp0
+    spec: /mnt/neptune-lentago/cpitzi/minecraft-ci,mp=/srv/minecraft-ci,ro=1

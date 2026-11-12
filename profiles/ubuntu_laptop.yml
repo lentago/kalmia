@@ -9,6 +9,20 @@ clone_repos: true
 
 enable_tlp: true               # power role: TLP + ThinkPad charge thresholds + fwupd
 
+# gnome_extensions role: installed from extensions.gnome.org and enabled for the
+# user. Values are GVariant text, as `gsettings get` prints them (quoted so
+# YAML keeps them strings). Dash to Panel replaces the top bar and Ubuntu Dock
+# with one panel per monitor, and turns Ubuntu Dock off itself while it runs.
+gnome_extensions:
+  - uuid: dash-to-panel@jderose9.github.com
+    version_tag: 75054           # v74, supports GNOME Shell 46-51
+    # sha256 from: computed (EGO publishes none)
+    sha256: 8989c892f9795948e4490f47dc092218e42d771a6fec3dd44431cb48700ac2e5
+    schema: org.gnome.shell.extensions.dash-to-panel
+    settings:
+      multi-monitors: "true"     # a panel on every monitor, not just the primary
+      panel-position: "'BOTTOM'"
+
 base_extra_packages:
   - openssh-server
 base_services:

@@ -1,0 +1,197 @@
+---
+# ============================================================================
+# gnome_extensions — install GNOME Shell extensions from extensions.gnome.org
+# into the user's extension directory, enable them, and pin their settings.
+# Gated in site.yml on a non-empty gnome_extensions list (only ubuntu_laptop
+# sets one). Runs entirely as the user.
+#
+# Presence only: the pinned release (version_tag + sha256) governs the first
+# install; after that GNOME Shell updates extensions.gnome.org extensions on
+# its own, so the role never reinstalls one that is already unpacked.
+#
+# Every write goes through gsettings, which needs the desktop session's D-Bus.
+# Without one, gsettings silently falls back to an in-memory backend and
+# nothing persists, so the role refuses to run outside a session instead of
+# reporting changes it did not make.
+# ============================================================================
+- name: Require the desktop session bus for gsettings
+  ansible.builtin.assert:
+    that: (ansible_facts.env.DBUS_SESSION_BUS_ADDRESS | default('')) | length > 0
+    fail_msg: >-
+      DBUS_SESSION_BUS_ADDRESS is unset. Run the play from a terminal inside
+      the GNOME session; outside one (e.g. plain SSH), gsettings writes go to
+      an in-memory backend and are lost.
+    quiet: true
+
+- name: Check which extensions are already unpacked
+  ansible.builtin.stat:
+    path: "{{ gnome_extensions_dir }}/{{ item.uuid }}/metadata.json"
+  loop: "{{ gnome_extensions }}"
+  loop_control:
+    label: "{{ item.uuid }}"
+  register: gnome_extensions_present
+
+- name: Ensure the extension download cache exists
+  ansible.builtin.file:
+    path: "{{ gnome_extensions_cache }}"
+    state: directory
+    mode: "0755"
+  when: gnome_extensions_present.results | rejectattr('stat.exists') | list | length > 0
+
+# In --check mode the cache directory above is not created and nothing is
+# downloaded, so this task and the unpack below have nothing to write to or
+# read from. Their failures are tolerated there (and only there).
+- name: Download the pinned extension releases
+  ansible.builtin.get_url:
+    url: >-
+      {{ gnome_extensions_ego_url }}/{{ item.item.uuid }}.shell-extension.zip?version_tag={{
+      item.item.version_tag }}
+    dest: "{{ gnome_extensions_cache }}/{{ item.item.uuid }}-{{ item.item.version_tag }}.zip"
+    checksum: "sha256:{{ item.item.sha256 }}"
+    mode: "0644"
+  loop: "{{ gnome_extensions_present.results }}"
+  loop_control:
+    label: "{{ item.item.uuid }}"
+  when: not item.stat.exists
+  ignore_errors: "{{ ansible_check_mode }}"
+
+- name: Ensure each extension's directory exists
+  ansible.builtin.file:
+    path: "{{ gnome_extensions_dir }}/{{ item.uuid }}"
+    state: directory
+    mode: "0775"
+  loop: "{{ gnome_extensions }}"
+  loop_control:
+    label: "{{ item.uuid }}"
+
+- name: Unpack the extensions
+  ansible.builtin.unarchive:
+    src: "{{ gnome_extensions_cache }}/{{ item.item.uuid }}-{{ item.item.version_tag }}.zip"
+    dest: "{{ gnome_extensions_dir }}/{{ item.item.uuid }}"
+    remote_src: true
+    creates: "{{ gnome_extensions_dir }}/{{ item.item.uuid }}/metadata.json"
+  loop: "{{ gnome_extensions_present.results }}"
+  loop_control:
+    label: "{{ item.item.uuid }}"
+  when: not item.stat.exists
+  register: gnome_extensions_installed
+  ignore_errors: "{{ ansible_check_mode }}"
+
+# GNOME's crash guard (org.gnome.Shell-disable-extensions.service) sets this
+# to true when the shell dies within ~60s of login, a reboot that soon
+# included, and that turns off every user extension at once (#307).
+- name: Read whether user extensions are switched off
+  ansible.builtin.command: gsettings get org.gnome.shell disable-user-extensions
+  register: gnome_user_extensions_off
+  changed_when: false
+  check_mode: false
+
+- name: Switch user extensions back on
+  ansible.builtin.command: gsettings set org.gnome.shell disable-user-extensions false
+  when: gnome_user_extensions_off.stdout != 'false'
+  changed_when: true
+
+# gsettings, not dconf, because only gsettings sees the effective value. A
+# fresh Ubuntu install never writes enabled-extensions; its built-in
+# extensions come from a vendor schema override, and replacing that default
+# with only our list would turn them off.
+- name: Read the enabled and disabled extension lists
+  ansible.builtin.command: gsettings get org.gnome.shell {{ item }}
+  loop:
+    - enabled-extensions
+    - disabled-extensions
+  register: gnome_extension_lists
+  changed_when: false
+  check_mode: false
+
+- name: Add the extensions to enabled-extensions
+  ansible.builtin.command:
+    argv:
+      - gsettings
+      - set
+      - org.gnome.shell
+      - enabled-extensions
+      - "{{ (gnome_enabled_now + gnome_enabled_missing) | to_json }}"
+  vars:
+    gnome_enabled_now: >-
+      {{ gnome_extension_lists.results[0].stdout | regex_replace('^@as ', '') | from_yaml }}
+    gnome_enabled_missing: >-
+      {{ gnome_extensions | map(attribute='uuid') | reject('in', gnome_enabled_now) | list }}
+  when: gnome_enabled_missing | length > 0
+  changed_when: true
+
+# disabled-extensions wins over enabled-extensions, and the Extensions app
+# puts an extension here when it is switched off.
+- name: Remove the extensions from disabled-extensions
+  ansible.builtin.command:
+    argv:
+      - gsettings
+      - set
+      - org.gnome.shell
+      - disabled-extensions
+      - "{{ gnome_disabled_kept | to_json }}"
+  vars:
+    gnome_disabled_now: >-
+      {{ gnome_extension_lists.results[1].stdout | regex_replace('^@as ', '') | from_yaml }}
+    gnome_disabled_kept: >-
+      {{ gnome_disabled_now | reject('in', gnome_extensions | map(attribute='uuid') | list) | list }}
+  when: gnome_disabled_kept | length != gnome_disabled_now | length
+  changed_when: true
+
+- name: Flatten the managed extension settings
+  ansible.builtin.set_fact:
+    gnome_extension_settings: >-
+      {{ gnome_extension_settings | default([])
+         + (item.settings | default({}) | dict2items
+            | map('combine', {'uuid': item.uuid, 'schema': item.schema | default('')}) | list) }}
+  loop: "{{ gnome_extensions }}"
+  loop_control:
+    label: "{{ item.uuid }}"
+
+# In --check mode a not-yet-installed extension has no schemas to read, so a
+# failed read is tolerated there (and only there).
+- name: Read the managed extension settings
+  ansible.builtin.command:
+    argv:
+      - gsettings
+      - --schemadir
+      - "{{ gnome_extensions_dir }}/{{ item.uuid }}/schemas"
+      - get
+      - "{{ item.schema }}"
+      - "{{ item.key }}"
+  loop: "{{ gnome_extension_settings | default([]) }}"
+  loop_control:
+    label: "{{ item.uuid }} {{ item.key }}"
+  register: gnome_extension_settings_now
+  changed_when: false
+  check_mode: false
+  ignore_errors: "{{ ansible_check_mode }}"
+
+- name: Apply the managed extension settings
+  ansible.builtin.command:
+    argv:
+      - gsettings
+      - --schemadir
+      - "{{ gnome_extensions_dir }}/{{ item.item.uuid }}/schemas"
+      - set
+      - "{{ item.item.schema }}"
+      - "{{ item.item.key }}"
+      - "{{ item.item.value }}"
+  loop: "{{ gnome_extension_settings_now.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.uuid }} {{ item.item.key }}={{ item.item.value }}"
+  when:
+    - item.rc | default(1) == 0
+    - item.stdout != item.item.value
+  changed_when: true
+
+# The running shell only discovers extensions that were on disk at login (on
+# Wayland it can't be restarted in place), so a fresh install shows up as
+# enabled but loads at the next login.
+- name: Note that newly installed extensions load at next login
+  ansible.builtin.debug:
+    msg: >-
+      Installed {{ gnome_extensions_installed.results | selectattr('changed')
+      | map(attribute='item.item.uuid') | join(', ') }}. Log out and back in
+      to load them.
+  when: gnome_extensions_installed is changed
