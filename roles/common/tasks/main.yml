@@ -108,6 +108,13 @@
     mode: "0644"
   become: false
 
+- name: Point git at the managed ignore file, wherever XDG_CONFIG_HOME points
+  community.general.git_config:
+    name: core.excludesFile
+    value: "{{ target_home }}/.config/git/ignore"
+    scope: global
+  become: false
+
 - name: Set git identity from explicit vars when provided
   community.general.git_config:
     name: "{{ item.name }}"
