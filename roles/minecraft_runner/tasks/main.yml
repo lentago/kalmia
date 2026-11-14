@@ -57,6 +57,30 @@
     create_home: true
   become: true
 
+# Both paths are NAS bind mounts attached by the kalmia mount hook. Without
+# them a release would publish to the guest's own disk and report success, so
+# stop here instead of provisioning a runner that can take that job.
+- name: Check that the NAS mounts are attached
+  ansible.builtin.command:
+    cmd: mountpoint -q {{ item }}
+  loop:
+    - "{{ minecraft_runner_staging }}"
+    - "{{ minecraft_runner_web_dir }}"
+  register: minecraft_runner_mountpoints
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Refuse to provision without the NAS mounts
+  ansible.builtin.fail:
+    msg: >-
+      {{ item.item }} is not a mount point. Push the mount-hook allowlist
+      (pve-host.yml) and re-run the terraform apply; see docs/minecraft-runner.md.
+  loop: "{{ minecraft_runner_mountpoints.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.rc != 0
+
 - name: Ensure the runner and job directories exist
   ansible.builtin.file:
     path: "{{ item }}"

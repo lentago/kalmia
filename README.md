@@ -301,7 +301,7 @@ pub.lan on every merge, the first guest to get its NAS bind mounts from the
 pipeline — see [`docs/pe-publish.md`](docs/pe-publish.md).
 
 The fifth: `minecraft-runner.yml` + the `minecraft_runner` role provision LXC
-124, the self-hosted Actions runner for `cpitzi/minecraft-builds`: Chunker
+124 and 126, the self-hosted Actions runners for `cpitzi/minecraft-builds`: Chunker
 conversions checked on a Bedrock Dedicated Server, releases to pub.lan — see
 [`docs/minecraft-runner.md`](docs/minecraft-runner.md).
 
