@@ -1,4 +1,4 @@
-# minecraft-runner — minecraft-builds CI runners (LXC 124 and 126, pve4)
+# minecraft-runner — minecraft-builds CI runners (LXC 124, 126 and 127)
 
 Two self-hosted GitHub Actions runners registered to the private
 `cpitzi/minecraft-builds` repo with label `minecraft` (#293, #318). That repo builds
@@ -18,28 +18,34 @@ same reason as pe-publish: that runner holds this repo's PVE token.
 
 | | |
 |---|---|
-| Guests | LXC 124 `minecraft-runner`, 192.168.139.3, and LXC 126 `minecraft-runner-2`, 192.168.139.23. Both pve4, Debian 12, 4c / 10 GiB / 32 GB |
+| Guests | LXC 124 `minecraft-runner`, 192.168.139.3, and LXC 126 `minecraft-runner-2`, 192.168.139.23, on pve4; LXC 127 `minecraft-runner-3`, 192.168.139.26, on pve3. All Debian 12, 4c / 10 GiB / 32 GB |
 | Defined in | [`terraform/minecraft-runner.tf`](../terraform/minecraft-runner.tf) (CI apply-on-merge) |
 | Provisioned by | `minecraft-runner.yml` + the `minecraft_runner` role |
 | Runner | `/opt/actions-runner`, user `runner` (in `webdrop`, gid 1000), systemd service from `svc.sh`, registered under the guest's hostname |
 | Labels | `self-hosted`, `Linux`, `X64`, `minecraft` |
 | Job state | `/opt/minecraft-ci`: Bedrock server (`server` → `bds-<version>`), block schema, Chunker jar, conversions, Python venv, bare clone of the world repo |
 
-## Two runners
+## Three runners
 
 A release can hold a runner for up to four hours, and the park's gate alone
 takes about two. With one runner, every PR's canary (about 30 seconds of work)
 waited behind it. The second runner (#318) has the same shape, labels and
 mounts as the first, so either takes either job and the workflows name no
 runner. The release workflow's `concurrency: release` group keeps two releases
-from overlapping, so the busiest case is one release and one canary.
+from overlapping, so a release holds one runner and the others take canaries
+from as many PRs.
 
 Each runner keeps its own job state in `/opt/minecraft-ci`. Nothing is shared
-between them but the two NAS mounts. Both guests are on pve4 (6 cores), so a
-canary that starts during a release takes CPU from it for about 30 seconds.
+between them but the two NAS mounts. 124 and 126 are both on pve4 (6 cores),
+so a canary that starts on one during a release on the other takes CPU from it
+for about 30 seconds.
 
-Everything below applies to both guests. The commands use 124; for the second
-runner, use 126.
+The third runner (#320) is on pve3, so runner capacity is not all on pve4 and
+one runner stays up through pve4 maintenance. pve3 has the same CPU and also
+hosts VM 100 (HAOS); the runner's 4 cores leave HAOS its 2.
+
+Everything below applies to all three guests. The commands use 124 on pve4;
+for the others, use 126 on pve4 or 127 on pve3.
 
 ## No job guard
 
@@ -82,17 +88,18 @@ role checks both against the SHA-256 pins in its defaults before unpacking. To
 upgrade the Bedrock server, stage the new zip there, bump
 `minecraft_runner_bds_version` and its hash in a PR, and re-run the playbook.
 
-Like pe-publish's, these are bind mounts of pve4's CIFS mount, attached by the
+Like pe-publish's, these are bind mounts of the node's CIFS mount of the NAS
+share (pve4 for 124 and 126, pve3 for 127), attached by the
 mount hook from its allowlist; see
 [`terraform/README.md` § Bind mounts — the mount hook](../terraform/README.md#bind-mounts--the-mount-hook).
 
 ## Build / rebuild
 
-1. **Allowlist:** the mounts are in `pve_host_mount_hook_allow`, one pair per VMID. Push it to pve4
+1. **Allowlist:** the mounts are in `pve_host_mount_hook_allow`, one pair per VMID. Push it to the guest's node
    before the guest's first apply, or the hook refuses them (see
    [`docs/pve-host.md`](pve-host.md)).
 2. **Guest and mounts:** merged `terraform/minecraft-runner.tf` creates the CT,
-   and the apply attaches both mounts. Check from pve4:
+   and the apply attaches both mounts. Check from the node:
    `pct exec 124 -- findmnt -t cifs`.
 3. **Provision**, on the container, with a registration token (valid one hour)
    minted from a workstation where `gh` can administer the repo. The token goes
@@ -123,5 +130,6 @@ mount hook from its allowlist; see
 
 **Firewalla:** as for pe-publish, a new MAC starts in quarantine (no internet)
 until it's approved in the Firewalla app. The MAC is pinned in Terraform, so a
-rebuild keeps that approval. LXC 126's address is inside the DHCP pool
-(nothing was free below it), so it also has a DHCP reservation for its MAC.
+rebuild keeps that approval. The addresses of LXC 126 and 127 are inside the
+DHCP pool (nothing was free below it), so each also has a DHCP reservation for
+its MAC, written before the guest's first apply.
