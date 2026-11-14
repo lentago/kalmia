@@ -1,7 +1,7 @@
-# minecraft-runner — minecraft-builds CI runner (LXC 124, pve4)
+# minecraft-runner — minecraft-builds CI runners (LXC 124 and 126, pve4)
 
-A self-hosted GitHub Actions runner registered to the private
-`cpitzi/minecraft-builds` repo with label `minecraft` (#293). That repo builds
+Two self-hosted GitHub Actions runners registered to the private
+`cpitzi/minecraft-builds` repo with label `minecraft` (#293, #318). That repo builds
 Minecraft worlds in code and ships Bedrock copies of them. Two workflows run
 here:
 
@@ -12,18 +12,34 @@ here:
   checks it block by block against the Java save, publishes it to
   `http://pub.lan/minecraft/` and attaches it to a GitHub Release.
 
-Both need the LAN, so this is not a hosted runner. The Bedrock server can't be
+Both need the LAN, so these are not hosted runners. The Bedrock server can't be
 downloaded by script, and delivery is pub.lan. It is also not LXC 115, for the
 same reason as pe-publish: that runner holds this repo's PVE token.
 
 | | |
 |---|---|
-| Guest | LXC 124 `minecraft-runner`, pve4, 192.168.139.3, Debian 12, 4c / 10 GiB / 32 GB |
+| Guests | LXC 124 `minecraft-runner`, 192.168.139.3, and LXC 126 `minecraft-runner-2`, 192.168.139.23. Both pve4, Debian 12, 4c / 10 GiB / 32 GB |
 | Defined in | [`terraform/minecraft-runner.tf`](../terraform/minecraft-runner.tf) (CI apply-on-merge) |
 | Provisioned by | `minecraft-runner.yml` + the `minecraft_runner` role |
-| Runner | `/opt/actions-runner`, user `runner` (in `webdrop`, gid 1000), systemd service from `svc.sh` |
+| Runner | `/opt/actions-runner`, user `runner` (in `webdrop`, gid 1000), systemd service from `svc.sh`, registered under the guest's hostname |
 | Labels | `self-hosted`, `Linux`, `X64`, `minecraft` |
 | Job state | `/opt/minecraft-ci`: Bedrock server (`server` → `bds-<version>`), block schema, Chunker jar, conversions, Python venv, bare clone of the world repo |
+
+## Two runners
+
+A release can hold a runner for up to four hours, and the park's gate alone
+takes about two. With one runner, every PR's canary (about 30 seconds of work)
+waited behind it. The second runner (#318) has the same shape, labels and
+mounts as the first, so either takes either job and the workflows name no
+runner. The release workflow's `concurrency: release` group keeps two releases
+from overlapping, so the busiest case is one release and one canary.
+
+Each runner keeps its own job state in `/opt/minecraft-ci`. Nothing is shared
+between them but the two NAS mounts. Both guests are on pve4 (6 cores), so a
+canary that starts during a release takes CPU from it for about 30 seconds.
+
+Everything below applies to both guests. The commands use 124; for the second
+runner, use 126.
 
 ## No job guard
 
@@ -72,7 +88,7 @@ mount hook from its allowlist; see
 
 ## Build / rebuild
 
-1. **Allowlist:** the mounts are in `pve_host_mount_hook_allow`. Push it to pve4
+1. **Allowlist:** the mounts are in `pve_host_mount_hook_allow`, one pair per VMID. Push it to pve4
    before the guest's first apply, or the hook refuses them (see
    [`docs/pve-host.md`](pve-host.md)).
 2. **Guest and mounts:** merged `terraform/minecraft-runner.tf` creates the CT,
@@ -101,10 +117,11 @@ mount hook from its allowlist; see
      cd /opt/kalmia && ansible-playbook -i inventory/hosts.yml minecraft-runner.yml'"
    ```
 
-4. **Check:** the runner shows `online`
+4. **Check:** the runner shows `online` under its hostname
    (`gh api repos/cpitzi/minecraft-builds/actions/runners`), and a canary run
    passes.
 
 **Firewalla:** as for pe-publish, a new MAC starts in quarantine (no internet)
 until it's approved in the Firewalla app. The MAC is pinned in Terraform, so a
-rebuild keeps that approval.
+rebuild keeps that approval. LXC 126's address is inside the DHCP pool
+(nothing was free below it), so it also has a DHCP reservation for its MAC.
