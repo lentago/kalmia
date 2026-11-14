@@ -13,13 +13,17 @@
 # LXC 126 — minecraft-runner-2 (#318) is a second runner of the same shape,
 # labels and mounts, at the end of this file. A release can hold one runner
 # for hours; the other keeps taking PR canaries.
+#
+# LXC 127 — minecraft-runner-3 (#320) is a third, on pve3, so runner capacity
+# is not all on pve4.
 
 locals {
   # Each value must equal its line in the node's allowlist
   # (pve_host_mount_hook_allow) or the hook refuses it. The share is CIFS
   # forced to uid/gid 101000 (container 1000), mode 0770: the guest's runner
   # user reads and writes through the gid-1000 `webdrop` group.
-  # Shared by both runners (124 and 126); the allowlist has a line per VMID.
+  # Shared by all three runners (124, 126, 127); the allowlist has a line per
+  # VMID.
   minecraft_runner_mounts = {
     # The pub.lan worlds page the release workflow publishes.
     mp0 = "/mnt/neptune-lentago/web/minecraft,mp=/srv/www/minecraft"
@@ -197,5 +201,91 @@ resource "terraform_data" "minecraft_runner_2_mounts" {
 
   lifecycle {
     replace_triggered_by = [proxmox_virtual_environment_container.minecraft_runner_2]
+  }
+}
+
+# ---------------------------------------------------------------------------
+# LXC 127 — minecraft-runner-3 (#320). Same shape again, on pve3, so runner
+# capacity is not all on pve4. pve3 also hosts VM 100 (HAOS): 4 of its 6 cores
+# here leaves HAOS its 2.
+# ---------------------------------------------------------------------------
+resource "proxmox_virtual_environment_container" "minecraft_runner_3" {
+  node_name     = "pve3"
+  vm_id         = 127
+  description   = "minecraft-runner-3 — third GitHub Actions runner for cpitzi/minecraft-builds (label minecraft), same shape and mounts as CT 124 and 126, on pve3 so runner capacity is not all on pve4. NAS mounts attached by the kalmia mount hook. Provisioned by minecraft-runner.yml (#320).\n"
+  unprivileged  = true
+  started       = true
+  start_on_boot = true
+
+  features {
+    nesting = true
+  }
+
+  cpu {
+    cores = 4
+  }
+
+  memory {
+    dedicated = 10240
+    swap      = 1024
+  }
+
+  disk {
+    datastore_id = "local-lvm"
+    size         = 32
+  }
+
+  network_interface {
+    name   = "eth0"
+    bridge = "vmbr0"
+    # Pinned, as for 124 and 126: the Firewalla approval and DHCP reservation follow the MAC.
+    mac_address = "BC:24:11:3D:7E:52"
+  }
+
+  initialization {
+    hostname = "minecraft-runner-3"
+
+    dns {
+      domain  = "local"
+      servers = ["192.168.139.1"]
+    }
+
+    ip_config {
+      ipv4 {
+        # Nothing is free below the Firewalla DHCP pool (.10-.254), so this
+        # address is inside it and held by a Firewalla reservation for the MAC.
+        address = "192.168.139.26/24"
+        gateway = "192.168.139.1"
+      }
+    }
+  }
+
+  operating_system {
+    template_file_id = "local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst"
+    type             = "debian"
+  }
+
+  lifecycle {
+    ignore_changes = [operating_system, mount_point]
+  }
+}
+
+resource "terraform_data" "minecraft_runner_3_mounts" {
+  for_each = local.minecraft_runner_mounts
+
+  triggers_replace = [proxmox_virtual_environment_container.minecraft_runner_3.vm_id, each.key, each.value]
+
+  provisioner "local-exec" {
+    command = "${path.module}/mount-hook.sh"
+    environment = {
+      HOOK_HOST = "192.168.139.55" # pve3
+      VMID      = proxmox_virtual_environment_container.minecraft_runner_3.vm_id
+      MP        = each.key
+      SPEC      = each.value
+    }
+  }
+
+  lifecycle {
+    replace_triggered_by = [proxmox_virtual_environment_container.minecraft_runner_3]
   }
 }

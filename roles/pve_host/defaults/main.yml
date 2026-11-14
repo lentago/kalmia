@@ -12,9 +12,10 @@ pve_host_thin_autoextend_percent: 10
 pve_host_lxc_fstrim_on_calendar: "*-*-* 04:30:00"
 
 # --- CI mount hook (#190, docs/pve-host.md § Mount hook) ---------------------
-# Nodes that get the hook: only those hosting a hook-mounted guest. Names are
+# Nodes that get the hook: only those hosting a hook-mounted guest. Each also
+# needs the NAS share mounted at /mnt/neptune-lentago (docs/pve-host.md). Names are
 # the inventory names the play is pushed with (-i pve,pve2,pve3,pve4,pve5,).
-pve_host_mount_hook_nodes: [pve4]
+pve_host_mount_hook_nodes: [pve3, pve4]
 pve_host_mount_hook_user: kalmia-mounts
 # The only address the key is accepted from: LXC 115 gha-runner, where the
 # terraform apply job runs.
@@ -49,6 +50,13 @@ pve_host_mount_hook_allow:
     key: mp0
     spec: /mnt/neptune-lentago/web/minecraft,mp=/srv/www/minecraft
   - vmid: 126
+    key: mp1
+    spec: /mnt/neptune-lentago/cpitzi/minecraft-ci,mp=/srv/minecraft-ci,ro=1
+  # LXC 127 minecraft-runner-3: third minecraft-builds CI runner, pve3 (#320).
+  - vmid: 127
+    key: mp0
+    spec: /mnt/neptune-lentago/web/minecraft,mp=/srv/www/minecraft
+  - vmid: 127
     key: mp1
     spec: /mnt/neptune-lentago/cpitzi/minecraft-ci,mp=/srv/minecraft-ci,ro=1
   # LXC 125 minecraft-lan: Bedrock Dedicated Server for the LAN (#297).

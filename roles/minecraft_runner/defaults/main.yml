@@ -1,7 +1,7 @@
 ---
 # ============================================================================
 # minecraft_runner — the self-hosted Actions runners for cpitzi/minecraft-builds
-# on LXC 124 and 126 (pve4, #293, #318). Its canary workflow converts a test world with
+# on LXC 124, 126 (pve4) and 127 (pve3; #293, #318, #320). Its canary workflow converts a test world with
 # Chunker and checks it on a Bedrock Dedicated Server; its release workflow
 # converts a tagged world and publishes it to /srv/www/minecraft (pub.lan).
 # Both NAS paths are bind mounts attached by the kalmia mount hook. See

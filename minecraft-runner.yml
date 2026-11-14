@@ -1,7 +1,7 @@
 ---
 # ============================================================================
-# Provision a minecraft-runner LXC (124 or 126, pve4) — the self-hosted Actions
-# runners for cpitzi/minecraft-builds (#293, #318). Self-provisioning, same as
+# Provision a minecraft-runner LXC (124 or 126 on pve4, 127 on pve3) — the self-hosted Actions
+# runners for cpitzi/minecraft-builds (#293, #318, #320). Self-provisioning, same as
 # pe-publish.yml: run this ON the container. It registers under the guest's
 # hostname.
 #

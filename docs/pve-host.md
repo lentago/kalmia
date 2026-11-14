@@ -51,7 +51,7 @@ directly with `pct exec`.
 Bind mount points are root@pam-only (PVE rejects any non-volume `mpN` from an
 API token), so the token-driven Terraform pipeline cannot give a guest a NAS
 bind mount on its own. The mount hook lets it, without handing CI root (#190).
-On each node in `pve_host_mount_hook_nodes` (pve4 today) the `pve_host` role
+On each node in `pve_host_mount_hook_nodes` (pve3 and pve4) the `pve_host` role
 installs:
 
 | Piece | What it allows |
@@ -72,9 +72,24 @@ and a mount missing from the node's allowlist fails the apply. Pushing the
 play is the root approval step. CI can never widen the allowlist itself.
 
 ```bash
-ansible-playbook -i pve4, -u root pve-host.yml --check --diff
-ansible-playbook -i pve4, -u root pve-host.yml
+ansible-playbook -i pve3,pve4, -u root pve-host.yml --check --diff
+ansible-playbook -i pve3,pve4, -u root pve-host.yml
 ```
+
+Every hook node gets the same allowlist. A line for a guest on another node
+does nothing there: `pct set` only acts on the node's own guests.
+
+**Adding a node:** the role installs the hook but not what the mounts need.
+By hand, as root on the node, before the first guest's apply:
+
+1. Mount the NAS share at `/mnt/neptune-lentago`: copy pve4's `/etc/fstab`
+   line and its `/etc/credentials/neptune-smb.cred` (mode 0600, node to node,
+   never through a repo or a workstation file).
+2. Fetch the guest's container template (`pveam download local <template>`);
+   `local` is per node.
+3. Add the node to `pve_host_mount_hook_nodes`, pin its
+   `/etc/ssh/ssh_host_ed25519_key.pub` in `terraform/pve-known-hosts`, and
+   push this play to it.
 
 **Rotating the key:** `ssh-keygen -t ed25519 -N '' -C kalmia-ci-mount-hook`,
 set the private half as repo secret `PVE_MOUNT_HOOK_SSH_KEY`, put the public
