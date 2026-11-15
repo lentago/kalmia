@@ -28,9 +28,15 @@ apt-get update -qq
 # openssh-client is listed explicitly so ssh-keygen is present for first-boot
 # host-key regen even without recommends. uuid-runtime ships uuidgen, which
 # run-job mints each job's session id with (lentago/claytonia#179, kalmia#260).
+# make runs a project's `make <target>` jobs, and python3-venv lets its setup hook
+# build a venv with pip (lentago/claytonia#242). Without python3-venv `python3 -m
+# venv` stops at "ensurepip is not available", and the system python has no pip.
+# On Debian 12 it hard-Depends on python3.11-venv, which Depends on
+# python3-pip-whl and python3-setuptools-whl (the ensurepip wheels), so
+# --no-install-recommends still yields a working pip and nothing more is listed.
 apt-get install -y -qq --no-install-recommends \
   curl ca-certificates git jq ripgrep inotify-tools sudo python3 less \
-  openssh-server openssh-client tini cron rsync shellcheck uuid-runtime >/dev/null
+  openssh-server openssh-client tini cron rsync shellcheck uuid-runtime make python3-venv >/dev/null
 echo "PKGS_OK"
 
 echo ">>> [substrate] claude service user + sudoers"
