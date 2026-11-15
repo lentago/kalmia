@@ -17,9 +17,12 @@ storage `neptune`, LAN-wide).
 
 - Debian 12 base + runner packages (`curl ca-certificates git jq ripgrep
   inotify-tools sudo python3 less openssh-server openssh-client tini cron rsync
-  shellcheck uuid-runtime`), the same list `substrate.sh` installs. `uuidgen`
-  (from `uuid-runtime`) is what `run-job` mints session ids with
-  (lentago/claytonia#179).
+  shellcheck uuid-runtime make python3-venv`), the same list `substrate.sh`
+  installs. `uuidgen` (from `uuid-runtime`) is what `run-job` mints session ids
+  with (lentago/claytonia#179). `make` runs a project's `make <target>` jobs, and
+  `python3-venv` (which pulls `python3.11-venv` and the pip and setuptools
+  wheels, so `python3 -m venv` gets a working pip) serves a project's setup hook
+  (lentago/claytonia#242).
 - A `claude` service user with an operator **public** SSH key authorized. Its
   only sudo rule, from v4, is `NOPASSWD: /opt/claude-runner/bin/gh-token`, the
   GitHub App token broker (lentago/claytonia#177, kalmia#264). The agent gets no
@@ -122,7 +125,8 @@ mount + pool membership, inject secrets. First boot the gitops loop takes over;
 
 `vN` tracks the substrate (OS/Claude Code/gh/package baseline); v3 adds the
 Gemini and Codex CLIs (kalmia#255), and v4 narrows the `claude` user's sudo to
-the token broker (kalmia#264). Rebuild — a new `vN` — when the substrate
+the token broker (kalmia#264), and `make` plus `python3-venv` ride the same
+image (lentago/claytonia#242). Rebuild — a new `vN` — when the substrate
 should move: a base-image bump, a new baked package, a Claude Code pinning
 change. You do **not** rebuild for runner-software changes; those ship through
 claytonia's gitops loop with no new image.
