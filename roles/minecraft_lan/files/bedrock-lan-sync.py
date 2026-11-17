@@ -8,7 +8,11 @@ checked against the hash, unpacked into worlds/<slug>-<hash[:8]>, and the server
 it. Earlier world directories are kept, so switching back to one resumes where it was left. Run
 by bedrock-lan-sync.timer; also starts the server if it should be running and isn't.
 
-Prints "switched to ...", "serving ..." or "no world announced ...".
+A new copy of the world being played (same slug, new hash) waits while anyone is on the server,
+and loads on the first tick with nobody on (or at the server's next start). A different slug
+switches at once. Players are counted with the server's own console `list`.
+
+Prints "switched to ...", "serving ...", "waiting ..." or "no world announced ...".
 """
 import hashlib
 import json
@@ -19,6 +23,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.parse
 import urllib.request
 import zipfile
@@ -29,6 +34,52 @@ HOME = Path(os.environ.get("BEDROCK_HOME", "/opt/bedrock"))
 USER = os.environ.get("BEDROCK_USER", "bedrock")
 WORLDS, PROPS, STATE = HOME / "worlds", HOME / "server.properties", HOME / "lan-state.json"
 SERVICE = "bedrock-server.service"
+CONSOLE = Path(os.environ.get("BEDROCK_CONSOLE", "/run/bedrock/console"))
+PLAYERS_RE = re.compile(r"There are (\d+)/\d+ players online")
+
+
+def world_slug(level_name: str) -> str:
+    """The slug of a worlds/<slug>-<hash[:8]> directory name."""
+    m = re.fullmatch(r"(.+)-[0-9a-f]{8}", level_name)
+    return m.group(1) if m else level_name
+
+
+def decide(current_level: str, current_title: str, name: str, title: str, active: bool, players) -> str:
+    """What to do with the announced world: "serve" (already on it), "load" (restart onto it),
+    "switch" (a different world: restart onto it) or "wait" (a new copy of the world being played
+    while players are on). `players` is a callable returning the count, only called when it matters."""
+    if current_level == name and current_title == title and active:
+        return "serve"
+    if not active:
+        return "load"
+    if world_slug(current_level) != world_slug(name):
+        return "switch"
+    return "wait" if players() > 0 else "load"
+
+
+def players_online(wait: float = 10.0) -> int:
+    """Ask the server's console `list` and read the answer from the journal. 0 when the console
+    doesn't answer (server down or starting)."""
+    try:
+        fd = os.open(CONSOLE, os.O_WRONLY | os.O_NONBLOCK)
+    except OSError:
+        return 0
+    since = time.strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        os.write(fd, b"list\n")
+    except OSError:
+        return 0
+    finally:
+        os.close(fd)
+    deadline = time.monotonic() + wait
+    while time.monotonic() < deadline:
+        time.sleep(0.5)
+        out = subprocess.run(["journalctl", "-u", SERVICE, "--since", since, "-o", "cat", "--no-pager"],
+                             capture_output=True, text=True).stdout
+        found = PLAYERS_RE.findall(out)
+        if found:
+            return int(found[-1])
+    return 0
 
 
 def systemctl(*args) -> bool:
@@ -99,6 +150,23 @@ def main():
         sys.exit(f"malformed announcement: {ann!r}")
     name = f"{slug}-{sha[:8]}"
     dest = WORLDS / name
+    current = props()
+    seen = []
+
+    def count() -> int:
+        seen.append(players_online())
+        return seen[-1]
+
+    action = decide(current.get("level-name", ""), current.get("server-name", ""), name, title,
+                    systemctl("is-active", "--quiet", SERVICE), count)
+    if action == "serve":
+        print(f"serving {title} ({name})")
+        return
+    if action == "wait":
+        n = seen[-1]
+        print(f"waiting: a new copy of {title} ({name}) is announced, {n} player(s) online; "
+              f"it loads when nobody is on")
+        return
     if not dest.exists():
         url = urllib.parse.urljoin(URL, urllib.parse.quote(file))
         fd, tmp = tempfile.mkstemp(prefix=".download-", dir=HOME)
@@ -113,11 +181,6 @@ def main():
             unpack(Path(tmp), dest)
         finally:
             Path(tmp).unlink(missing_ok=True)
-    current = props()
-    same = current.get("level-name") == name and current.get("server-name") == title
-    if same and systemctl("is-active", "--quiet", SERVICE):
-        print(f"serving {title} ({name})")
-        return
     set_props({"level-name": name, "server-name": title})
     if not systemctl("restart", SERVICE):
         sys.exit(f"could not start {SERVICE}; see journalctl -u {SERVICE}")

@@ -38,6 +38,15 @@ title becomes the name in the LAN list. Earlier world directories are kept, so
 announcing an older world again resumes it where it was left, and a rebuilt
 world (new hash) starts fresh beside the old one.
 
+A new copy of the world already being played (same slug, new hash) does not
+load while anyone is on: the sync asks the server's console `list` (the answer
+`There are N/8 players online:` lands in the journal) and, with one or more
+players, logs `waiting: ... N player(s) online` and tries again next tick. It
+loads on the first tick with nobody on, or at the server's next start (a console
+that doesn't answer counts as nobody on). A different slug switches at once.
+The decision is `decide()` in the script; `python3 tests/bedrock-lan-sync-decide.py`
+tests it.
+
 Trust: the guest serves whatever pub.lan announces. pub.lan is LAN-only, and
 anyone who could rewrite it or impersonate it on the LAN could make the server
 run a different world. The unpacker refuses archive members that are links or
