@@ -68,8 +68,10 @@
 #                                  terminal, pid, size, session name (state "trust?" = waiting
 #                                  at Claude's folder-trust dialog); then any live Claude
 #                                  session outside these panes: name, state, where it runs
-#                                  (cli, vscode, desktop), pid and role (director, em, ad-hoc
-#                                  for a session in a repo below the repos dir, other)
+#                                  (cli, vscode, desktop), pid, role (director, em, ad-hoc
+#                                  for a session in a repo below the repos dir, other), the
+#                                  tmux pane it sits in (session:window.pane, "-" if none)
+#                                  and its working directory
 #   standing trust [repo ...] [--yes]  list the EMs waiting at the folder-trust dialog and,
 #                                  after a y/N prompt (or --yes), accept it in each — your
 #                                  call to run; these are your repos and Claude won't run it for you
@@ -706,6 +708,26 @@ warn_if_outside() {
     [[ -z "$op" ]] || warn "a session named '$1' already runs outside tmux (pid $op): this starts a second one under the same name — close that one first"
 }
 
+# Set TMUX_AT to the tmux target (session:window.pane) of the pane pid $1 runs
+# in, on any session of this tmux server, or to "-". The pane list is read once
+# per run; a pane shown through grouped sessions keeps the first target listed.
+declare -A TMUX_PANES=(); TMUX_PANES_READ=0; TMUX_AT="-"
+tmux_of() {
+    local p=$1 pp tgt
+    TMUX_AT="-"
+    if (( ! TMUX_PANES_READ )); then
+        TMUX_PANES_READ=1
+        while IFS="$US" read -r pp tgt; do
+            if [[ -n "$pp" && -z "${TMUX_PANES[$pp]:-}" ]]; then TMUX_PANES[$pp]=$tgt; fi
+        done < <(tmux list-panes -a -F "#{pane_pid}${US}#{session_name}:#{window_index}.#{pane_index}" 2>/dev/null || true)
+    fi
+    while [[ -n "$p" && "$p" != 0 && "$p" != 1 ]]; do
+        if [[ -n "${TMUX_PANES[$p]:-}" ]]; then TMUX_AT=${TMUX_PANES[$p]}; return 0; fi
+        p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ') || p=""
+    done
+    return 0
+}
+
 # Where a session runs, from its record's entrypoint.
 where_of() {
     case "$1" in
@@ -949,7 +971,7 @@ cmd_restart() {
 cmd_status() {
     need tmux
     local w n term id repo dead pid cmdname size i show_win=0 lacking=0 ems=1
-    local d_state d_term="-" d_pid="-" d_size="-" d_out="" line o_pid o_name o_entry o_state o_cwd
+    local d_state d_term="-" d_pid="-" d_size="-" d_out="" line o_pid o_name o_entry o_state o_cwd o_dir
     local -a out=() dup=()
     local -A in_tmux=()
     local -a r_repo=() r_state=() r_term=() r_win=() r_pid=() r_size=()
@@ -1000,11 +1022,14 @@ cmd_status() {
     if (( ${#out[@]} )); then
         say ""
         say "Outside standing's tmux (Claude Code session records):"
-        printf '%-30s %-9s %-8s %-8s %s\n' SESSION STATE WHERE PID ROLE
+        printf '%-30s %-9s %-8s %-8s %-9s %-18s %s\n' SESSION STATE WHERE PID ROLE TMUX CWD
         for line in "${out[@]}"; do
             IFS="$US" read -r o_pid o_name o_entry o_state o_cwd <<<"$line"
-            printf '%-30s %-9s %-8s %-8s %s\n' "${o_name:-(unnamed)}" "${o_state:--}" "$(where_of "$o_entry")" \
-                "$o_pid" "$(role_of "$o_name" "$o_cwd")"
+            tmux_of "$o_pid"
+            o_dir=${o_cwd:--}
+            if [[ "$o_dir" == "$HOME" || "$o_dir" == "$HOME"/* ]]; then o_dir="~${o_dir#"$HOME"}"; fi
+            printf '%-30s %-9s %-8s %-8s %-9s %-18s %s\n' "${o_name:-(unnamed)}" "${o_state:--}" "$(where_of "$o_entry")" \
+                "$o_pid" "$(role_of "$o_name" "$o_cwd")" "$TMUX_AT" "$o_dir"
             [[ "$o_name" == "$DIRECTOR_NAME" && -z "$d_out" ]] && d_out="$(where_of "$o_entry"), pid $o_pid"
             [[ -n "$o_name" && -n "${in_tmux[$o_name]:-}" ]] && dup+=("$o_name")
         done
