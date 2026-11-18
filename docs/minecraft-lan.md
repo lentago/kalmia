@@ -39,13 +39,13 @@ announcing an older world again resumes it where it was left, and a rebuilt
 world (new hash) starts fresh beside the old one.
 
 A new copy of the world already being played (same slug, new hash) does not
-load while anyone is on: the sync asks the server's console `list` (the answer
-`There are N/8 players online:` lands in the journal) and, with one or more
-players, logs `waiting: ... N player(s) online` and tries again next tick. It
-loads on the first tick with nobody on, or at the server's next start (a console
-that doesn't answer counts as nobody on). A different slug switches at once.
-The decision is `decide()` in the script; `python3 tests/bedrock-lan-sync-decide.py`
-tests it.
+load while anyone is on. The sync asks the server's console `list` and reads
+the reply from the journal (`There are N/8 players online:`). If players are
+online or the count is unknown, it logs why the update is pending and tries
+again on the next sync tick. The update loads on a sync tick when the server
+is inactive or the console confirms zero players. A title-only change also
+waits before restarting the server. A different slug switches at once.
+Run `python3 tests/bedrock-lan-sync-decide.py` to test the decision and sync paths.
 
 Trust: the guest serves whatever pub.lan announces. pub.lan is LAN-only, and
 anyone who could rewrite it or impersonate it on the LAN could make the server

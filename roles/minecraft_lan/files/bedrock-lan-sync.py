@@ -9,8 +9,8 @@ it. Earlier world directories are kept, so switching back to one resumes where i
 by bedrock-lan-sync.timer; also starts the server if it should be running and isn't.
 
 A new copy of the world being played (same slug, new hash) waits while anyone is on the server,
-and loads on the first tick with nobody on (or at the server's next start). A different slug
-switches at once. Players are counted with the server's own console `list`.
+and loads on a sync tick when the server is inactive or its console `list` confirms zero players.
+An unknown count keeps the update pending. A different slug switches at once.
 
 Prints "switched to ...", "serving ...", "waiting ..." or "no world announced ...".
 """
@@ -27,6 +27,7 @@ import time
 import urllib.parse
 import urllib.request
 import zipfile
+from datetime import datetime
 from pathlib import Path
 
 URL = os.environ.get("ANNOUNCE_URL", "http://pub.lan/minecraft/lan.json")
@@ -35,7 +36,7 @@ USER = os.environ.get("BEDROCK_USER", "bedrock")
 WORLDS, PROPS, STATE = HOME / "worlds", HOME / "server.properties", HOME / "lan-state.json"
 SERVICE = "bedrock-server.service"
 CONSOLE = Path(os.environ.get("BEDROCK_CONSOLE", "/run/bedrock/console"))
-PLAYERS_RE = re.compile(r"There are (\d+)/\d+ players online")
+PLAYERS_RE = re.compile(r"There are ([0-9]+)/[0-9]+ players online\b")
 
 
 def world_slug(level_name: str) -> str:
@@ -46,40 +47,51 @@ def world_slug(level_name: str) -> str:
 
 def decide(current_level: str, current_title: str, name: str, title: str, active: bool, players) -> str:
     """What to do with the announced world: "serve" (already on it), "load" (restart onto it),
-    "switch" (a different world: restart onto it) or "wait" (a new copy of the world being played
-    while players are on). `players` is a callable returning the count, only called when it matters."""
+    "switch" (restart onto a different world) or "wait" (the current world may have players).
+    `players` returns an integer count or None when the count is unknown."""
     if current_level == name and current_title == title and active:
         return "serve"
     if not active:
         return "load"
     if world_slug(current_level) != world_slug(name):
         return "switch"
-    return "wait" if players() > 0 else "load"
+    return "load" if players() == 0 else "wait"
 
 
-def players_online(wait: float = 10.0) -> int:
-    """Ask the server's console `list` and read the answer from the journal. 0 when the console
-    doesn't answer (server down or starting)."""
+def players_online(wait: float = 10.0) -> int | None:
+    """Ask the console for a player count and return None if it cannot be confirmed."""
     try:
         fd = os.open(CONSOLE, os.O_WRONLY | os.O_NONBLOCK)
-    except OSError:
-        return 0
-    since = time.strftime("%Y-%m-%d %H:%M:%S")
-    try:
-        os.write(fd, b"list\n")
-    except OSError:
-        return 0
-    finally:
-        os.close(fd)
+        try:
+            since = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+            if os.write(fd, b"list\n") != len(b"list\n"):
+                print("player count unknown: incomplete console list command")
+                return None
+        finally:
+            os.close(fd)
+    except OSError as e:
+        print(f"player count unknown: console list command failed ({e})")
+        return None
+
     deadline = time.monotonic() + wait
-    while time.monotonic() < deadline:
-        time.sleep(0.5)
-        out = subprocess.run(["journalctl", "-u", SERVICE, "--since", since, "-o", "cat", "--no-pager"],
-                             capture_output=True, text=True).stdout
-        found = PLAYERS_RE.findall(out)
-        if found:
-            return int(found[-1])
-    return 0
+    while (remaining := deadline - time.monotonic()) > 0:
+        try:
+            result = subprocess.run(
+                ["journalctl", "-u", SERVICE, "--since", since, "-o", "cat", "--no-pager"],
+                capture_output=True, text=True, timeout=remaining,
+            )
+            if result.returncode:
+                print(f"player count unknown: journalctl exited {result.returncode}: {result.stderr.strip()}")
+                return None
+            found = PLAYERS_RE.findall(result.stdout)
+            if found:
+                return int(found[-1])
+        except (OSError, subprocess.TimeoutExpired, ValueError) as e:
+            print(f"player count unknown: could not read the console reply ({e})")
+            return None
+        time.sleep(min(0.5, max(0, deadline - time.monotonic())))
+    print(f"player count unknown: no recognizable console list reply within {wait:g}s")
+    return None
 
 
 def systemctl(*args) -> bool:
@@ -153,7 +165,7 @@ def main():
     current = props()
     seen = []
 
-    def count() -> int:
+    def count() -> int | None:
         seen.append(players_online())
         return seen[-1]
 
@@ -164,8 +176,9 @@ def main():
         return
     if action == "wait":
         n = seen[-1]
-        print(f"waiting: a new copy of {title} ({name}) is announced, {n} player(s) online; "
-              f"it loads when nobody is on")
+        reason = "player count unknown" if n is None else f"{n} player(s) online"
+        update = "title change" if current.get("level-name") == name else "new world copy"
+        print(f"waiting: {update} for {title} ({name}), {reason}")
         return
     if not dest.exists():
         url = urllib.parse.urljoin(URL, urllib.parse.quote(file))
