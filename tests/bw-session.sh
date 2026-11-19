@@ -84,8 +84,15 @@ check "fresh shell env: key still found" test "$(last)" = "args=status session=F
 rm -f "$keyfile"
 
 # --- XDG_RUNTIME_DIR unset: fall back to /run/user/<uid>, never to disk ---------
-check "fallback is /run/user/<uid>" bash -c \
-    "unset XDG_RUNTIME_DIR; . '$files/bw-session.sh'; f=\$(bw_session_file) && [[ \$f == /run/user/\$(id -u)/bw-session ]] || ! [[ -d /run/user/\$(id -u) ]]"
+# Where /run/user/<uid> exists the fallback must resolve to it; where it does
+# not (a CI runner), it must fail rather than pick a disk path.
+if [[ -d /run/user/$(id -u) && -O /run/user/$(id -u) ]]; then
+    check "fallback is /run/user/<uid>" bash -c \
+        "unset XDG_RUNTIME_DIR; . '$files/bw-session.sh'; [[ \$(bw_session_file) == /run/user/\$(id -u)/bw-session ]]"
+else
+    check "no tmpfs directory: no fallback path" bash -c \
+        "unset XDG_RUNTIME_DIR; . '$files/bw-session.sh'; ! bw_session_file"
+fi
 
 # --- bw-unlock and bw-lock ---------------------------------------------------
 : >"$STUB_LOG"
@@ -123,6 +130,10 @@ mkdir -p "$HOME/.config/bws"
 check "empty token file: nothing exported" test "$(token)" = "<unset>"
 
 printf 'FAKE-BWS-TOKEN\n' >"$HOME/.config/bws/access-token"
+chmod 644 "$HOME/.config/bws/access-token"
+check "loose token mode: nothing exported" test "$(token 2>/dev/null)" = "<unset>"
+
+chmod 600 "$HOME/.config/bws/access-token"
 check "token file: exported, newline trimmed" test "$(token)" = "FAKE-BWS-TOKEN"
 
 echo
