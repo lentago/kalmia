@@ -58,6 +58,10 @@ resource "proxmox_virtual_environment_container" "n8n" {
   initialization {
     hostname = "n8n"
 
+    user_account {
+      keys = [local.xubuntu_ws_ssh_public_key]
+    }
+
     dns {
       domain  = "local"
       servers = ["192.168.139.1"]
@@ -81,7 +85,7 @@ resource "proxmox_virtual_environment_container" "n8n" {
   lifecycle {
     # Import-only: root@pam-created (keyctl); the API token cannot recreate it. Retire via #124.
     prevent_destroy = true
-    ignore_changes  = [operating_system]
+    ignore_changes  = [operating_system, initialization[0].user_account]
   }
 }
 
@@ -141,6 +145,10 @@ resource "proxmox_virtual_environment_container" "pub" {
   initialization {
     hostname = "pub"
 
+    user_account {
+      keys = [local.xubuntu_ws_ssh_public_key]
+    }
+
     dns {
       domain  = "local"
       servers = ["192.168.139.1"]
@@ -167,7 +175,7 @@ resource "proxmox_virtual_environment_container" "pub" {
     # mount_point: both bind mounts are attached by root@pam with `pct set`
     # (docs/pub.md); a token-driven edit of them would fail with HTTP 403,
     # so they are never reconciled here (the claytonia workers' pattern).
-    ignore_changes = [operating_system, mount_point]
+    ignore_changes = [operating_system, mount_point, initialization[0].user_account]
   }
 }
 
@@ -212,6 +220,10 @@ resource "proxmox_virtual_environment_container" "grafana_stack" {
   initialization {
     hostname = "grafana-stack"
 
+    user_account {
+      keys = [local.xubuntu_ws_ssh_public_key]
+    }
+
     dns {
       servers = ["192.168.139.1"]
     }
@@ -233,7 +245,7 @@ resource "proxmox_virtual_environment_container" "grafana_stack" {
   lifecycle {
     # Import-only: build template is gone and state is unrebuildable; guarded.
     prevent_destroy = true
-    ignore_changes  = [operating_system]
+    ignore_changes  = [operating_system, initialization[0].user_account]
   }
 }
 
@@ -302,6 +314,10 @@ resource "proxmox_virtual_environment_container" "brasenia" {
   initialization {
     hostname = "brasenia"
 
+    user_account {
+      keys = [local.xubuntu_ws_ssh_public_key]
+    }
+
     dns {
       domain  = "local"
       servers = ["192.168.139.1"]
@@ -321,8 +337,8 @@ resource "proxmox_virtual_environment_container" "brasenia" {
   }
 
   lifecycle {
-    # Pipeline-recreatable (token-created, no keyctl/bind mount): not guarded.
-    ignore_changes       = [operating_system]
+    # Pipeline-recreatable (token-created, no keyctl/bind mount): not destroy-guarded. Only operating_system and the seeded SSH key (user_account) are excluded from drift.
+    ignore_changes       = [operating_system, initialization[0].user_account]
     replace_triggered_by = [terraform_data.brasenia_rebuild]
   }
 }

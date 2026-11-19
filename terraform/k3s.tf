@@ -92,6 +92,10 @@ resource "proxmox_virtual_environment_container" "k3s" {
   initialization {
     hostname = each.key
 
+    user_account {
+      keys = [local.xubuntu_ws_ssh_public_key]
+    }
+
     dns {
       domain  = "local"
       servers = ["192.168.139.1"]
@@ -117,6 +121,6 @@ resource "proxmox_virtual_environment_container" "k3s" {
     prevent_destroy = true
     # template_file_id is create-only and cannot be reconciled later — same
     # guard the other created/imported containers carry (see brasenia, 118).
-    ignore_changes = [operating_system]
+    ignore_changes = [operating_system, initialization[0].user_account]
   }
 }

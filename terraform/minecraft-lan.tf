@@ -58,6 +58,10 @@ resource "proxmox_virtual_environment_container" "minecraft_lan" {
   initialization {
     hostname = "minecraft-lan"
 
+    user_account {
+      keys = [local.xubuntu_ws_ssh_public_key]
+    }
+
     dns {
       domain  = "local"
       servers = ["192.168.139.1"]
@@ -79,7 +83,7 @@ resource "proxmox_virtual_environment_container" "minecraft_lan" {
 
   lifecycle {
     # operating_system: create-only. mount_point: attached by the mount hook.
-    ignore_changes = [operating_system, mount_point]
+    ignore_changes = [operating_system, mount_point, initialization[0].user_account]
   }
 }
 

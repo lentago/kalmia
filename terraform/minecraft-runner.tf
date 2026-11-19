@@ -71,6 +71,10 @@ resource "proxmox_virtual_environment_container" "minecraft_runner" {
   initialization {
     hostname = "minecraft-runner"
 
+    user_account {
+      keys = [local.xubuntu_ws_ssh_public_key]
+    }
+
     dns {
       domain  = "local"
       servers = ["192.168.139.1"]
@@ -93,7 +97,7 @@ resource "proxmox_virtual_environment_container" "minecraft_runner" {
   lifecycle {
     # operating_system: create-only. mount_point: attached by the mount hook
     # (below); a token-driven edit of a bind mount gets HTTP 403.
-    ignore_changes = [operating_system, mount_point]
+    ignore_changes = [operating_system, mount_point, initialization[0].user_account]
   }
 }
 
@@ -159,6 +163,10 @@ resource "proxmox_virtual_environment_container" "minecraft_runner_2" {
   initialization {
     hostname = "minecraft-runner-2"
 
+    user_account {
+      keys = [local.xubuntu_ws_ssh_public_key]
+    }
+
     dns {
       domain  = "local"
       servers = ["192.168.139.1"]
@@ -180,7 +188,7 @@ resource "proxmox_virtual_environment_container" "minecraft_runner_2" {
   }
 
   lifecycle {
-    ignore_changes = [operating_system, mount_point]
+    ignore_changes = [operating_system, mount_point, initialization[0].user_account]
   }
 }
 
@@ -245,6 +253,10 @@ resource "proxmox_virtual_environment_container" "minecraft_runner_3" {
   initialization {
     hostname = "minecraft-runner-3"
 
+    user_account {
+      keys = [local.xubuntu_ws_ssh_public_key]
+    }
+
     dns {
       domain  = "local"
       servers = ["192.168.139.1"]
@@ -266,7 +278,7 @@ resource "proxmox_virtual_environment_container" "minecraft_runner_3" {
   }
 
   lifecycle {
-    ignore_changes = [operating_system, mount_point]
+    ignore_changes = [operating_system, mount_point, initialization[0].user_account]
   }
 }
 
