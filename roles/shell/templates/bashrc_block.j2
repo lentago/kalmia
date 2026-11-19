@@ -24,6 +24,14 @@ command -v direnv &>/dev/null && eval "$(direnv hook bash)"
 # --- Starship prompt ---
 command -v starship &>/dev/null && eval "$(starship init bash)"
 
+# --- Bitwarden Secrets Manager (bws) ---
+# Exported only when the machine-account token file exists and is non-empty.
+# The file is hand-placed (mode 600, in a 700 directory); Ansible never writes it.
+if [[ -s "$HOME/.config/bws/access-token" ]]; then
+  BWS_ACCESS_TOKEN=$(<"$HOME/.config/bws/access-token")
+  export BWS_ACCESS_TOKEN
+fi
+
 # --- Granted (AWS account switching) ---
 alias assume="source assume"
 

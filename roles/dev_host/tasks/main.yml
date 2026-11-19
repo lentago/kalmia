@@ -148,13 +148,94 @@
   become: true
   when: ansible_architecture == "x86_64" and not ansible_check_mode
 
-- name: Link bw into /usr/local/bin
+# The pinned binary is linked at a fixed path; /usr/local/bin/bw is a wrapper
+# that adds the per-task session key (below).
+- name: Link the real bw at a fixed path
   ansible.builtin.file:
     src: "/opt/bitwarden-cli/{{ dev_host_bw_version }}/bw"
-    dest: /usr/local/bin/bw
+    dest: /opt/bitwarden-cli/bw
     state: link
   become: true
   when: ansible_architecture == "x86_64" and not ansible_check_mode
+
+# --- Bitwarden Secrets Manager CLI (#343) ------------------------------------
+# bws is path A: a machine account scoped to one project, its token in
+# ~/.config/bws/access-token (the shell role exports it when the file is
+# non-empty). Ansible creates the directory and never the token.
+- name: Download the Bitwarden Secrets Manager CLI
+  ansible.builtin.get_url:
+    url: "https://github.com/bitwarden/sdk-sm/releases/download/bws-v{{ dev_host_bws_version }}/bws-x86_64-unknown-linux-gnu-{{ dev_host_bws_version }}.zip"
+    dest: "/tmp/bws-linux-{{ dev_host_bws_version }}.zip"
+    checksum: "sha256:{{ dev_host_bws_sha256 }}"
+    mode: "0644"
+  when: ansible_architecture == "x86_64"
+
+- name: Create the versioned Secrets Manager CLI directory
+  ansible.builtin.file:
+    path: "/opt/bitwarden-cli/bws-{{ dev_host_bws_version }}"
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Unpack the Secrets Manager CLI into a versioned directory
+  ansible.builtin.unarchive:
+    src: "/tmp/bws-linux-{{ dev_host_bws_version }}.zip"
+    dest: "/opt/bitwarden-cli/bws-{{ dev_host_bws_version }}"
+    remote_src: true
+    creates: "/opt/bitwarden-cli/bws-{{ dev_host_bws_version }}/bws"
+    mode: "0755"
+  become: true
+  when: ansible_architecture == "x86_64" and not ansible_check_mode
+
+- name: Link bws into /usr/local/bin
+  ansible.builtin.file:
+    src: "/opt/bitwarden-cli/bws-{{ dev_host_bws_version }}/bws"
+    dest: /usr/local/bin/bws
+    state: link
+  become: true
+  when: ansible_architecture == "x86_64" and not ansible_check_mode
+
+- name: Create the bws config directory
+  ansible.builtin.file:
+    path: "{{ target_home }}/.config/bws"
+    state: directory
+    mode: "0700"
+
+# --- Per-task bw unlock (#343) -----------------------------------------------
+# bw-unlock keeps the session key on tmpfs; the bw wrapper reads it at call
+# time, because Claude Code snapshots the shell environment at session start.
+- name: Check whether /usr/local/bin/bw is still the symlink to the binary
+  ansible.builtin.stat:
+    path: /usr/local/bin/bw
+    follow: false
+  register: dev_host_bw_path
+
+# Writing the wrapper through the symlink would overwrite the pinned binary.
+- name: Drop the old bw symlink
+  ansible.builtin.file:
+    path: /usr/local/bin/bw
+    state: absent
+  become: true
+  when: dev_host_bw_path.stat.islnk | default(false)
+
+- name: Create the shared helper directory
+  ansible.builtin.file:
+    path: /usr/local/lib/kalmia
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Install the bw session helpers
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode }}"
+  become: true
+  loop:
+    - { src: bw-session.sh, dest: /usr/local/lib/kalmia/bw-session.sh, mode: "0644" }
+    - { src: bw, dest: /usr/local/bin/bw, mode: "0755" }
+    - { src: bw-unlock, dest: /usr/local/bin/bw-unlock, mode: "0755" }
+    - { src: bw-lock, dest: /usr/local/bin/bw-lock, mode: "0755" }
 
 # #339 briefly installed the 1Password CLI; Chris moved to Bitwarden (#341).
 - name: Remove the 1Password CLI

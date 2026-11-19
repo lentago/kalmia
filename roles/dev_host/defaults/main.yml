@@ -31,6 +31,11 @@ dev_host_claude_backup_calendar: "*-*-* 02:30:00"
 # matching the digest GitHub publishes for the asset.
 dev_host_bw_version: "2026.10.1"
 dev_host_bw_sha256: "eb09c3715291c21cf744819b873a255c1247b1b8b45bae138621a644ec7ad8f5"
+# Bitwarden Secrets Manager CLI release (bitwarden/sdk-sm, bws-v<version>), pinned
+# (#343). 2.1.0 (2026-05-21) is the newest release more than two weeks old. sha256 of
+# bws-x86_64-unknown-linux-gnu-<version>.zip, matching the digest GitHub publishes.
+dev_host_bws_version: "2.1.0"
+dev_host_bws_sha256: "ba8233c3a4aee5d43e3c73bbd04d99e9bc5aba13bbbfd06d89b073abe732b860"
 # The osmunda k3s server (LXC 119, k3s-1 on pve5). The kubeconfig is fetched from
 # it, never copied from another workstation.
 dev_host_kube_pve_node: pve5

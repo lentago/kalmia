@@ -1,0 +1,29 @@
+# ============================================================================
+# bw-session — runs tests/bw-session.sh (#343): the bw wrapper, bw-unlock,
+# bw-lock and the BWS_ACCESS_TOKEN export, all against stubs and fake keys.
+# Path-filtered, so it must never become a required check: a required check
+# whose workflow never triggers holds every other PR at "Expected".
+# ============================================================================
+name: bw-session
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+    paths:
+      - "roles/dev_host/files/**"
+      - "roles/shell/templates/bashrc_block.j2"
+      - "tests/bw-session.sh"
+      - ".github/workflows/bw-session.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  bw-session:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run the helper tests
+        run: tests/bw-session.sh

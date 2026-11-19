@@ -1,0 +1,32 @@
+#!/bin/bash
+# bw-unlock — run in your own terminal before a task that needs the personal
+# vault. Prompts for the master password, then keeps the session key on tmpfs
+# (mode 600) where the bw wrapper finds it. Run bw-lock when the task is done.
+# An unlocked bw exposes the whole vault and cannot be scoped (kalmia#343).
+set -u
+
+# shellcheck source=/dev/null
+. "${BW_SESSION_LIB:-/usr/local/lib/kalmia/bw-session.sh}"
+real=${BW_REAL:-/opt/bitwarden-cli/bw}
+
+file=$(bw_session_file) || {
+    echo "bw-unlock: no tmpfs directory for the session key (XDG_RUNTIME_DIR, /run/user/<uid>)" >&2
+    exit 1
+}
+[[ -t 0 ]] || {
+    echo "bw-unlock: run it in your own terminal; it asks for the master password" >&2
+    exit 1
+}
+
+umask 077
+# --raw prints only the key; the password prompt goes to the terminal.
+key=$("$real" unlock --raw) || exit 1
+[[ -n $key ]] || {
+    echo "bw-unlock: bw returned no session key" >&2
+    exit 1
+}
+
+tmp=$(mktemp "$file.XXXXXX") || exit 1
+printf '%s' "$key" >"$tmp"
+mv -f "$tmp" "$file"
+echo "Vault unlocked for this host. Run bw-lock when the task is done."

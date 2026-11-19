@@ -1,0 +1,25 @@
+#!/bin/bash
+# bw — wraps the pinned Bitwarden CLI so a Claude Code session can use a vault
+# the maintainer unlocked for one task (kalmia#343, installed by dev_host).
+#
+# Claude Code snapshots the shell environment when a session starts, so an
+# `export BW_SESSION` made later in the maintainer's terminal never reaches it.
+# This wrapper reads the key from the tmpfs file bw-unlock wrote, at the moment
+# bw is called. No file, or a BW_SESSION already set, and bw behaves as it does
+# without the wrapper. The key is never printed.
+set -u
+
+# shellcheck source=/dev/null
+. "${BW_SESSION_LIB:-/usr/local/lib/kalmia/bw-session.sh}"
+
+if [[ -z ${BW_SESSION:-} ]] && file=$(bw_session_file) \
+    && [[ -f $file && ! -L $file && -O $file && -s $file ]]; then
+    if [[ $(stat -c %a "$file") == 600 ]]; then
+        BW_SESSION=$(<"$file")
+        export BW_SESSION
+    else
+        echo "bw: ignoring $file: its mode is not 600" >&2
+    fi
+fi
+
+exec "${BW_REAL:-/opt/bitwarden-cli/bw}" "$@"
