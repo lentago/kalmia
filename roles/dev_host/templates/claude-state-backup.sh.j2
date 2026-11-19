@@ -11,7 +11,8 @@ dest="{{ dev_host_claude_backup_dest }}"
 
 # Fail closed: write only to the real CIFS mount, never to a bare local directory.
 touch "{{ dev_host_nas_mountpoint }}/." 2>/dev/null || true
-if [ "$(findmnt -no FSTYPE -T "{{ dev_host_nas_mountpoint }}")" != cifs ]; then
+# (x-systemd.automount stacks autofs over cifs, so findmnt prints both.)
+if ! findmnt -no FSTYPE -T "{{ dev_host_nas_mountpoint }}" | grep -qx cifs; then
   echo "claude-state-backup: {{ dev_host_nas_mountpoint }} is not a cifs mount" >&2
   exit 1
 fi
