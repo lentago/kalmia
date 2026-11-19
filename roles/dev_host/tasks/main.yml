@@ -12,11 +12,13 @@
     state: present
   become: true
 
+# No `mode`: once the share is mounted, this path is the CIFS root and its mode
+# comes from the mount's dir_mode (0775), so a chmod to 0755 would report
+# changed on every run (#346). A fresh directory gets root's default umask.
 - name: Create the NAS mount point
   ansible.builtin.file:
     path: "{{ dev_host_nas_mountpoint }}"
     state: directory
-    mode: "0755"
   become: true
 
 # The credentials file holds a password, so it stays hand-managed. Mounting is
