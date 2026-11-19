@@ -17,3 +17,10 @@ dev_host_nas_options:
   - _netdev
   - nofail
   - x-systemd.automount
+
+# --- Nightly mirror of the Claude state (#286) -------------------------------
+# xubuntu-ws is the single source of Claude memory and transcripts; VM 102 is
+# otherwise only in the weekly vzdump. Never under web/: pub.lan serves that to
+# the whole LAN, and transcripts hold message text.
+dev_host_claude_backup_dest: "{{ dev_host_nas_mountpoint }}/claude-state/{{ ansible_hostname }}"
+dev_host_claude_backup_calendar: "*-*-* 02:30:00"

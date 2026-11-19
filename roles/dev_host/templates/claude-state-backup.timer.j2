@@ -1,0 +1,11 @@
+# ANSIBLE MANAGED — kalmia roles/dev_host.
+[Unit]
+Description=Nightly mirror of Claude state to the NAS
+
+[Timer]
+OnCalendar={{ dev_host_claude_backup_calendar }}
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
