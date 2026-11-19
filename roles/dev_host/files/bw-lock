@@ -1,0 +1,14 @@
+#!/bin/bash
+# bw-lock — locks the vault and deletes the tmpfs session key (kalmia#343).
+set -u
+
+# shellcheck source=/dev/null
+. "${BW_SESSION_LIB:-/usr/local/lib/kalmia/bw-session.sh}"
+real=${BW_REAL:-/opt/bitwarden-cli/bw}
+
+# Remove the key first: a failed `bw lock` must still leave no key behind.
+if file=$(bw_session_file); then
+    rm -f -- "$file"
+fi
+"$real" lock >/dev/null 2>&1 || true
+echo "Vault locked."
