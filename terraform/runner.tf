@@ -39,6 +39,10 @@ resource "proxmox_virtual_environment_container" "gha_runner" {
   initialization {
     hostname = "gha-runner"
 
+    user_account {
+      keys = [local.xubuntu_ws_ssh_public_key]
+    }
+
     dns {
       domain  = "local"
       servers = ["192.168.139.1"]
@@ -55,5 +59,11 @@ resource "proxmox_virtual_environment_container" "gha_runner" {
   operating_system {
     template_file_id = "local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst"
     type             = "debian"
+  }
+
+  lifecycle {
+    # Existing guest: the key is seeded only into a newly created guest
+    # (guest-ssh-key.tf), never applied by replacing this one (#337).
+    ignore_changes = [initialization[0].user_account]
   }
 }
