@@ -16,6 +16,23 @@
   become: true
   when: ansible_os_family == "Debian"
 
+# The workstation-bootstrap predecessor (and the VS Code postinst) wrote one-line
+# docker.list / vscode.list sources signed by a different key than the deb822
+# sources the containers and editors roles add. apt then sees one repository with
+# two Signed-By keys and refuses to read any source, so these go before the first
+# apt call, not in those roles. packages.microsoft.gpg belongs to the code package
+# and stays.
+- name: Retire the predecessor's one-line Docker and VS Code sources (Debian)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/sources.list.d/docker.list
+    - /etc/apt/keyrings/docker.gpg
+    - /etc/apt/sources.list.d/vscode.list
+  become: true
+  when: ansible_os_family == "Debian"
+
 - name: Update apt cache (Debian)
   ansible.builtin.apt:
     update_cache: true
