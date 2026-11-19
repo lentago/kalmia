@@ -9,7 +9,7 @@ viewer_host_notice:
   hookSpecificOutput:
     hookEventName: SessionStart
     additionalContext: >-
-      This machine is a disposable viewer (Chris, 2026-11-19, kalmia#286). Claude
+      This machine is a disposable viewer (kalmia#286). Claude
       state (memory, transcripts, settings) lives on {{ viewer_host_dev_host }}, and a
       session here writes a second copy that drifts. Do not start work here. Tell the
       user to run `ssh {{ viewer_host_dev_host }}` and then `director` or
