@@ -4,7 +4,7 @@
 # standing — start and tend a standing interactive Claude Code session in a
 # Lentago repo, each in its own maximized terminal. Every session is one window
 # of tmux session "lentago", named after its repo and holding one pane that
-# runs `claude --name <repo>-standing` in that repo's checkout. Each window is
+# runs `claude --name <host>/<repo>-standing` in that repo's checkout. Each window is
 # viewed through its own grouped tmux session ("lentago-<repo>") with its own
 # terminal, titled "<repo> — standing EM" at the terminal's normal font size, so
 # a human finds a session by name in the window switcher and nothing runs hidden.
@@ -20,7 +20,7 @@
 #
 # The Director lives on the same tmux server, in its own tmux session
 # "lentago-director": one window "director" in ~/repos/lentago running
-# `claude --name lentago-director --continue`, so it survives a closed terminal,
+# `claude --name <host>/lentago-director --continue`, so it survives a closed terminal,
 # keeps a stable name for the EMs to report to, and resumes its conversation.
 # `standing director` (or the `director` command) creates or resumes it and
 # attaches. While that session exists, `standing up` points new EMs at it.
@@ -115,7 +115,11 @@
 #                          N > 1 packs N tiled panes into windows standing-1, standing-2, …)
 #   STANDING_MODEL         model every EM starts on (default: claude-sonnet-5-5; set it
 #                          empty for Claude's own default; `-- --model X` overrides per run)
-#   STANDING_NAME_SUFFIX   claude --name suffix    (default: standing → "kalmia-standing")
+#   STANDING_HOST          host label prefixed to every claude --name, "<host>/<name>"
+#                          (default: `hostname -s`; set a short one on long hostnames,
+#                          e.g. STANDING_HOST=thinkpad; empty disables). tmux session
+#                          names stay unqualified.
+#   STANDING_NAME_SUFFIX   claude --name suffix    (default: standing → "xubuntu-ws/kalmia-standing")
 #   STANDING_TERMINAL      terminal for `open`     (default: first of ghostty, ptyxis, alacritty)
 #   STANDING_FONT_SIZE     font size for those terminals only (ghostty/alacritty; default:
 #                          unset, i.e. the terminal's own size)
@@ -155,6 +159,13 @@ DIRECTOR_TITLE="lentago — Engineering Director"
 PER_WINDOW="${STANDING_PER_WINDOW:-1}"
 MODEL="${STANDING_MODEL-claude-sonnet-5-5}"
 NAME_SUFFIX="${STANDING_NAME_SUFFIX:-standing}"
+# Host label in every claude --name (kalmia#330): sessions from several machines share
+# one claude.ai / Desktop list, so "<host>/<name>" says where each one runs. Host first,
+# so a list that truncates names still shows it. Empty STANDING_HOST turns it off.
+HOST="${STANDING_HOST-$(hostname -s 2>/dev/null || true)}"
+qualify() { printf '%s%s' "${HOST:+$HOST/}" "$1"; }
+em_name() { qualify "$1-$NAME_SUFFIX"; }                       # claude --name of repo $1's EM
+DIRECTOR_CLAUDE="$(qualify "$DIRECTOR_NAME")"                  # claude --name of the Director
 REMOTE_CONTROL="${STANDING_REMOTE_CONTROL:-1}"
 EXIT_WAIT="${STANDING_EXIT_WAIT:-20}"
 WIN_PREFIX="standing"   # grid windows: standing-1, standing-2, … (PER_WINDOW > 1, or older runs)
@@ -353,8 +364,8 @@ parse_launch_flags() {
     elif [[ -z "$DIRECTOR" ]]; then
         # A live Director, in tmux or outside it (kalmia#291), outranks a remembered
         # name: that is how EMs started after the switch stop pointing at an old session.
-        if director_up || [[ -n "$(outside_pid_of "$DIRECTOR_NAME")" ]]; then
-            DIRECTOR=$DIRECTOR_NAME
+        if director_up || [[ -n "$(outside_pid_of "$DIRECTOR_CLAUDE")" ]]; then
+            DIRECTOR=$DIRECTOR_CLAUDE
         else
             DIRECTOR=$(recall_director)
         fi
@@ -393,8 +404,8 @@ claude_argv() {
     local -a cmd=()
     local a has_model=0
     mapfile -d '' cmd < <(env_prefix)
-    cmd+=("$CLI_BIN" --name "$repo-$NAME_SUFFIX")
-    mapfile -d '' -O "${#cmd[@]}" cmd < <(remote_control_args "$repo-$NAME_SUFFIX")
+    cmd+=("$CLI_BIN" --name "$(em_name "$repo")")
+    mapfile -d '' -O "${#cmd[@]}" cmd < <(remote_control_args "$(em_name "$repo")")
     for a in "${EXTRA[@]}"; do [[ "$a" == --model || "$a" == --model=* ]] && has_model=1; done
     [[ -n "$MODEL" && $has_model == 0 ]] && cmd+=(--model "$MODEL")
     cmd+=("${EXTRA[@]}")
@@ -741,7 +752,7 @@ where_of() {
 
 # A session's role from its name ($1) and cwd ($2).
 role_of() {
-    if [[ "$1" == "$DIRECTOR_NAME" ]]; then printf 'director'
+    if [[ "$1" == "$DIRECTOR_CLAUDE" || "$1" == "$DIRECTOR_NAME" ]]; then printf 'director'
     elif [[ "$1" == *-"$NAME_SUFFIX" ]]; then printf 'em'
     elif [[ "$2" == "$REPOS_DIR" || "$2" == "$REPOS_DIR"/* ]]; then printf 'ad-hoc'
     else printf 'other'; fi
@@ -760,8 +771,8 @@ director_pane() { { tmux list-panes -s -t "=$DIRECTOR_NAME" -F '#{pane_id}' 2>/d
 director_argv() {
     local -a cmd=()
     mapfile -d '' cmd < <(env_prefix)
-    cmd+=("$CLI_BIN" --name "$DIRECTOR_NAME")
-    mapfile -d '' -O "${#cmd[@]}" cmd < <(remote_control_args "$DIRECTOR_NAME")
+    cmd+=("$CLI_BIN" --name "$DIRECTOR_CLAUDE")
+    mapfile -d '' -O "${#cmd[@]}" cmd < <(remote_control_args "$DIRECTOR_CLAUDE")
     (( FRESH )) || cmd+=(--continue)
     cmd+=("${EXTRA[@]}")
     printf '%s\0' "${cmd[@]}"
@@ -775,7 +786,7 @@ ensure_director() {
     mapfile -d '' cmd < <(director_argv)
     (( ${#cmd[@]} >= 3 )) || die "internal: could not build the claude command for the Director"
     if ! director_up; then
-        warn_if_outside "$DIRECTOR_NAME"
+        warn_if_outside "$DIRECTOR_CLAUDE"
         # remain-on-exit in the same command sequence, so a claude that exits at
         # once (nothing to --continue, say) leaves its screen instead of the session vanishing.
         tmux new-session -d -s "$DIRECTOR_NAME" -n "$DIRECTOR_WIN" -x "$DEF_W" -y "$DEF_H" \
@@ -869,7 +880,7 @@ cmd_director() {
     scrub_env
     ensure_director
     case "$D_STATE" in
-        started)   ok "the Director started  ${c_dim}(claude --name $DIRECTOR_NAME$( (( FRESH )) || printf ' --continue') in $REPOS_DIR)${c_off}" ;;
+        started)   ok "the Director started  ${c_dim}(claude --name $DIRECTOR_CLAUDE$( (( FRESH )) || printf ' --continue') in $REPOS_DIR)${c_off}" ;;
         respawned) ok "the Director respawned  ${c_dim}(its claude had exited)${c_off}" ;;
         running)   say "${c_dim}  · the Director is already running${c_off}"
                    (( FRESH == 0 && ${#EXTRA[@]} == 0 )) || warn "--fresh and claude args apply only when claude starts; /exit it first" ;;
@@ -905,11 +916,11 @@ cmd_up() {
                 kept=$((kept + 1))
             fi
         else
-            warn_if_outside "$repo-$NAME_SUFFIX"
+            warn_if_outside "$(em_name "$repo")"
             id=$(spawn_pane "$repo" "$dir" "${cmd[@]}")
             w=$(window_of "$id"); want+=("$w")
             if [[ "$w" == "$(win_name "$repo")" ]]; then where="its own window"; else where="window $w"; fi
-            ok "$repo started in $where  ${c_dim}(claude --name $repo-$NAME_SUFFIX$(m=$(effective_model); [[ -n "$m" ]] && printf ' --model %s' "$m"))${c_off}"
+            ok "$repo started in $where  ${c_dim}(claude --name $(em_name "$repo")$(m=$(effective_model); [[ -n "$m" ]] && printf ' --model %s' "$m"))${c_off}"
             started=$((started + 1))
         fi
         apply_options
@@ -1002,22 +1013,22 @@ cmd_status() {
     # The state is pre-padded by visible width (vpad): printf would count its colour codes.
     if (( show_win )); then
         printf '%-30s %-9s %-5s %-12s %-8s %-9s %s\n' REPO STATE TERM WINDOW PID SIZE SESSION
-        printf '%-30s %s %-5s %-12s %-8s %-9s %s\n' "(director)" "$(vpad "$d_state" 9)" "$d_term" "-" "$d_pid" "$d_size" "$DIRECTOR_NAME"
+        printf '%-30s %s %-5s %-12s %-8s %-9s %s\n' "(director)" "$(vpad "$d_state" 9)" "$d_term" "-" "$d_pid" "$d_size" "$DIRECTOR_CLAUDE"
     else
         printf '%-30s %-9s %-5s %-8s %-9s %s\n' REPO STATE TERM PID SIZE SESSION
-        printf '%-30s %s %-5s %-8s %-9s %s\n' "(director)" "$(vpad "$d_state" 9)" "$d_term" "$d_pid" "$d_size" "$DIRECTOR_NAME"
+        printf '%-30s %s %-5s %-8s %-9s %s\n' "(director)" "$(vpad "$d_state" 9)" "$d_term" "$d_pid" "$d_size" "$DIRECTOR_CLAUDE"
     fi
     for i in "${!r_repo[@]}"; do
         if (( show_win )); then
             printf '%-30s %s %-5s %-12s %-8s %-9s %s\n' "${r_repo[$i]}" "$(vpad "${r_state[$i]}" 9)" "${r_term[$i]}" \
-                "${r_win[$i]}" "${r_pid[$i]}" "${r_size[$i]}" "${r_repo[$i]}-$NAME_SUFFIX"
+                "${r_win[$i]}" "${r_pid[$i]}" "${r_size[$i]}" "$(em_name "${r_repo[$i]}")"
         else
             printf '%-30s %s %-5s %-8s %-9s %s\n' "${r_repo[$i]}" "$(vpad "${r_state[$i]}" 9)" "${r_term[$i]}" \
-                "${r_pid[$i]}" "${r_size[$i]}" "${r_repo[$i]}-$NAME_SUFFIX"
+                "${r_pid[$i]}" "${r_size[$i]}" "$(em_name "${r_repo[$i]}")"
         fi
     done
-    for i in "${!r_repo[@]}"; do in_tmux["${r_repo[$i]}-$NAME_SUFFIX"]=1; done
-    director_up && in_tmux["$DIRECTOR_NAME"]=1
+    for i in "${!r_repo[@]}"; do in_tmux["$(em_name "${r_repo[$i]}")"]=1; done
+    director_up && in_tmux["$DIRECTOR_CLAUDE"]=1
     mapfile -t out < <(outside_sessions)
     if (( ${#out[@]} )); then
         say ""
@@ -1030,7 +1041,7 @@ cmd_status() {
             if [[ "$o_dir" == "$HOME" || "$o_dir" == "$HOME"/* ]]; then o_dir="~${o_dir#"$HOME"}"; fi
             printf '%-30s %-9s %-8s %-8s %-9s %-18s %s\n' "${o_name:-(unnamed)}" "${o_state:--}" "$(where_of "$o_entry")" \
                 "$o_pid" "$(role_of "$o_name" "$o_cwd")" "$TMUX_AT" "$o_dir"
-            [[ "$o_name" == "$DIRECTOR_NAME" && -z "$d_out" ]] && d_out="$(where_of "$o_entry"), pid $o_pid"
+            [[ "$o_name" == "$DIRECTOR_CLAUDE" && -z "$d_out" ]] && d_out="$(where_of "$o_entry"), pid $o_pid"
             [[ -n "$o_name" && -n "${in_tmux[$o_name]:-}" ]] && dup+=("$o_name")
         done
         say ""
@@ -1039,7 +1050,7 @@ cmd_status() {
         say "No EMs in tmux: session '$TMUX_SESSION' is not running — 'standing up <repo>' starts one"
     fi
     if ! director_up && [[ -n "$d_out" ]]; then
-        say "${c_warn}The Director runs outside tmux ($d_out): 'director' would start a second '$DIRECTOR_NAME' — close that one first${c_off}"
+        say "${c_warn}The Director runs outside tmux ($d_out): 'director' would start a second '$DIRECTOR_CLAUDE' — close that one first${c_off}"
     elif ! director_up; then
         say "${c_dim}The Director is not in tmux — 'director' starts or resumes it${c_off}"
     elif [[ "$d_state" == *trust\?* ]]; then
