@@ -1,0 +1,24 @@
+---
+# ============================================================================
+# viewer_host — the ThinkPad is a disposable viewer, not a dev host (#286,
+# Chris 2026-11-19). A Claude Code session started here writes memory and
+# transcripts that nobody reads, and the two hosts' state drifts apart again.
+# This installs a SessionStart hook that says so and points at xubuntu-ws.
+#
+# Delivered as managed settings (/etc/claude-code/managed-settings.json), which
+# Claude Code merges with the user's own settings.json: kalmia owns the whole
+# file, so there is no JSON to edit in place and nothing to drift.
+# ============================================================================
+- name: Ensure the Claude Code managed-settings directory exists
+  ansible.builtin.file:
+    path: /etc/claude-code
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Install the viewer-host SessionStart hook
+  ansible.builtin.template:
+    src: managed-settings.json.j2
+    dest: /etc/claude-code/managed-settings.json
+    mode: "0644"
+  become: true

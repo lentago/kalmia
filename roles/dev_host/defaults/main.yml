@@ -1,0 +1,19 @@
+---
+# dev_host — extras for the single dev host that runs the Director and EMs
+# (xubuntu-ws, #286). Gated by `dev_host` in group_vars/all.yml.
+dev_host_nas_share: "//192.168.139.6/lentago"
+dev_host_nas_mountpoint: /mnt/lentago
+# Hand-placed, never in git: the cifs username/password. The fstab line points
+# at it; the mount fails closed (nofail) until it exists.
+dev_host_nas_credentials: "{{ target_home }}/.smbcred"
+dev_host_nas_options:
+  - "credentials={{ dev_host_nas_credentials }}"
+  - "uid={{ ansible_user_uid }}"
+  - "gid={{ ansible_user_gid }}"
+  - iocharset=utf8
+  - file_mode=0664
+  - dir_mode=0775
+  - vers=3.0
+  - _netdev
+  - nofail
+  - x-systemd.automount

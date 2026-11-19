@@ -1,0 +1,28 @@
+# ANSIBLE MANAGED — kalmia roles/dev_host. Rewritten on every run; edit
+# roles/dev_host/templates/ssh-hosts.conf.j2, not this file.
+Host *
+  ServerAliveInterval 60
+  ServerAliveCountMax 3
+  HashKnownHosts no
+Host pve pve.local
+  HostName 192.168.139.8
+  User root
+Host pve2 pve3 pve4 pve5
+  UserKnownHostsFile ~/.ssh/known_hosts ~/.ssh/pve_known_hosts
+  User root
+  ProxyJump pve
+Host ha haos homeassistant.local
+  HostName homeassistant.local
+  User root
+Host neptune neptune.local
+  HostName neptune.local
+  User cpitzi
+Host firewalla firewalla.local
+  HostName firewalla.local
+  User pi
+Host fws fedora-ws
+  HostName 192.168.139.168
+  User cpitzi
+Host claude-runner crun
+  HostName 192.168.139.10
+  User claude

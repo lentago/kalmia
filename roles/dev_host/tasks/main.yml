@@ -1,0 +1,82 @@
+---
+# ============================================================================
+# dev_host — what the single dev host needs beyond the workstation baseline:
+# the NAS mount, the `pane` wall-display command, cluster SSH aliases and uv
+# (kalmia#286). Runs after cli_tools (pipx) and repos (the brasenia clone).
+# ============================================================================
+
+# --- NAS share --------------------------------------------------------------
+- name: Install cifs-utils
+  ansible.builtin.package:
+    name: cifs-utils
+    state: present
+  become: true
+
+- name: Create the NAS mount point
+  ansible.builtin.file:
+    path: "{{ dev_host_nas_mountpoint }}"
+    state: directory
+    mode: "0755"
+  become: true
+
+# The credentials file holds a password, so it stays hand-managed. Mounting is
+# lazy (x-systemd.automount) and nofail, so a missing file never fails boot.
+- name: Declare the NAS share in fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^{{ dev_host_nas_share | regex_escape }}\s+{{ dev_host_nas_mountpoint | regex_escape }}\s'
+    line: "{{ dev_host_nas_share }} {{ dev_host_nas_mountpoint }} cifs {{ dev_host_nas_options | join(',') }} 0 0"
+  become: true
+  register: dev_host_fstab
+
+- name: Reload systemd so the new automount unit exists
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  become: true
+  when: dev_host_fstab is changed
+
+# --- pane (brasenia viewport bus) -------------------------------------------
+- name: Link pane into ~/.local/bin
+  ansible.builtin.file:
+    src: "{{ repos_dir }}/lentago/brasenia/bin/pane"
+    dest: "{{ target_home }}/.local/bin/pane"
+    state: link
+    force: false
+  become: false
+
+# --- SSH aliases ------------------------------------------------------------
+- name: Ensure ~/.ssh and ~/.ssh/config.d exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0700"
+  loop:
+    - "{{ target_home }}/.ssh"
+    - "{{ target_home }}/.ssh/config.d"
+  become: false
+
+- name: Render the managed host aliases
+  ansible.builtin.template:
+    src: ssh-hosts.conf.j2
+    dest: "{{ target_home }}/.ssh/config.d/kalmia.conf"
+    mode: "0600"
+  become: false
+
+# `Include` must precede any Host stanza. Everything else in ~/.ssh/config stays
+# the user's; hand-made copies of the managed aliases are removed once.
+- name: Include the managed aliases from ~/.ssh/config
+  ansible.builtin.lineinfile:
+    path: "{{ target_home }}/.ssh/config"
+    line: "Include ~/.ssh/config.d/*.conf"
+    insertbefore: BOF
+    create: true
+    mode: "0600"
+  become: false
+
+# --- uv ---------------------------------------------------------------------
+# The aws and grafana MCP servers launch through uvx.
+- name: Install uv (and uvx) with pipx
+  community.general.pipx:
+    name: uv
+    state: present
+  become: false

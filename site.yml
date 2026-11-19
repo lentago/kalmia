@@ -85,3 +85,9 @@
     - role: repos
       tags: [repos]
       when: clone_repos | bool
+    - role: dev_host
+      tags: [dev-host]
+      when: dev_host | bool
+    - role: viewer_host
+      tags: [viewer-host]
+      when: workstation_profile == 'ubuntu_laptop'
