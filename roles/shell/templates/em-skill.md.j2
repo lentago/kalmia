@@ -1,6 +1,6 @@
 ---
 name: em
-description: Director-side handling of a repo's standing Engineering Manager — start it on demand in its own terminal window, show or hide that window, dispatch to it, report. Use whenever dispatching to a <repo>-standing session, when Chris says show/open/hide/close an EM or asks which EMs are up, and before any `standing` command.
+description: Director-side handling of a repo's standing Engineering Manager — start it on demand in its own terminal window, show or hide that window, dispatch to it, report. Use whenever dispatching to a <host>/<repo>-standing session, when Chris says show/open/hide/close an EM or asks which EMs are up, and before any `standing` command.
 ---
 
 <!-- ANSIBLE MANAGED — kalmia roles/shell/templates/em-skill.md.j2, installed with
@@ -8,8 +8,10 @@ description: Director-side handling of a repo's standing Engineering Manager —
 
 # /em — a standing EM, on demand, in its own window
 
-The model (Chris, 2026-10-31): each Engineering Manager is `claude --name <repo>-standing`
-(started with `--remote-control <repo>-standing`, so it appears by name in the claude.ai
+The model (Chris, 2026-10-31): each Engineering Manager is `claude --name <host>/<repo>-standing`
+(`<host>` is `hostname -s`, or `STANDING_HOST` on long hostnames; kalmia#330: sessions from
+several machines share one session list, so the name says where each runs. Started with
+`--remote-control <host>/<repo>-standing`, so it appears by name in the claude.ai
 session list; `STANDING_REMOTE_CONTROL=0` opts out) in one tmux pane, one per repo, shown in its own maximized Ghostty titled
 `<repo> — standing EM`. The Director starts an EM the first time it needs one, never all
 at init, opens its window so Chris can watch the work alongside the Director's, and Chris
@@ -30,7 +32,7 @@ client, the session keeps running. Canon: `~/repos/lentago/CLAUDE.md` § Directo
 
 ## Procedure
 
-1. **Status.** `ListAgents`: is `<repo>-standing` listed? `standing status` gives one row
+1. **Status.** `ListAgents`: is `<host>/<repo>-standing` listed? `standing status` gives one row
    per EM: state, pid, and in TERM how many terminals show it (`none` = no window).
 2. **Start if absent, one at a time** (two concurrent starts can race, kalmia#247):
 
@@ -39,7 +41,11 @@ client, the session keeps running. Canon: `~/repos/lentago/CLAUDE.md` § Directo
    ```
 
    While the tmux session `lentago-director` exists (Chris starts it with `director`),
-   `--director` defaults to `lentago-director`; pass it when you run under any other name.
+   `--director` defaults to `<host>/lentago-director` (the Director's qualified `--name`); pass it
+   when you run under any other name. An EM or Director that was already running when
+   kalmia#330 rolled out keeps its old unqualified name (`kalmia-standing`) until it restarts:
+   `ListAgents` shows which form is live, so address that exact name and do not wait for the
+   qualified one to appear.
    `up` opens a terminal for the EM it starts, and only for that one. Then check
    `ListAgents` every 10 s, up to 60 s, until the name appears. If `standing status`
    shows `trust?`, stop and tell Chris: accepting the folder-trust dialog is his
@@ -51,7 +57,7 @@ client, the session keeps running. Canon: `~/repos/lentago/CLAUDE.md` § Directo
 3. **Show** an EM that was already up: `standing show <repo>`. It opens one terminal,
    or says the EM is already shown and opens nothing. Never `standing open`: it reopens
    every EM's window, including ones Chris closed.
-4. **Dispatch** per the protocol: `SendMessage` to `<repo>-standing` with
+4. **Dispatch** per the protocol: `SendMessage` to `<host>/<repo>-standing` (the full name `ListAgents` prints) with
    `notify_when_idle: true`; first line is the ask in one sentence; carry the issue number
    (file it first), the deliverable, what is out of scope, any judgment already decided.
    One ask per message.
