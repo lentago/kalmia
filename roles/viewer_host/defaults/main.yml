@@ -1,0 +1,16 @@
+---
+viewer_host_dev_host: xubuntu-ws
+# SessionStart hook output: `additionalContext` reaches the model, `systemMessage`
+# is shown to the person.
+viewer_host_notice:
+  systemMessage: >-
+    This machine is a viewer, not a dev host. Work happens on {{ viewer_host_dev_host }}:
+    run `ssh {{ viewer_host_dev_host }}`, then `director` or `standing up <repo>`.
+  hookSpecificOutput:
+    hookEventName: SessionStart
+    additionalContext: >-
+      This machine is a disposable viewer (kalmia#286). Claude
+      state (memory, transcripts, settings) lives on {{ viewer_host_dev_host }}, and a
+      session here writes a second copy that drifts. Do not start work here. Tell the
+      user to run `ssh {{ viewer_host_dev_host }}` and then `director` or
+      `standing up <repo>`, unless they explicitly say this session is a one-off.

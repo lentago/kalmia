@@ -1,0 +1,14 @@
+{{ {
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '%s\\n' " ~ (viewer_host_notice | to_json | quote)
+          }
+        ]
+      }
+    ]
+  }
+} | to_nice_json }}

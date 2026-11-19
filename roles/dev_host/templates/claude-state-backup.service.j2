@@ -1,0 +1,12 @@
+# ANSIBLE MANAGED — kalmia roles/dev_host.
+[Unit]
+Description=Mirror Claude state to the NAS (kalmia#286)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User={{ target_user }}
+ExecStart={{ target_home }}/.local/bin/claude-state-backup
+Nice=10
+IOSchedulingClass=idle

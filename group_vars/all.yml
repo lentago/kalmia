@@ -26,6 +26,10 @@ docker_daemon: true            # false → CLI-only (Crostini)
 install_vscode: true
 install_claude_code: true
 clone_repos: true              # needs gh auth or GH_TOKEN in the env
+# The single dev host that runs the Director and EMs (#286): adds the NAS mount,
+# pane, cluster SSH aliases and uv (roles/dev_host). Keyed on the hostname because
+# the xubuntu profile also builds the testbed VMs, which must not get any of it.
+dev_host: "{{ ansible_hostname == 'xubuntu-ws' }}"
 
 # Whether an unauthenticated gh is a hard failure when clone_repos is on.
 # Default false: now that cloning is on by default, a pristine first run — where

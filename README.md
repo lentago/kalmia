@@ -236,6 +236,8 @@ table below — `docker`, `code`, the CLI utilities — should all be on your
 | `power` | TLP power management, ThinkPad charge thresholds, fwupd (opt-in) |
 | `editors` | VS Code (+ extensions), Claude Code |
 | `cli_tools` | jq, yq, bat, fd, ripgrep, fzf, tmux, direnv, Starship, … |
+| `dev_host` | The single dev host (`xubuntu-ws`, `-e dev_host=true` elsewhere): `cifs-utils` and the NAS fstab line, the `pane` link, cluster SSH aliases in `~/.ssh/config.d`, `uv`, and a nightly timer mirroring the Claude state (`~/.claude/projects` and settings, `CLAUDE.md` files, clones' `settings.local.json`) to `/mnt/lentago/claude-state/<host>` |
+| `viewer_host` | `ubuntu_laptop` only: a machine-wide SessionStart hook (`/etc/claude-code/managed-settings.json`) saying the machine is a viewer and pointing at `ssh xubuntu-ws`; delete the file to opt out |
 | `gnome_extensions` | GNOME Shell extensions from extensions.gnome.org, enabled and configured per profile (Dash to Panel on `ubuntu_laptop`; skipped elsewhere) |
 | `shell` | marker-managed `.bashrc` block + Starship config + the `pull-all` / `clean-all` / `gh-issue` / `standing` / `director` helpers + the Lentago Director's `/em` skill |
 | `repos` | GitHub CLI + clone your personal and org repos into `~/repos/<owner>/<name>` (on by default) |

@@ -1,0 +1,110 @@
+---
+# ============================================================================
+# dev_host — what the single dev host needs beyond the workstation baseline:
+# the NAS mount, the `pane` wall-display command, cluster SSH aliases and uv
+# (kalmia#286). Runs after cli_tools (pipx) and repos (the brasenia clone).
+# ============================================================================
+
+# --- NAS share --------------------------------------------------------------
+- name: Install cifs-utils
+  ansible.builtin.package:
+    name: cifs-utils
+    state: present
+  become: true
+
+- name: Create the NAS mount point
+  ansible.builtin.file:
+    path: "{{ dev_host_nas_mountpoint }}"
+    state: directory
+    mode: "0755"
+  become: true
+
+# The credentials file holds a password, so it stays hand-managed. Mounting is
+# lazy (x-systemd.automount) and nofail, so a missing file never fails boot.
+- name: Declare the NAS share in fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^{{ dev_host_nas_share | regex_escape }}\s+{{ dev_host_nas_mountpoint | regex_escape }}\s'
+    line: "{{ dev_host_nas_share }} {{ dev_host_nas_mountpoint }} cifs {{ dev_host_nas_options | join(',') }} 0 0"
+  become: true
+  register: dev_host_fstab
+
+- name: Reload systemd so the new automount unit exists
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  become: true
+  when: dev_host_fstab is changed
+
+# --- pane (brasenia viewport bus) -------------------------------------------
+# Needs the brasenia clone, so it follows the repos role and clone_repos.
+- name: Link pane into ~/.local/bin
+  ansible.builtin.file:
+    src: "{{ repos_dir }}/lentago/brasenia/bin/pane"
+    dest: "{{ target_home }}/.local/bin/pane"
+    state: link
+    force: false
+  become: false
+  when: clone_repos | bool
+
+# --- SSH aliases ------------------------------------------------------------
+- name: Ensure ~/.ssh and ~/.ssh/config.d exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0700"
+  loop:
+    - "{{ target_home }}/.ssh"
+    - "{{ target_home }}/.ssh/config.d"
+  become: false
+
+- name: Render the managed host aliases
+  ansible.builtin.template:
+    src: ssh-hosts.conf.j2
+    dest: "{{ target_home }}/.ssh/config.d/kalmia.conf"
+    mode: "0600"
+  become: false
+
+# `Include` must precede any Host stanza. Everything else in ~/.ssh/config stays
+# the user's. A hand-made copy of an alias left there is harmless (the managed,
+# identical one wins) and can be deleted by hand.
+- name: Include the managed aliases from ~/.ssh/config
+  ansible.builtin.lineinfile:
+    path: "{{ target_home }}/.ssh/config"
+    line: "Include ~/.ssh/config.d/*.conf"
+    insertbefore: BOF
+    create: true
+    mode: "0600"
+  become: false
+
+# --- uv ---------------------------------------------------------------------
+# The aws and grafana MCP servers launch through uvx.
+- name: Install uv (and uvx) with pipx
+  community.general.pipx:
+    name: uv
+    state: present
+  become: false
+
+# --- Nightly Claude-state mirror to the NAS ---------------------------------
+- name: Install the Claude-state backup script
+  ansible.builtin.template:
+    src: claude-state-backup.sh.j2
+    dest: "{{ target_home }}/.local/bin/claude-state-backup"
+    mode: "0755"
+  become: false
+
+- name: Install the Claude-state backup units
+  ansible.builtin.template:
+    src: "claude-state-backup.{{ item }}.j2"
+    dest: "/etc/systemd/system/claude-state-backup.{{ item }}"
+    mode: "0644"
+  loop: [service, timer]
+  become: true
+  register: dev_host_backup_units
+
+- name: Enable the nightly mirror timer
+  ansible.builtin.systemd_service:
+    name: claude-state-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ dev_host_backup_units is changed }}"
+  become: true
