@@ -30,6 +30,9 @@ jobs:
       - name: Downloads are pinned (kalmia#259)
         run: python3 tests/download-pins.py
 
+      - name: Pre-tasks run under any --tags (kalmia#251)
+        run: python3 tests/pretasks-always.py
+
       - name: Syntax check
         run: ansible-playbook --syntax-check -i inventory/hosts.yml site.yml
 
