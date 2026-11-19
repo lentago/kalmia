@@ -26,9 +26,11 @@ dev_host_claude_backup_dest: "{{ dev_host_nas_mountpoint }}/claude-state/{{ ansi
 dev_host_claude_backup_calendar: "*-*-* 02:30:00"
 
 # --- Admin parity with the old ThinkPad (#337) --------------------------------
-# sha256 of https://downloads.1password.com/linux/keys/1password.asc (computed
-# 2026-11-19; 1Password publishes none). Bump if the key rotates.
-dev_host_op_gpg_key_sha256: "f39e7dd9dedc581ced85732832f217e0de5860a3b80279b5af4bc7c6d8157bae"
+# Bitwarden CLI release (bitwarden/clients cli-v<version>), pinned. 2026.10.1 is the
+# newest release that is more than two weeks old. sha256 of bw-linux-<version>.zip,
+# matching the digest GitHub publishes for the asset.
+dev_host_bw_version: "2026.10.1"
+dev_host_bw_sha256: "eb09c3715291c21cf744819b873a255c1247b1b8b45bae138621a644ec7ad8f5"
 # The osmunda k3s server (LXC 119, k3s-1 on pve5). The kubeconfig is fetched from
 # it, never copied from another workstation.
 dev_host_kube_pve_node: pve5

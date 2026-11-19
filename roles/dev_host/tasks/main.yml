@@ -109,48 +109,73 @@
     daemon_reload: "{{ dev_host_backup_units is changed }}"
   become: true
 
-# --- rclone and the 1Password CLI (#337) ------------------------------------
-# Sign-ins are the maintainer's, per machine: `rclone config` (Drive OAuth) and
-# `op signin`. Nothing is copied from another host.
+# --- rclone and the Bitwarden CLI (#337, #341) -----------------------------
+# Sign-ins are the maintainer's, per machine: `rclone config` (Drive OAuth),
+# `bw login` once and `bw unlock` per shell. Nothing is copied from another
+# host, and no master password or BW_SESSION is stored anywhere.
 - name: Install rclone
   ansible.builtin.package:
     name: rclone
     state: present
   become: true
 
-- name: Set up the 1Password apt repository (Debian)
-  when: ansible_os_family == "Debian"
+# bw comes from Bitwarden's own release assets (bitwarden/clients, cli-v<ver>):
+# one self-contained binary, so no Node toolchain, and the version is pinned by
+# checksum. The snap would auto-update past any pin, and the npm package would
+# pull in nvm's Node.
+- name: Download the Bitwarden CLI
+  ansible.builtin.get_url:
+    url: "https://github.com/bitwarden/clients/releases/download/cli-v{{ dev_host_bw_version }}/bw-linux-{{ dev_host_bw_version }}.zip"
+    dest: "/tmp/bw-linux-{{ dev_host_bw_version }}.zip"
+    checksum: "sha256:{{ dev_host_bw_sha256 }}"
+    mode: "0644"
+  when: ansible_architecture == "x86_64"
+
+- name: Create the versioned Bitwarden CLI directory
+  ansible.builtin.file:
+    path: "/opt/bitwarden-cli/{{ dev_host_bw_version }}"
+    state: directory
+    mode: "0755"
   become: true
-  block:
-    - name: Ensure the apt keyrings directory exists
-      ansible.builtin.file:
-        path: /etc/apt/keyrings
-        state: directory
-        mode: "0755"
 
-    - name: Add the 1Password GPG key
-      ansible.builtin.get_url:
-        url: https://downloads.1password.com/linux/keys/1password.asc
-        dest: /etc/apt/keyrings/1password.asc
-        checksum: "sha256:{{ dev_host_op_gpg_key_sha256 }}"
-        mode: "0644"
+- name: Unpack the Bitwarden CLI into a versioned directory
+  ansible.builtin.unarchive:
+    src: "/tmp/bw-linux-{{ dev_host_bw_version }}.zip"
+    dest: "/opt/bitwarden-cli/{{ dev_host_bw_version }}"
+    remote_src: true
+    creates: "/opt/bitwarden-cli/{{ dev_host_bw_version }}/bw"
+    mode: "0755"
+  become: true
+  when: ansible_architecture == "x86_64" and not ansible_check_mode
 
-    - name: Add the 1Password apt repository
-      ansible.builtin.deb822_repository:
-        name: 1password
-        types: [deb]
-        uris: https://downloads.1password.com/linux/debian/amd64
-        suites: stable
-        components: [main]
-        architectures: [amd64]
-        signed_by: /etc/apt/keyrings/1password.asc
-        state: present
+- name: Link bw into /usr/local/bin
+  ansible.builtin.file:
+    src: "/opt/bitwarden-cli/{{ dev_host_bw_version }}/bw"
+    dest: /usr/local/bin/bw
+    state: link
+  become: true
+  when: ansible_architecture == "x86_64" and not ansible_check_mode
 
-    - name: Install the 1Password CLI
-      ansible.builtin.apt:
-        name: 1password-cli
-        state: present
-        update_cache: true
+# #339 briefly installed the 1Password CLI; Chris moved to Bitwarden (#341).
+- name: Remove the 1Password CLI
+  ansible.builtin.apt:
+    name: 1password-cli
+    state: absent
+  become: true
+  when: ansible_os_family == "Debian"
+
+- name: Remove the 1Password apt repository
+  ansible.builtin.deb822_repository:
+    name: 1password
+    state: absent
+  become: true
+  when: ansible_os_family == "Debian"
+
+- name: Remove the 1Password GPG key
+  ansible.builtin.file:
+    path: /etc/apt/keyrings/1password.asc
+    state: absent
+  become: true
 
 # --- kubeconfig for the osmunda k3s cluster ---------------------------------
 # Fetched from the k3s server over the same root SSH path as the rest of the
