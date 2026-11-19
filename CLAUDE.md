@@ -62,7 +62,7 @@ instead of ~1,000-line bash scripts. It supersedes the bash scripts in
   `become: true`, user-space tasks (nvm, `.bashrc`, Starship, VS Code settings)
   run as the user. Use `target_user` / `target_home`, never root's `$HOME`.
 - **Roles**: common, languages, cloud_tools, containers, power, editors,
-  cli_tools, shell, gnome_extensions, repos, dev_host (xubuntu-ws only: NAS mount, `pane`, SSH aliases, uv, nightly Claude-state mirror to the NAS), viewer_host (`ubuntu_laptop`: SessionStart hook in `/etc/claude-code/managed-settings.json`, machine-wide, removed by deleting that file).
+  cli_tools, shell, gnome_extensions, repos, dev_host (xubuntu-ws only: NAS mount, `pane`, SSH aliases, uv, rclone, `op`, a k3s kubeconfig, nightly Claude-state mirror to the NAS), viewer_host (`ubuntu_laptop`: SessionStart hook in `/etc/claude-code/managed-settings.json`, machine-wide, removed by deleting that file).
 
 ## Editing guidelines
 
