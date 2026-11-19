@@ -32,6 +32,10 @@
       {{ (ansible_virtualization_type | default('')) in ['lxc', 'lxd', 'container']
          or 'lxc' in (ansible_virtualization_tech_guest | default([])) }}
 
+  # Every pre_task is tagged `always`: they set workstation_profile and load the
+  # profile and OS-family vars, so a tag-limited run (`--tags shell`) would
+  # otherwise skip them and roles would render from their own defaults or see an
+  # empty profile (kalmia#251). tests/pretasks-always.py enforces this.
   pre_tasks:
     - name: Autodetect workstation profile when not provided
       ansible.builtin.set_fact:
@@ -45,6 +49,7 @@
             else ''
           }}
       when: workstation_profile | length == 0
+      tags: always
 
     - name: Fail fast when the profile cannot be determined
       ansible.builtin.assert:
@@ -53,12 +58,15 @@
           Could not autodetect the workstation profile. Re-run with
           -e workstation_profile=<crostini|baguette|xubuntu|fedora|ubuntu_laptop>.
         success_msg: "Workstation profile: {{ workstation_profile }}"
+      tags: always
 
     - name: Load OS-family package-name map
       ansible.builtin.include_vars: "vars/{{ ansible_os_family }}.yml"
+      tags: always
 
     - name: Load profile feature toggles
       ansible.builtin.include_vars: "profiles/{{ workstation_profile }}.yml"
+      tags: always
 
   roles:
     - role: common
