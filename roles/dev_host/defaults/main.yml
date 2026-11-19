@@ -24,3 +24,13 @@ dev_host_nas_options:
 # the whole LAN, and transcripts hold message text.
 dev_host_claude_backup_dest: "{{ dev_host_nas_mountpoint }}/claude-state/{{ ansible_hostname }}"
 dev_host_claude_backup_calendar: "*-*-* 02:30:00"
+
+# --- Admin parity with the old ThinkPad (#337) --------------------------------
+# sha256 of https://downloads.1password.com/linux/keys/1password.asc (computed
+# 2026-11-19; 1Password publishes none). Bump if the key rotates.
+dev_host_op_gpg_key_sha256: "f39e7dd9dedc581ced85732832f217e0de5860a3b80279b5af4bc7c6d8157bae"
+# The osmunda k3s server (LXC 119, k3s-1 on pve5). The kubeconfig is fetched from
+# it, never copied from another workstation.
+dev_host_kube_pve_node: pve5
+dev_host_kube_ctid: 119
+dev_host_kube_server: "https://192.168.139.25:6443"

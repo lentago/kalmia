@@ -108,3 +108,90 @@
     state: started
     daemon_reload: "{{ dev_host_backup_units is changed }}"
   become: true
+
+# --- rclone and the 1Password CLI (#337) ------------------------------------
+# Sign-ins are the maintainer's, per machine: `rclone config` (Drive OAuth) and
+# `op signin`. Nothing is copied from another host.
+- name: Install rclone
+  ansible.builtin.package:
+    name: rclone
+    state: present
+  become: true
+
+- name: Set up the 1Password apt repository (Debian)
+  when: ansible_os_family == "Debian"
+  become: true
+  block:
+    - name: Ensure the apt keyrings directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Add the 1Password GPG key
+      ansible.builtin.get_url:
+        url: https://downloads.1password.com/linux/keys/1password.asc
+        dest: /etc/apt/keyrings/1password.asc
+        checksum: "sha256:{{ dev_host_op_gpg_key_sha256 }}"
+        mode: "0644"
+
+    - name: Add the 1Password apt repository
+      ansible.builtin.deb822_repository:
+        name: 1password
+        types: [deb]
+        uris: https://downloads.1password.com/linux/debian/amd64
+        suites: stable
+        components: [main]
+        architectures: [amd64]
+        signed_by: /etc/apt/keyrings/1password.asc
+        state: present
+
+    - name: Install the 1Password CLI
+      ansible.builtin.apt:
+        name: 1password-cli
+        state: present
+        update_cache: true
+
+# --- kubeconfig for the osmunda k3s cluster ---------------------------------
+# Fetched from the k3s server over the same root SSH path as the rest of the
+# cluster work, and only when ~/.kube/config does not exist, so a hand-merged
+# config is never overwritten. Best effort: an unreachable server skips it.
+- name: Check for an existing kubeconfig
+  ansible.builtin.stat:
+    path: "{{ target_home }}/.kube/config"
+  register: dev_host_kubeconfig
+
+- name: Fetch the k3s kubeconfig from the server
+  ansible.builtin.command:
+    argv:
+      - ssh
+      - -o
+      - BatchMode=yes
+      - -o
+      - ConnectTimeout=10
+      - pve
+      - "ssh {{ dev_host_kube_pve_node }} pct exec {{ dev_host_kube_ctid }} -- cat /etc/rancher/k3s/k3s.yaml"
+  register: dev_host_k3s_yaml
+  changed_when: false
+  failed_when: false
+  no_log: true          # stdout is the cluster-admin client key
+  when: not dev_host_kubeconfig.stat.exists
+
+- name: Write ~/.kube/config
+  when:
+    - not dev_host_kubeconfig.stat.exists
+    - dev_host_k3s_yaml.rc | default(1) == 0
+    - "'apiVersion' in dev_host_k3s_yaml.stdout"
+  block:
+    - name: Ensure ~/.kube exists
+      ansible.builtin.file:
+        path: "{{ target_home }}/.kube"
+        state: directory
+        mode: "0700"
+
+    - name: Write the kubeconfig, pointed at the server's LAN address
+      ansible.builtin.copy:
+        dest: "{{ target_home }}/.kube/config"
+        content: "{{ dev_host_k3s_yaml.stdout | replace('https://127.0.0.1:6443', dev_host_kube_server) }}\n"
+        mode: "0600"
+      no_log: true
