@@ -41,7 +41,11 @@ client, the session keeps running. Canon: `~/repos/lentago/CLAUDE.md` § Directo
    ```
 
    While the tmux session `lentago-director` exists (Chris starts it with `director`),
-   `--director` defaults to `lentago-director`; pass it when you run under any other name.
+   `--director` defaults to `<host>/lentago-director` (the Director's qualified `--name`); pass it
+   when you run under any other name. An EM or Director that was already running when
+   kalmia#330 rolled out keeps its old unqualified name (`kalmia-standing`) until it restarts:
+   `ListAgents` shows which form is live, so address that exact name and do not wait for the
+   qualified one to appear.
    `up` opens a terminal for the EM it starts, and only for that one. Then check
    `ListAgents` every 10 s, up to 60 s, until the name appears. If `standing status`
    shows `trust?`, stop and tell Chris: accepting the folder-trust dialog is his

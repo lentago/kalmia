@@ -45,7 +45,7 @@
 #   standing up REPO --director NAME  tell the EM which session is its Director (NAME from
 #                                  the "This session is …" line of ListAgents); remembered
 #                                  for later up/restart calls — `--no-director` forgets it.
-#                                  With no --director, the EM reports to lentago-director
+#                                  With no --director, the EM reports to <host>/lentago-director
 #                                  while that tmux session exists, else to the remembered one
 #   standing up --no-open ...      don't open terminal windows
 #   standing up --no-prompt ...    start claude at an empty prompt (no kickoff turn)
@@ -55,7 +55,7 @@
 #                                  /exit each pane and start a FRESH session in it (new model,
 #                                  prompt, director); the EM's conversation and any in-flight
 #                                  work are gone. Windows and terminals stay put. A bare
-#                                  `standing restart` keeps the Director: lentago-director
+#                                  `standing restart` keeps the Director: <host>/lentago-director
 #                                  while that session exists, else the one remembered from
 #                                  the last --director.
 #   standing down [repo ...]       send /exit, wait, then kill the EM's pane, window and
@@ -63,7 +63,7 @@
 #                                  sessions — never the Director's
 #   standing down director         /exit the Director, then end its tmux session and terminals.
 #                                  The remembered Director name is kept: EMs started meanwhile
-#                                  still report to lentago-director, which `director` brings back
+#                                  still report to <host>/lentago-director, which `director` brings back
 #   standing status                the Director's row, then one row per EM: repo, state,
 #                                  terminal, pid, size, session name (state "trust?" = waiting
 #                                  at Claude's folder-trust dialog); then any live Claude
@@ -119,7 +119,7 @@
 #                          (default: `hostname -s`; set a short one on long hostnames,
 #                          e.g. STANDING_HOST=thinkpad; empty disables). tmux session
 #                          names stay unqualified.
-#   STANDING_NAME_SUFFIX   claude --name suffix    (default: standing → "xubuntu-ws/kalmia-standing")
+#   STANDING_NAME_SUFFIX   claude --name suffix    (default: standing → "<host>/kalmia-standing")
 #   STANDING_TERMINAL      terminal for `open`     (default: first of ghostty, ptyxis, alacritty)
 #   STANDING_FONT_SIZE     font size for those terminals only (ghostty/alacritty; default:
 #                          unset, i.e. the terminal's own size)
