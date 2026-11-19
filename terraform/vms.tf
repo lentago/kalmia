@@ -50,11 +50,16 @@ resource "proxmox_virtual_environment_vm" "xubuntu_ws" {
 
   # Moved off `local` (pve5's root fs) to thin LVM and grown 32 -> 64 GB
   # out of band (`qm disk move` + `qm resize`); discard returns freed blocks.
+  # Grown 64 -> 96 GB for #286: the single dev host holds ~20 GB of clones plus
+  # the synced Claude state. The thin pool is overcommitted, so the next grow
+  # needs a pool check first. The apply resizes the disk online; the guest
+  # partition and ext4 filesystem are grown inside the guest (growpart +
+  # resize2fs), which Terraform cannot do.
   disk {
     interface    = "scsi0"
     datastore_id = "local-lvm"
     file_format  = "raw"
-    size         = 64
+    size         = 96
     iothread     = true
     discard      = "on"
   }
