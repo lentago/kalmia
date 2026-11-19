@@ -20,7 +20,7 @@
 #
 # The Director lives on the same tmux server, in its own tmux session
 # "lentago-director": one window "director" in ~/repos/lentago running
-# `claude --name <host>/lentago-director --continue`, so it survives a closed terminal,
+# `claude --name <host>/lentago-director --continue --model claude-opus-5-5`, so it survives a closed terminal,
 # keeps a stable name for the EMs to report to, and resumes its conversation.
 # `standing director` (or the `director` command) creates or resumes it and
 # attaches. While that session exists, `standing up` points new EMs at it.
@@ -115,6 +115,10 @@
 #                          N > 1 packs N tiled panes into windows standing-1, standing-2, …)
 #   STANDING_MODEL         model every EM starts on (default: claude-sonnet-5-5; set it
 #                          empty for Claude's own default; `-- --model X` overrides per run)
+#   STANDING_DIRECTOR_MODEL  model the Director starts on (default: claude-opus-5-5; set it
+#                          empty for Claude's own default; `director -- --model X` overrides
+#                          per run). Applies only when its claude starts, so a running
+#                          Director keeps its model until it restarts.
 #   STANDING_HOST          host label prefixed to every claude --name, "<host>/<name>"
 #                          (default: `hostname -s`; set a short one on long hostnames,
 #                          e.g. STANDING_HOST=thinkpad; empty disables). tmux session
@@ -158,6 +162,9 @@ DIRECTOR_WIN=director
 DIRECTOR_TITLE="lentago — Engineering Director"
 PER_WINDOW="${STANDING_PER_WINDOW:-1}"
 MODEL="${STANDING_MODEL-claude-sonnet-5-5}"
+# The Director runs on Opus (Chris, 2026-11-19, kalmia#335); the global settings.json
+# default and the EMs' model are untouched.
+DIRECTOR_MODEL="${STANDING_DIRECTOR_MODEL-claude-opus-5-5}"
 NAME_SUFFIX="${STANDING_NAME_SUFFIX:-standing}"
 # Host label in every claude --name (kalmia#330): sessions from several machines share
 # one claude.ai / Desktop list, so "<host>/<name>" says where each one runs. Host first,
@@ -415,15 +422,16 @@ claude_argv() {
 
 # The model an EM actually gets: a `--model X` / `--model=X` passed after `--`
 # wins over the default, same as claude_argv. Prints nothing when neither is set.
+# $1, when given (even empty), replaces the EM default: the Director passes its own.
 effective_model() {
-    local i
+    local i def=${1-$MODEL}
     for (( i = 0; i < ${#EXTRA[@]}; i++ )); do
         case "${EXTRA[i]}" in
             --model)   printf '%s' "${EXTRA[i+1]:-}"; return ;;   # bare/empty: claude_argv adds no default either
             --model=*) printf '%s' "${EXTRA[i]#--model=}"; return ;;
         esac
     done
-    printf '%s' "$MODEL"
+    printf '%s' "$def"
 }
 
 # Create the pane for a repo (creating the session as needed); prints its id.
@@ -767,13 +775,17 @@ director_up()   { tmux has-session -t "=$DIRECTOR_NAME" 2>/dev/null; }
 director_pane() { { tmux list-panes -s -t "=$DIRECTOR_NAME" -F '#{pane_id}' 2>/dev/null || true; } | head -n1; }
 
 # claude for the Director: CLAUDE* stripped, its standing name, resuming the
-# latest conversation in REPOS_DIR unless FRESH, then the caller's extras.
+# latest conversation in REPOS_DIR unless FRESH, then the Director's default
+# model unless the caller passed one, then the caller's extras.
 director_argv() {
     local -a cmd=()
+    local a has_model=0
     mapfile -d '' cmd < <(env_prefix)
     cmd+=("$CLI_BIN" --name "$DIRECTOR_CLAUDE")
     mapfile -d '' -O "${#cmd[@]}" cmd < <(remote_control_args "$DIRECTOR_CLAUDE")
     (( FRESH )) || cmd+=(--continue)
+    for a in "${EXTRA[@]}"; do [[ "$a" == --model || "$a" == --model=* ]] && has_model=1; done
+    [[ -n "$DIRECTOR_MODEL" && $has_model == 0 ]] && cmd+=(--model "$DIRECTOR_MODEL")
     cmd+=("${EXTRA[@]}")
     printf '%s\0' "${cmd[@]}"
 }
@@ -880,7 +892,7 @@ cmd_director() {
     scrub_env
     ensure_director
     case "$D_STATE" in
-        started)   ok "the Director started  ${c_dim}(claude --name $DIRECTOR_CLAUDE$( (( FRESH )) || printf ' --continue') in $REPOS_DIR)${c_off}" ;;
+        started)   ok "the Director started  ${c_dim}(claude --name $DIRECTOR_CLAUDE$( (( FRESH )) || printf ' --continue')$(m=$(effective_model "$DIRECTOR_MODEL"); [[ -n "$m" ]] && printf ' --model %s' "$m") in $REPOS_DIR)${c_off}" ;;
         respawned) ok "the Director respawned  ${c_dim}(its claude had exited)${c_off}" ;;
         running)   say "${c_dim}  · the Director is already running${c_off}"
                    (( FRESH == 0 && ${#EXTRA[@]} == 0 )) || warn "--fresh and claude args apply only when claude starts; /exit it first" ;;

@@ -10,7 +10,9 @@
 #   director                 create or resume, then attach (switch-client inside tmux)
 #   director --open          open a maximized terminal on it instead of attaching here
 #   director --fresh         start a new conversation instead of --continue
-#   director -- ARGS         extra claude arguments (only when claude starts)
+#   director -- ARGS         extra claude arguments (only when claude starts);
+#                            `-- --model X` beats the default model, claude-opus-5-5
+#                            (STANDING_DIRECTOR_MODEL changes it; empty = Claude's own default)
 #
 # `standing show|hide director` opens or closes its terminal, `standing down
 # director` ends it; `standing --help` has the rest.
