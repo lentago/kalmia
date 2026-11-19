@@ -422,15 +422,16 @@ claude_argv() {
 
 # The model an EM actually gets: a `--model X` / `--model=X` passed after `--`
 # wins over the default, same as claude_argv. Prints nothing when neither is set.
+# $1, when given (even empty), replaces the EM default: the Director passes its own.
 effective_model() {
-    local i
+    local i def=${1-$MODEL}
     for (( i = 0; i < ${#EXTRA[@]}; i++ )); do
         case "${EXTRA[i]}" in
             --model)   printf '%s' "${EXTRA[i+1]:-}"; return ;;   # bare/empty: claude_argv adds no default either
             --model=*) printf '%s' "${EXTRA[i]#--model=}"; return ;;
         esac
     done
-    printf '%s' "$MODEL"
+    printf '%s' "$def"
 }
 
 # Create the pane for a repo (creating the session as needed); prints its id.
@@ -891,7 +892,7 @@ cmd_director() {
     scrub_env
     ensure_director
     case "$D_STATE" in
-        started)   ok "the Director started  ${c_dim}(claude --name $DIRECTOR_CLAUDE$( (( FRESH )) || printf ' --continue')$( [[ -n "$DIRECTOR_MODEL" ]] && printf ' --model %s' "$DIRECTOR_MODEL") in $REPOS_DIR)${c_off}" ;;
+        started)   ok "the Director started  ${c_dim}(claude --name $DIRECTOR_CLAUDE$( (( FRESH )) || printf ' --continue')$(m=$(effective_model "$DIRECTOR_MODEL"); [[ -n "$m" ]] && printf ' --model %s' "$m") in $REPOS_DIR)${c_off}" ;;
         respawned) ok "the Director respawned  ${c_dim}(its claude had exited)${c_off}" ;;
         running)   say "${c_dim}  · the Director is already running${c_off}"
                    (( FRESH == 0 && ${#EXTRA[@]} == 0 )) || warn "--fresh and claude args apply only when claude starts; /exit it first" ;;
