@@ -337,7 +337,7 @@ resource "proxmox_virtual_environment_container" "brasenia" {
   }
 
   lifecycle {
-    # Pipeline-recreatable (token-created, no keyctl/bind mount): not guarded.
+    # Pipeline-recreatable (token-created, no keyctl/bind mount): not destroy-guarded. Only operating_system and the seeded SSH key (user_account) are excluded from drift.
     ignore_changes       = [operating_system, initialization[0].user_account]
     replace_triggered_by = [terraform_data.brasenia_rebuild]
   }

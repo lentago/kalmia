@@ -252,6 +252,12 @@ pipeline-recreatable guests unguarded so ordinary replacements still work.
 | minecraft-runner-2 CT 126 | `container.minecraft_runner_2` | no | Pipeline-recreatable, as minecraft-runner: the same two mount-hook mounts |
 | minecraft-runner-3 CT 127 | `container.minecraft_runner_3` | no | Pipeline-recreatable, as minecraft-runner: the same two mount-hook mounts, through pve3's hook |
 
+Every container also carries `ignore_changes = [initialization[0].user_account]`
+([`guest-ssh-key.tf`](guest-ssh-key.tf), #337). Changing `initialization`
+forces replacement, so the dev-host SSH key is seeded only into a guest that
+is created or rebuilt, never into a live one by replacing it. A new container
+resource needs the same `user_account` block and ignore.
+
 Intentionally replacing a guarded guest means removing the guard in a
 dedicated PR first (and, for import-only guests, pre-creating as root@pam).
 
