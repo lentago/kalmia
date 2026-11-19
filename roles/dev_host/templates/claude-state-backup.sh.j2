@@ -24,11 +24,21 @@ chmod 0700 "$dest" 2>/dev/null || true
 opts=(-rt --no-perms --no-owner --no-group --delete --relative --modify-window=2)
 
 cd "$home"
-rsync "${opts[@]}" .claude/projects .claude/skills .claude/commands "$dest/" 2>&1 || {
+dirs=()
+for d in .claude/projects .claude/skills .claude/commands; do
+  [ -d "$d" ] && dirs+=("$d")   # a missing dir must not abort the whole run
+done
+rsync "${opts[@]}" "${dirs[@]}" "$dest/" 2>&1 || {
   rc=$?; [ "$rc" -eq 24 ] || exit "$rc"; }   # 24: a file vanished mid-run, fine
 singles=()
 for f in .claude/CLAUDE.md .claude/settings.json CLAUDE.md repos/CLAUDE.md repos/lentago/CLAUDE.md; do
-  [ -e "$f" ] && singles+=("$f")
+  [ -e "$f" ] || continue
+  # settings.json can carry an `env` block with tokens: never copy one off-host.
+  if [ "$f" = .claude/settings.json ] && grep -q '"env"' "$f"; then
+    echo "claude-state-backup: skipping $f (has an env block)" >&2
+    continue
+  fi
+  singles+=("$f")
 done
 # The clones' local permission grants.
 while IFS= read -r f; do singles+=("${f#./}"); done < <(find repos -maxdepth 4 -path '*/.claude/settings.local.json' -type f)
