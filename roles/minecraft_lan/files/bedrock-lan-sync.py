@@ -12,6 +12,8 @@ A new copy of the world being played (same slug, new hash) waits while anyone is
 and loads on a sync tick when the server is inactive or its console `list` confirms zero players.
 An unknown count keeps the update pending. A different slug switches at once.
 
+A running server with nothing listening on its TCP join port is restarted (#348).
+
 Prints "switched to ...", "serving ...", "waiting ..." or "no world announced ...".
 """
 import hashlib
@@ -37,6 +39,7 @@ WORLDS, PROPS, STATE = HOME / "worlds", HOME / "server.properties", HOME / "lan-
 SERVICE = "bedrock-server.service"
 CONSOLE = Path(os.environ.get("BEDROCK_CONSOLE", "/run/bedrock/console"))
 PLAYERS_RE = re.compile(r"There are ([0-9]+)/[0-9]+ players online\b")
+JOIN_GRACE = 30  # seconds a started server gets to open its join port before it counts as missing
 
 
 def world_slug(level_name: str) -> str:
@@ -96,6 +99,45 @@ def players_online(wait: float = 10.0) -> int | None:
 
 def systemctl(*args) -> bool:
     return subprocess.run(["systemctl", *args], capture_output=True).returncode == 0
+
+
+def join_port_listening(port: str) -> bool | None:
+    """Whether anything listens on TCP `port`; None when that cannot be told."""
+    try:
+        result = subprocess.run(["ss", "-ltnH", f"sport = :{port}"], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        print(f"join port unknown: ss failed ({e})")
+        return None
+    if result.returncode:
+        print(f"join port unknown: ss exited {result.returncode}: {result.stderr.strip()}")
+        return None
+    return bool(result.stdout.strip())
+
+
+def seconds_active() -> float | None:
+    """How long the service has been active, or None when systemd doesn't say."""
+    try:
+        out = subprocess.run(["systemctl", "show", SERVICE, "--property=ActiveEnterTimestampMonotonic", "--value"],
+                             capture_output=True, text=True, timeout=10).stdout.strip()
+        return time.monotonic() - int(out) / 1e6 if int(out) else None
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return None
+
+
+def heal_join_port(port: str) -> bool:
+    """Restart a running server that has no TCP join socket. The server binds it without
+    SO_REUSEADDR and carries on silently if a socket left by the previous process still holds
+    the port (#348). Nobody can be on a server nobody can join, so this disconnects no one.
+    Returns True when it restarted the service."""
+    if join_port_listening(port) is not False:
+        return False
+    age = seconds_active()
+    if age is None or age < JOIN_GRACE:
+        return False  # still starting, or unknown: check again next tick
+    print(f"nothing listens on TCP {port}; restarting {SERVICE}")
+    if not systemctl("restart", SERVICE):
+        sys.exit(f"could not restart {SERVICE}; see journalctl -u {SERVICE}")
+    return True
 
 
 def set_props(values: dict):
@@ -172,7 +214,8 @@ def main():
     action = decide(current.get("level-name", ""), current.get("server-name", ""), name, title,
                     systemctl("is-active", "--quiet", SERVICE), count)
     if action == "serve":
-        print(f"serving {title} ({name})")
+        healed = heal_join_port(current.get("server-port", "19132"))
+        print(f"serving {title} ({name})" + (" after restoring the join port" if healed else ""))
         return
     if action == "wait":
         n = seen[-1]

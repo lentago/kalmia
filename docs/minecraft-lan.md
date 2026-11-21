@@ -148,6 +148,18 @@ themselves, so when they move to a new Bedrock release:
 
 5. **Check:** the play's last task prints what the sync did. From the LAN, the
    server answers NetherNet LAN discovery (UDP 7551) with its title, version
-   and world (cpitzi/minecraft-builds has `tools/lan_server.py discover`), TCP
-   19132 accepts connections, and a client joins it as an added server
-   (Play → Servers → Add Server, `192.168.139.2`, port `19132`).
+   and world (cpitzi/minecraft-builds has `tools/lan_server.py discover`), and
+   a client joins it as an added server (Play → Servers → Add Server,
+   `192.168.139.2`, port `19132`).
+
+**After any restart**, also check that TCP 19132 is listening
+(`ss -ltn 'sport = :19132'`). Discovery answers on UDP 7551 whether or not the
+join port is open, so it can't tell. The server binds that socket without
+`SO_REUSEADDR` and says nothing if the bind fails; a socket left by the previous
+process (`FIN-WAIT-2` while a client held a connection, then `TIME-WAIT`) keeps
+the port for up to 60 s, and the new server comes up healthy by every other sign
+but refuses every join (#348). Two guards: the unit waits for the port to clear
+before starting (`ExecStartPre`, ceiling 65 s, so a switch soon after a join can
+take up to a minute longer), and each sync tick restarts a server that has been
+active for 30 s with nothing listening there (it prints `serving ... after
+restoring the join port`).

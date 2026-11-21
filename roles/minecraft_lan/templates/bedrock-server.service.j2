@@ -13,6 +13,11 @@ WorkingDirectory={{ minecraft_lan_home }}/server
 Environment=LD_LIBRARY_PATH=.
 RuntimeDirectory=bedrock
 ExecStartPre=/usr/bin/mkfifo -m 0600 /run/bedrock/console
+# The server binds its TCP join port without SO_REUSEADDR and carries on without
+# it if a socket from the previous process (FIN-WAIT-2/TIME-WAIT) still holds the
+# port (#348). Wait for the port to clear, up to a little over tcp_fin_timeout
+# (60s); bedrock-lan-sync restarts a server that still ends up without a listener.
+ExecStartPre=/bin/sh -c 'i=0; while [ -n "$$(ss -tanH "sport = :{{ minecraft_lan_properties["server-port"] }}")" ] && [ $$i -lt 65 ]; do sleep 1; i=$$((i+1)); done'
 # Stdin is a FIFO opened read-write: the server quits when stdin reaches EOF,
 # and this one never does. Console commands: echo "list" > /run/bedrock/console
 ExecStart=/bin/sh -c 'exec ./bedrock_server <> /run/bedrock/console'
