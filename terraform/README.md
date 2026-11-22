@@ -168,6 +168,7 @@ runs use the `cpitzi-iac` IAM credentials already on the workstation.
 | 125 | lxc | minecraft-lan | pve4 | n/a — created BY this layer (#297) |
 | 126 | lxc | minecraft-runner-2 | pve4 | n/a — created BY this layer (#318) |
 | 127 | lxc | minecraft-runner-3 | pve3 | n/a — created BY this layer (#320) |
+| 128 | lxc | kiosk-sim | pve4 | n/a — created BY this layer |
 
 VM 100 (Home Assistant OS) is mission-critical and USB-pinned to pve3
 (Z-Wave/Zigbee/Matter radios; passthrough does not survive migration). It is
@@ -251,6 +252,7 @@ pipeline-recreatable guests unguarded so ordinary replacements still work.
 | minecraft-lan CT 125 | `container.minecraft_lan` | no | Pipeline-recreatable, as minecraft-runner: one read-only mount-hook mount. Its worlds live in the guest, so a rebuild re-downloads only the world announced now |
 | minecraft-runner-2 CT 126 | `container.minecraft_runner_2` | no | Pipeline-recreatable, as minecraft-runner: the same two mount-hook mounts |
 | minecraft-runner-3 CT 127 | `container.minecraft_runner_3` | no | Pipeline-recreatable, as minecraft-runner: the same two mount-hook mounts, through pve3's hook |
+| kiosk-sim CT 128 | `container.kiosk_sim` | no | Pipeline-recreatable: token-created, no keyctl/bind mount; contents re-provisioned by cpitzi/memory-aid `lab/kiosk-sim.yml` |
 
 Every container also carries `ignore_changes = [initialization[0].user_account]`
 ([`guest-ssh-key.tf`](guest-ssh-key.tf), #337). Changing `initialization`
