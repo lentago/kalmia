@@ -59,9 +59,11 @@ resource "proxmox_virtual_environment_container" "kiosk_sim" {
 
     ip_config {
       ipv4 {
-        # Inside the Firewalla DHCP pool: needs a reservation for the MAC
-        # above (both hosts2 and redis ipAllocation), as .19/.23/.26 have.
-        # Unanswered and unreferenced when picked, 2026-11-22.
+        # Inside the Firewalla DHCP pool (.10-.254), so the MAC above is
+        # reserved to this address on the Firewalla (hosts2 file + redis
+        # policy:mac ipAllocation, per the firewalla-dhcp-reservation
+        # runbook), set 2026-11-22. Keep the two in step: change one, change
+        # both. Other in-pool statics lack this today: #350.
         address = "192.168.139.48/24"
         gateway = "192.168.139.1"
       }
