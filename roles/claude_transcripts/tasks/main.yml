@@ -1,0 +1,130 @@
+---
+# ============================================================================
+# claude_transcripts — install betula's Claude Code transcript client: the
+# code under /opt/betula/claude-code, a managed-settings drop-in that runs its
+# hook on every session, and a timer that catches up sessions the hook missed.
+# Same result as betula's `install.sh --apply`, plus the timer.
+#
+# Order matters: seed, then hook, then timer. Seeding claims every existing
+# transcript, so neither the first hook nor the first `sync --all` backfills
+# history to Loki.
+#
+# A session cannot change the hook that records it (Claude Code's safety check
+# refuses), so this role is applied by a person in their own terminal.
+# ============================================================================
+- name: Refuse claytonia workers (drosera's Alloy shipper already covers them)
+  ansible.builtin.assert:
+    that: not (ansible_hostname is match('claude-runner'))
+    fail_msg: "{{ ansible_hostname }} is a claytonia worker; a second shipper would double-ship."
+    quiet: true
+
+- name: Ensure the betula config directory exists
+  ansible.builtin.file:
+    path: "{{ claude_transcripts_env_file | dirname }}"
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Check for the betula client env file
+  ansible.builtin.stat:
+    path: "{{ claude_transcripts_env_file }}"
+  register: claude_transcripts_env
+  become: true
+
+- name: Say the sinks stay off until the env file exists
+  ansible.builtin.debug:
+    msg: >-
+      {{ claude_transcripts_env_file }} is missing, so the hook installs but ships
+      nothing. Write it from betula's clients/claude-code/env.example (mode 0640,
+      group {{ target_user }}), then re-run with --tags claude-transcripts.
+  when: not claude_transcripts_env.stat.exists
+
+- name: Check out betula at the pinned commit
+  ansible.builtin.git:
+    repo: "{{ claude_transcripts_repo }}"
+    dest: "{{ claude_transcripts_src }}"
+    version: "{{ claude_transcripts_version }}"
+    single_branch: false
+    force: true
+  become: true
+
+# In --check the checkout above is only planned, so there is nothing to copy
+# from on a first run; the copies report on a real run.
+- name: Check the betula checkout
+  ansible.builtin.stat:
+    path: "{{ claude_transcripts_src }}/clients/claude-code/cc-transcripts"
+  register: claude_transcripts_checkout
+
+- name: Install the client
+  when: claude_transcripts_checkout.stat.exists
+  become: true
+  block:
+    - name: Create the client directory
+      ansible.builtin.file:
+        path: "{{ claude_transcripts_dest }}/cc_transcripts"
+        state: directory
+        mode: "0755"
+
+    - name: Install the launcher
+      ansible.builtin.copy:
+        src: "{{ claude_transcripts_src }}/clients/claude-code/cc-transcripts"
+        dest: "{{ claude_transcripts_dest }}/cc-transcripts"
+        remote_src: true
+        mode: "0755"
+
+    - name: Install the package
+      ansible.builtin.copy:
+        src: "{{ claude_transcripts_src }}/clients/claude-code/cc_transcripts/"
+        dest: "{{ claude_transcripts_dest }}/cc_transcripts/"
+        remote_src: true
+        mode: "0644"
+        directory_mode: "0755"
+
+# Only once per user: a host that already has cursors (a hand install via
+# install.sh) keeps them, so lines not yet shipped are not skipped.
+- name: Seed existing transcripts so history is not backfilled
+  ansible.builtin.shell: |
+    set -eu
+    if [ ! -d "{{ claude_transcripts_state_dir }}/cursors" ]; then
+      /usr/bin/python3 "{{ claude_transcripts_dest }}/cc-transcripts" seed
+    fi
+    mkdir -p "{{ claude_transcripts_state_dir }}"
+    touch "{{ claude_transcripts_state_dir }}/.seeded"
+  args:
+    creates: "{{ claude_transcripts_state_dir }}/.seeded"
+  become: false
+  when: claude_transcripts_checkout.stat.exists
+
+- name: Ensure the managed-settings drop-in directory exists
+  ansible.builtin.file:
+    path: "{{ claude_transcripts_dropin_dir }}"
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Install the hook drop-in
+  ansible.builtin.copy:
+    src: "{{ claude_transcripts_src }}/clients/claude-code/hooks/managed-settings.d/{{ claude_transcripts_dropin }}"
+    dest: "{{ claude_transcripts_dropin_dir }}/{{ claude_transcripts_dropin }}"
+    remote_src: true
+    mode: "0644"
+  become: true
+  when: claude_transcripts_checkout.stat.exists
+
+- name: Install the catch-up sync units
+  ansible.builtin.template:
+    src: "betula-cc-sync.{{ item }}.j2"
+    dest: "/etc/systemd/system/betula-cc-sync.{{ item }}"
+    mode: "0644"
+  loop: [service, timer]
+  become: true
+  register: claude_transcripts_units
+
+- name: Enable the catch-up sync timer
+  ansible.builtin.systemd_service:
+    name: betula-cc-sync.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ claude_transcripts_units is changed }}"
+  become: true
+  when: claude_transcripts_checkout.stat.exists
