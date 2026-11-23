@@ -31,6 +31,18 @@ clone_repos: true              # needs gh auth or GH_TOKEN in the env
 # the xubuntu profile also builds the testbed VMs, which must not get any of it.
 dev_host: "{{ ansible_hostname == 'xubuntu-ws' }}"
 
+# Hosts that ship Claude Code transcripts to the NAS and Loki (betula#161,
+# roles/claude_transcripts): every machine a person runs Claude Code on. Keyed on
+# the hostname for the same reason as dev_host: the testbeds build these
+# profiles too and must not ship. claude-runner* workers are covered by drosera
+# and refused by the role.
+claude_transcripts_hosts:
+  - xubuntu-ws          # dev host (VM 102)
+  - cpitzi-ThinkPad     # viewer laptop (ubuntu_laptop)
+  - fedora-ws           # VM 104 (fedora)
+  - penguin             # Chromebook (crostini / baguette)
+claude_transcripts: "{{ ansible_hostname in claude_transcripts_hosts }}"
+
 # Whether an unauthenticated gh is a hard failure when clone_repos is on.
 # Default false: now that cloning is on by default, a pristine first run — where
 # the repos role installs gh and nobody has logged in yet — must still finish

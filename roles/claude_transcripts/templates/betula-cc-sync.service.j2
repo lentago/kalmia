@@ -1,0 +1,14 @@
+# ANSIBLE MANAGED — kalmia roles/claude_transcripts.
+[Unit]
+Description=Catch-up sync of Claude Code transcripts to the NAS and Loki (betula#161)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+# No EnvironmentFile: the client reads /etc/betula/claude-code.env itself
+# (betula cc_transcripts/config.py), so the token never enters systemd's view.
+Type=oneshot
+User={{ target_user }}
+ExecStart=/usr/bin/python3 {{ claude_transcripts_dest }}/cc-transcripts sync --all --days {{ claude_transcripts_sync_days }}
+Nice=10
+IOSchedulingClass=idle

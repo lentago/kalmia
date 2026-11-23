@@ -99,3 +99,6 @@
     - role: viewer_host
       tags: [viewer-host]
       when: workstation_profile == 'ubuntu_laptop'
+    - role: claude_transcripts
+      tags: [claude-transcripts]
+      when: claude_transcripts | bool
