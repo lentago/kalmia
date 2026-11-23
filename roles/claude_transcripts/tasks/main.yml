@@ -111,20 +111,33 @@
   become: true
   when: claude_transcripts_checkout.stat.exists
 
-- name: Install the catch-up sync units
-  ansible.builtin.template:
-    src: "betula-cc-sync.{{ item }}.j2"
-    dest: "/etc/systemd/system/betula-cc-sync.{{ item }}"
-    mode: "0644"
-  loop: [service, timer]
-  become: true
-  register: claude_transcripts_units
+# The timer needs systemd as PID 1. Every profile is expected to have it
+# (Crostini's container and Baguette's VM both boot systemd), but a host
+# without it still gets the hook and only loses the catch-up sync.
+- name: Say the catch-up timer is skipped without systemd
+  ansible.builtin.debug:
+    msg: >-
+      {{ ansible_hostname }} runs {{ ansible_service_mgr }}, not systemd: the hook is
+      installed, the catch-up timer is not. Run `cc-transcripts sync --all` by hand
+      after a session that was killed.
+  when: ansible_service_mgr != 'systemd'
 
-- name: Enable the catch-up sync timer
-  ansible.builtin.systemd_service:
-    name: betula-cc-sync.timer
-    enabled: true
-    state: started
-    daemon_reload: "{{ claude_transcripts_units is changed }}"
+- name: Install and enable the catch-up sync timer
+  when: ansible_service_mgr == 'systemd'
   become: true
-  when: claude_transcripts_checkout.stat.exists
+  block:
+    - name: Install the catch-up sync units
+      ansible.builtin.template:
+        src: "betula-cc-sync.{{ item }}.j2"
+        dest: "/etc/systemd/system/betula-cc-sync.{{ item }}"
+        mode: "0644"
+      loop: [service, timer]
+      register: claude_transcripts_units
+
+    - name: Enable the catch-up sync timer
+      ansible.builtin.systemd_service:
+        name: betula-cc-sync.timer
+        enabled: true
+        state: started
+        daemon_reload: "{{ claude_transcripts_units is changed }}"
+      when: claude_transcripts_checkout.stat.exists
