@@ -39,13 +39,14 @@ resource "proxmox_virtual_environment_vm" "xubuntu_ws" {
   # CPU/memory hotplug are off, so a resize lands as pending config and takes
   # effect only on a PVE-side restart (`qm reboot 102`), never a guest reboot.
   #
-  # x86-64-v3 (not v2-AES) so the guest sees AVX2/BMI/FMA for SIMD-accelerated
-  # tools (ripgrep, zstd, numpy, ffmpeg). Every cluster node was verified
-  # v3-capable on 2026-11-27, so VM 102 stays migratable (#354).
+  # Broadwell-noTSX-IBRS: a superset of x86-64-v3 (AVX2/BMI/FMA for ripgrep,
+  # zstd, numpy, ffmpeg) that adds PCLMULQDQ, so AES-GCM isn't stuck on a
+  # software GHASH. Starts with `enforce` on every node (pve's i7-5557U is a
+  # Broadwell), so VM 102 stays migratable (#354, #361).
   cpu {
     cores   = 6
     sockets = 1
-    type    = "x86-64-v3"
+    type    = "Broadwell-noTSX-IBRS"
   }
 
   memory {
@@ -123,10 +124,12 @@ resource "proxmox_virtual_environment_vm" "fedora_ws" {
     enabled = true
   }
 
+  # Broadwell-noTSX-IBRS, as on xubuntu-ws: superset of x86-64-v3 plus
+  # PCLMULQDQ for AES-GCM (#361).
   cpu {
     cores   = 4
     sockets = 1
-    type    = "x86-64-v3"
+    type    = "Broadwell-noTSX-IBRS"
   }
 
   memory {
@@ -288,15 +291,15 @@ resource "proxmox_virtual_environment_vm" "haos" {
     enabled = true
   }
 
-  # x86-64-v3 instead of the QEMU kvm64 default (which has no SSE4.2, POPCNT,
-  # AES-NI or AVX), so TLS gets hardware AES and add-ons built for the v2/v3
-  # baseline don't fail with illegal instructions. v3 rather than `host`: all
-  # five nodes are v3-capable (#354), so HAOS can still cold-start elsewhere
-  # if the radios ever move (#357).
+  # Broadwell-noTSX-IBRS instead of the QEMU kvm64 default (no SSE4.2, POPCNT,
+  # AES-NI or AVX): a superset of x86-64-v3 that adds PCLMULQDQ, so TLS gets
+  # hardware AES-GCM and v2/v3-built add-ons don't hit illegal instructions.
+  # Starts with `enforce` on every node (pve's i7-5557U is a Broadwell), so
+  # HAOS can still cold-start elsewhere, which `host` wouldn't allow (#357, #361).
   cpu {
     cores   = 2
     sockets = 1
-    type    = "x86-64-v3"
+    type    = "Broadwell-noTSX-IBRS"
   }
 
   memory {
