@@ -161,7 +161,7 @@ runs use the `cpitzi-iac` IAM credentials already on the workstation.
 | 104 | qemu | fedora-ws | pve5 | 3 |
 | 120 | qemu | xubuntu-test | pve5 | 3 |
 | 121 | qemu | fedora-xfce-test | pve5 | 3 |
-| 100 | qemu | haos-17.1 | pve3 | 3 — **last** |
+| 100 | qemu | haos | pve3 | 3 — **last** |
 | 115 | lxc | gha-runner | pve4 | n/a — created BY this layer (phase 2) |
 | 123 | lxc | pe-publish | pve4 | n/a — created BY this layer (#190) |
 | 124 | lxc | minecraft-runner | pve4 | n/a — created BY this layer (#293) |
