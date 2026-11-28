@@ -294,8 +294,9 @@ resource "proxmox_virtual_environment_vm" "haos" {
   # Broadwell-noTSX-IBRS instead of the QEMU kvm64 default (no SSE4.2, POPCNT,
   # AES-NI or AVX): a superset of x86-64-v3 that adds PCLMULQDQ, so TLS gets
   # hardware AES-GCM and v2/v3-built add-ons don't hit illegal instructions.
-  # Starts with `enforce` on every node (pve's i7-5557U is a Broadwell), so
-  # HAOS can still cold-start elsewhere, which `host` wouldn't allow (#357, #361).
+  # Starts with `enforce` on every node (pve's i7-5557U is a Broadwell), so if
+  # the radios ever move HAOS cold-starts elsewhere on the same guest-visible
+  # CPU, which `host` wouldn't give (#357, #361).
   cpu {
     cores   = 2
     sockets = 1
