@@ -30,24 +30,26 @@ PR lands, update the rows it closes.
 
 ## Summary of gaps
 
+Codification starts with #370 (profiles as `locals`, plan shows no changes).
+
 | Guests | Gap | Attribute | Handled in |
 |---|---|---|---|
 | 100, 102, 104 | change | CPU flags `+md-clear;+ssbd` | #365 (PR #368) |
 | 120, 121 | change | CPU model, flags, disk `discard`/`ssd`, `protection`, `tags`; codify `floating`, `hotplug` | #358 (lands with the re-taken `pristine`) |
 | 120, 121 | decision needed | node placement | #366 |
-| 100, 102, 104 | change | `protection` = 1, class `tags` | workstation and appliance child issues |
-| 100 | change | `startup` `order=1` | appliance child issue |
-| 100, 104 | codify-only | `floating` = `dedicated` | workstation and appliance child issues |
-| 102 | decision needed | balloon: keep `balloon=0` or turn on the device with `floating = 16384` | workstation child issue |
-| 100, 102, 104 | codify-only | `vga`, `hotplug` | workstation and appliance child issues |
-| every kalmia CT | change | class `tags` | per-class child issues |
-| CI runners | change | `cpuunits` = 50 | CI-runner child issue |
-| services, k3s nodes | codify-only | `cpuunits` = 100 | service and cluster-node child issues |
-| 115, 119, 122 | codify-only | MAC pin (value needed) | CI-runner and cluster-node child issues |
-| 119, 122 | decision needed | stable addressing (DHCP today) | k3s addressing child issue |
+| 100, 102, 104 | change | `protection` = 1, class `tags` | #371 (102, 104), #372 (100) |
+| 100 | change | `startup` `order=1` | #372 |
+| 100, 104 | codify-only | `floating` = `dedicated` | #372 (100), #371 (104) |
+| 102 | decision needed | balloon: keep `balloon=0` or turn on the device with `floating = 16384` | #371 |
+| 100, 102, 104 | codify-only | `vga`, `hotplug` | #371, #372 |
+| every kalmia CT | change | class `tags` | #373, #374, #375 |
+| CI runners | change | `cpuunits` = 50 | #373 |
+| services, k3s nodes | codify-only | `cpuunits` = 100 | #374, #375 |
+| 115, 119, 122 | codify-only | MAC pin (value needed) | #373 (115), #375 (119, 122) |
+| 119, 122 | decision needed | stable addressing (DHCP today) | #376 |
 | 105, 113, 115 | decision needed | verify the Firewalla reservation for an in-pool static IP | #350 (outside Terraform) |
 | 118 | change | add the missing Firewalla reservation | #350 (outside Terraform) |
-| CI runners, agent workers | decision needed | exclude from `guests-weekly` | backup-policy child issue |
+| CI runners, agent workers | decision needed | exclude from `guests-weekly` | #377 |
 | 110 – 112, 116, 117 | claytonia-owned | `cpuunits` = 50, class `tags`; verify reservations | lentago/claytonia (list in the PR) |
 
 
