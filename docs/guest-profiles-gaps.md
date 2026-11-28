@@ -20,7 +20,10 @@ PR lands, update the rows it closes.
   - **none:** live, Terraform and target agree, or the target is a provider
     default the plan already enforces.
   - **codify-only:** live is already right, but Terraform is silent, so drift
-    is invisible.
+    is invisible. Codifying causes no behaviour change, but the first apply
+    may still write the value out explicitly (for example `balloon: 8192` in
+    place of an absent key). The provider may flag that write as needing a
+    restart. Each child issue states what happens on a running guest.
   - **change:** live differs from the target.
   - **decision needed:** the target needs an operator decision or a value
     that isn't in the inventory (each is a question in the PR).

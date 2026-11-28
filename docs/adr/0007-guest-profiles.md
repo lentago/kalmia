@@ -23,9 +23,10 @@ found by accident:
 - No VM passes `md-clear` or `ssbd` (#365).
 - The testbeds drifted from the workstations they stand in for (#358).
 
-Every one of these was in an attribute the resource left **unset**. CI's plan
+All but one of these were in an attribute the resource left **unset**. CI's plan
 only shows drift for attributes Terraform sets, so an unset attribute is
-invisible however wrong its live value is. The fixes were also argued guest by
+invisible however wrong its live value is. The exception, HAOS's `localtime`,
+is worse: the provider doesn't model it at all, so no setting can surface it. The fixes were also argued guest by
 guest, so the next VM or container would start from whatever its installer
 chose.
 

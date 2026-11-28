@@ -65,7 +65,7 @@ fixes the rule, and the gap table holds each guest's number.
 | Cores / sockets | 1 socket, cores sized per guest (102: 6, 104: 4), at most the node's 6 cores | pve5 is a single-socket, non-SMT i5-8500T; one socket keeps the guest topology true to the host (#286, #356) |
 | NUMA | off (PVE default) | Single-socket host; NUMA is only needed for CPU/memory hotplug, which this class doesn't use |
 | Memory | sized per guest (102: 16 GiB, 104: 8 GiB), counted in full in the node budget | A workstation's working set is the whole allocation; the pve5 budget (below) assumes it is resident |
-| Balloon | `floating` = `dedicated` (balloon device present, never inflated) | The same behaviour as PVE's default (no `balloon` line), but visible to Terraform, which reads "unset" and `balloon=0` alike as `floating = 0`. The device reports guest-side usage to PVE. 102's live `balloon=0` is a **decision** (gap table) |
+| Balloon | `floating` = `dedicated` (balloon device present, never inflated) | The same behaviour as PVE's default (no `balloon` line), but visible to Terraform, which reads "unset" and `balloon=0` alike as `floating = 0`. The device reports guest-side usage to PVE. **Pending exception:** 102 keeps its live `balloon=0` until #371 decides between keeping it (a live-only field, invisible to Terraform) and adopting this target |
 | Machine | `q35` | PCIe topology; what both guests were installed on |
 | BIOS | SeaBIOS (PVE default) | Both are installed BIOS-boot. Moving to OVMF needs an EFI disk and a bootloader change and buys a desktop nothing |
 | `scsihw` | `virtio-scsi-single` | One controller per disk, which `iothread` needs |
@@ -173,7 +173,7 @@ Baseline for every LXC class unless a class says otherwise:
 |---|---|---|
 | `features` | `nesting=1` | Baseline. No runner uses Docker |
 | Cores | sized per workload: 2, or 4 for the Chunker runners (124, 126, 127) | Job parallelism |
-| `cpuunits` | **50** | Batch work yields to services, k3s and HAOS when a node is contended: pve4 carries 16 LXCs on 6 cores, and CT 127 sits beside HAOS on pve3. An idle runner costs nothing either way |
+| `cpuunits` | **50** | Batch work yields to services, k3s and HAOS when a node is contended: pve4 carries 15 LXCs on 6 cores, and CT 127 sits beside HAOS on pve3. An idle runner costs nothing either way |
 | Memory / swap | sized to the job's peak: 10 GiB + 1 GiB swap for Chunker (`-Xmx6G` plus BDS), else 1 – 2 GiB + 512 MiB | |
 | Rootfs | sized to the job workspace | |
 | Mount points | hook-attached, per the guest's mount map | [README § Bind mounts](../terraform/README.md#bind-mounts--the-mount-hook) |
@@ -265,7 +265,7 @@ on one host; HAOS never leaves pve3.
 with `floating = dedicated` nothing is reclaimed. LXC `memory` is a cgroup
 cap, not a reservation.
 
-| Node | VM memory that can run | LXC limits | Physical | In use |
+| Node | VM memory configured (not all can run at once; rule 1) | LXC limits | Physical | In use |
 |---|---|---|---|---|
 | pve3 | 8 GiB (100) | 10 GiB (127) | 31.1 GiB | 6.9 GiB |
 | pve4 | — | 60.5 GiB (1.95× RAM) | 31.1 GiB | 5.6 GiB |
@@ -287,7 +287,7 @@ writes):
 | Node | `pve/data` used | Virtual size on it | Overcommit |
 |---|---|---|---|
 | pve3 | 13.6 % | ~64 GiB (100: 32 + EFI, 127: 32) | pool size not in the inventory (question in the PR) |
-| pve4 | 39.1 % | ~266 GiB of rootfs (16 CTs) | pool size not in the inventory (question in the PR) |
+| pve4 | 39.1 % | ~266 GiB of rootfs (15 CTs) | pool size not in the inventory (question in the PR) |
 | pve5 | 81.5 % of 155.7 GiB | ~254 GiB before snapshots | ~163 % |
 
 - **Used ceiling: 70 %**, steady state after a trim. That stays below the 80 %
