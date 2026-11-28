@@ -94,7 +94,7 @@ files. The patterns an IT-ops reader can lift wholesale:
 | **Branch protection as policy, not habit** — change can't land without green CI, merge method constrained | The `main` ruleset requires squash-only merges + four checks (`gate`, `ansible-lint`, `shellcheck`, `docs-check`); see [Workflow](#status) |
 | **Idempotent, role-based provisioning across heterogeneous targets** — the everyday config-management pattern | Five [profiles](#targets-profiles) share one role set; [`ansible-lint.yml`](.github/workflows/ansible-lint.yml) runs `--syntax-check` + `ansible-lint` on every PR |
 
-**Architecture decisions:** The design choices behind these patterns — tool selection, profile routing, Terraform provider, apply-on-merge, capacity ownership, image forge tooling — are recorded in [`docs/adr/`](docs/adr/).
+**Architecture decisions:** The design choices behind these patterns — tool selection, profile routing, Terraform provider, apply-on-merge, capacity ownership, image forge tooling, per-class guest profiles — are recorded in [`docs/adr/`](docs/adr/).
 
 ## 🛠️ Make a change yourself
 
