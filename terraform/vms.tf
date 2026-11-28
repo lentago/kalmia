@@ -262,7 +262,7 @@ import {
 resource "proxmox_virtual_environment_vm" "haos" {
   node_name           = "pve3"
   vm_id               = 100
-  name                = "haos-17.1"
+  name                = "haos"
   description         = "Home Assistant OS. USB-pinned to pve3 (radios 303a:831a, 303a:4001): never migrate. Cold restart only (qm reboot 100 on pve3). Managed by kalmia terraform/vms.tf."
   machine             = "q35"
   bios                = "ovmf"
