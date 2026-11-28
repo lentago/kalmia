@@ -401,6 +401,9 @@ prompts the investment.
   store (`local`), `raw` for LVM-thin (`local-lvm`). A mismatch reads as a
   disk change.
 - **HAOS specifics that must be reproduced or it plans a recreate:**
-  `bios = "ovmf"` + `efi_disk {}`, `scsi_hardware = "virtio-scsi-pci"`, both
-  `usb { host = … }` radios, and the disk `discard`/`ssd` flags. Its verbose
-  installer `description` is `ignore_changes`d rather than reproduced.
+  `bios = "ovmf"` + `efi_disk {}`, both `usb { host = … }` radios, and the
+  disk `discard`/`ssd` flags. `scsi_hardware` was imported as
+  `virtio-scsi-pci` and moved to `virtio-scsi-single` (with scsi0
+  `iothread`) in #357, an in-place pending change. The installer's verbose
+  `description` was `ignore_changes`d at import and replaced by a short
+  codified one in #357.

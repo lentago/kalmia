@@ -238,9 +238,9 @@ resource "proxmox_virtual_environment_vm" "testbed" {
 
 # --- HAOS (100): MISSION-CRITICAL, pve3, USB-pinned Z-Wave/Zigbee/Matter
 #     radios (passthrough does not survive migration), OVMF/EFI, SSD-emulated
-#     discard disk. Imported LAST. prevent_destroy guards it; description
-#     (a large HTML blob from the community-scripts installer) is ignored
-#     rather than reproduced. ---
+#     discard disk. Imported LAST. prevent_destroy guards it. The
+#     installer's HTML description blob was ignored at import; a short
+#     plain-text one is codified now (#357). ---
 import {
   to = proxmox_virtual_environment_vm.haos
   id = "pve3/100"
@@ -250,22 +250,43 @@ resource "proxmox_virtual_environment_vm" "haos" {
   node_name           = "pve3"
   vm_id               = 100
   name                = "haos-17.1"
+  description         = "Home Assistant OS. USB-pinned to pve3 (radios 303a:831a, 303a:4001): never migrate. Cold restart only (qm reboot 100 on pve3). Managed by kalmia terraform/vms.tf."
   machine             = "q35"
   bios                = "ovmf"
-  scsi_hardware       = "virtio-scsi-pci"
+  scsi_hardware       = "virtio-scsi-single"
   on_boot             = true
   started             = true
   reboot_after_update = false
   tablet_device       = false
   boot_order          = ["scsi0"]
 
+  # Live-only field, not modelled by bpg/proxmox (checked at v0.115.0: the
+  # API client has `localtime`, the VM resource schema does not):
+  #   - localtime: the community-scripts installer set `localtime: 1`, so the
+  #     RTC runs on host local time and every cold boot starts the guest clock
+  #     ~5 h off (EST) until NTP steps it. A Linux guest expects a UTC RTC.
+  #     Removed by hand with `qm set 100 --delete localtime` (#357). Terraform
+  #     can't see it, so it can't detect it if it comes back.
+  #
+  # Every change below that touches hardware (cpu type, scsi_hardware, disk
+  # iothread) is written as PENDING config: reboot_after_update = false means
+  # the apply never restarts HAOS. It takes effect only on a cold
+  # `qm reboot 100` on pve3, scheduled just after a haos-4h backup. A reboot
+  # inside the guest won't do it.
+
   agent {
     enabled = true
   }
 
+  # x86-64-v3 instead of the QEMU kvm64 default (which has no SSE4.2, POPCNT,
+  # AES-NI or AVX), so TLS gets hardware AES and add-ons built for the v2/v3
+  # baseline don't fail with illegal instructions. v3 rather than `host`: all
+  # five nodes are v3-capable (#354), so HAOS can still cold-start elsewhere
+  # if the radios ever move (#357).
   cpu {
     cores   = 2
     sockets = 1
+    type    = "x86-64-v3"
   }
 
   memory {
@@ -277,10 +298,13 @@ resource "proxmox_virtual_environment_vm" "haos" {
     type         = "4m"
   }
 
+  # virtio-scsi-single (above) + iothread moves disk I/O off QEMU's main
+  # loop, so a slow write (pve3 NVMe stalls, #325) can't stall the vCPUs.
   disk {
     interface    = "scsi0"
     datastore_id = "local-lvm"
     size         = 32
+    iothread     = true
     discard      = "on"
     ssd          = true
   }
@@ -312,6 +336,5 @@ resource "proxmox_virtual_environment_vm" "haos" {
 
   lifecycle {
     prevent_destroy = true
-    ignore_changes  = [description]
   }
 }
