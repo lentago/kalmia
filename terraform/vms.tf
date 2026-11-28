@@ -114,7 +114,7 @@ resource "proxmox_virtual_environment_vm" "fedora_ws" {
   name                = "fedora-ws"
   machine             = "q35"
   scsi_hardware       = "virtio-scsi-single"
-  on_boot             = true
+  on_boot             = false
   started             = true
   reboot_after_update = false
   boot_order          = ["scsi0", "net0"]
