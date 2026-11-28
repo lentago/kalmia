@@ -43,10 +43,13 @@ resource "proxmox_virtual_environment_vm" "xubuntu_ws" {
   # zstd, numpy, ffmpeg) that adds PCLMULQDQ, so AES-GCM isn't stuck on a
   # software GHASH. Starts with `enforce` on every node (pve's i7-5557U is a
   # Broadwell), so VM 102 stays migratable (#354, #361).
+  # flags: the named model omits md-clear and ssbd, so the guest can't
+  # mitigate MDS or Spectre v4. Every node's CPU exposes both (#365).
   cpu {
     cores   = 6
     sockets = 1
     type    = "Broadwell-noTSX-IBRS"
+    flags   = ["+md-clear", "+ssbd"]
   }
 
   memory {
@@ -126,10 +129,13 @@ resource "proxmox_virtual_environment_vm" "fedora_ws" {
 
   # Broadwell-noTSX-IBRS, as on xubuntu-ws: superset of x86-64-v3 plus
   # PCLMULQDQ for AES-GCM (#361).
+  # flags: the named model omits md-clear and ssbd, so the guest can't
+  # mitigate MDS or Spectre v4. Every node's CPU exposes both (#365).
   cpu {
     cores   = 4
     sockets = 1
     type    = "Broadwell-noTSX-IBRS"
+    flags   = ["+md-clear", "+ssbd"]
   }
 
   memory {
@@ -297,10 +303,13 @@ resource "proxmox_virtual_environment_vm" "haos" {
   # Starts with `enforce` on every node (pve's i7-5557U is a Broadwell), so if
   # the radios ever move HAOS cold-starts elsewhere on the same guest-visible
   # CPU, which `host` wouldn't give (#357, #361).
+  # flags: the named model omits md-clear and ssbd, so the guest can't
+  # mitigate MDS or Spectre v4. Every node's CPU exposes both (#365).
   cpu {
     cores   = 2
     sockets = 1
     type    = "Broadwell-noTSX-IBRS"
+    flags   = ["+md-clear", "+ssbd"]
   }
 
   memory {
