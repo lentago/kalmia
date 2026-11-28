@@ -93,7 +93,16 @@ resource "proxmox_virtual_environment_vm" "xubuntu_ws" {
   }
 }
 
-# --- fedora-ws (104): running workstation, agent on, empty ide2 cdrom ---
+# --- fedora-ws (104): parked, operator-started (on_boot = false; stopped,
+#     last started 2026-10-25), agent on ---
+#
+# pve5 memory budget (measured 2026-11-27, 31.1 GiB usable, 7.6 GiB swap):
+# VM 102 xubuntu-ws 16 GiB (balloon 0, ~16.1 in use) + CT 119 k3s-1 6 GiB
+# (~1.3) + CT 105 grafana-stack 2 GiB (~0.2) + ~3.1 host overhead leaves
+# ~11.1 GiB available. Starting fedora-ws (8 GiB) leaves ~3 GiB; a testbed
+# run on top (VMs 120 + 121, 4 GiB each) exceeds physical RAM and the OOM
+# killer takes VM 102's kvm first. Check headroom before resizing or adding
+# any pve5 guest, and never autostart fedora-ws.
 import {
   to = proxmox_virtual_environment_vm.fedora_ws
   id = "pve5/104"
@@ -108,16 +117,16 @@ resource "proxmox_virtual_environment_vm" "fedora_ws" {
   on_boot             = true
   started             = true
   reboot_after_update = false
-  boot_order          = ["ide2", "scsi0", "net0"]
+  boot_order          = ["scsi0", "net0"]
 
   agent {
     enabled = true
   }
 
   cpu {
-    cores   = 2
-    sockets = 2
-    type    = "x86-64-v2-AES"
+    cores   = 4
+    sockets = 1
+    type    = "x86-64-v3"
   }
 
   memory {
@@ -130,6 +139,7 @@ resource "proxmox_virtual_environment_vm" "fedora_ws" {
     size         = 50
     iothread     = true
     discard      = "on"
+    ssd          = true
   }
 
   network_device {
