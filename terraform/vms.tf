@@ -38,10 +38,14 @@ resource "proxmox_virtual_environment_vm" "xubuntu_ws" {
   # on one socket, matching pve5's single-socket i5-8500T, and 16 GiB. NUMA and
   # CPU/memory hotplug are off, so a resize lands as pending config and takes
   # effect only on a PVE-side restart (`qm reboot 102`), never a guest reboot.
+  #
+  # x86-64-v3 (not v2-AES) so the guest sees AVX2/BMI/FMA for SIMD-accelerated
+  # tools (ripgrep, zstd, numpy, ffmpeg). Every cluster node was verified
+  # v3-capable on 2026-11-27, so VM 102 stays migratable (#354).
   cpu {
     cores   = 6
     sockets = 1
-    type    = "x86-64-v2-AES"
+    type    = "x86-64-v3"
   }
 
   memory {
@@ -54,7 +58,8 @@ resource "proxmox_virtual_environment_vm" "xubuntu_ws" {
   # the synced Claude state. The thin pool is overcommitted, so the next grow
   # needs a pool check first. The apply resizes the disk online; the guest
   # partition and ext4 filesystem are grown inside the guest (growpart +
-  # resize2fs), which Terraform cannot do.
+  # resize2fs), which Terraform cannot do. ssd = true presents the thin-LVM-
+  # on-NVMe disk as non-rotational in the guest (#354).
   disk {
     interface    = "scsi0"
     datastore_id = "local-lvm"
@@ -62,6 +67,7 @@ resource "proxmox_virtual_environment_vm" "xubuntu_ws" {
     size         = 96
     iothread     = true
     discard      = "on"
+    ssd          = true
   }
 
   network_device {
