@@ -9,6 +9,10 @@ dates**, not the reconstruction date. Where an alternative or claim comes
 exclusively from fleet records and cannot be verified within this repo's commit
 history, it is labelled accordingly.
 
+From ADR-0007 on, records are written when the decision is made. Their status
+line carries only the decision date. Each follows the same shape: Status,
+Context, Decision, Alternatives, Consequences.
+
 ## Index
 
 | ADR | Title | Status | Date |
@@ -19,3 +23,4 @@ history, it is labelled accordingly.
 | [0004](0004-lan-apply-on-merge.md) | LAN apply-on-merge with self-hosted runner | Accepted | 2026-07-05 |
 | [0005](0005-runner-pool-to-claytonia.md) | Release runner pool to claytonia | Accepted | 2026-07-07 |
 | [0006](0006-image-forge-pct-capture.md) | Image forge: script + pct capture | Accepted | 2026-07-07 |
+| [0007](0007-guest-profiles.md) | Per-class guest profiles | Accepted | 2026-11-28 |
